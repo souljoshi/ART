@@ -1,6 +1,7 @@
 /* Ocamlyacc parser for ART */
 
 %{
+  open Ast
 %}
 
 %token LPAREN RPAREN LBRACK RBRACK
@@ -29,7 +30,7 @@
 %left INDEX CALL MEMB /* member */ POST /* postfix decrement/increment */
 
 %start expr
-%type <unit> expr
+%type <Ast.expr> expr
 
 %%
 
@@ -96,11 +97,11 @@ posexpr:
   | LPAREN expr RPAREN    {$2} /* { $2 } */
 
   /* postfix expression */
-  | posexpr LBRACK expr RBRACK %prec INDEX    {$1}
-  | posexpr LPAREN arglist RPAREN %prec CALL  {$1}
-  | posexpr DOT ID %prec MEMB                 {$1}
-  | posexpr PLUSPLUS %prec POST               {$1}
-  | posexpr MINUSMINUS %prec POST             {$1}
+  | posexpr LBRACK expr RBRACK    %prec INDEX   {$1}
+  | posexpr LPAREN arglist RPAREN %prec CALL    {$1}
+  | posexpr DOT ID                %prec MEMB    {$1}
+  | posexpr PLUSPLUS              %prec POST    {$1}
+  | posexpr MINUSMINUS            %prec POST    {$1}
 
 arglist:
   /* nothing */       {[]}
