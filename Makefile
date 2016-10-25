@@ -1,7 +1,6 @@
 # basic makefile
 
 art: scanner
-	ocamlyacc parser.mly  # create parser.ml and parser.mli
 	ocamlc -c ast.mli     # compile AST types
 	ocamlc -c parser.mli  # compile parser types
 	ocamlc -c scanner.ml  # compile the scanner
@@ -12,7 +11,10 @@ art: scanner
 scanner: scanner.mll
 	ocamllex scanner.mll  # create scanner.ml
 
+parser: parser.mly
+	ocamlyacc parser.mly  # create parser.ml and parser.mli
+
 .PHONY: clean
 
 clean:
-	rm -f *.cmo *.cmi scanner.ml parser.ml parser.mli art
+	rm -f *.cmo *.cmi scanner.ml parser.ml parser.mli parser.output art

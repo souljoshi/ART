@@ -57,7 +57,9 @@ rule token = parse
 | '0' oct*  as lxm { INTLIT( int_of_string ("0o"^lxm))}
 | '0' ('x' | 'X') hex* as lxm { INTLIT( int_of_string )}
 | ['1'-'9'] dec* as lxm { INTLIT(int_of_string lxm) } 
-| ['a'-'z' 'A'-'Z']['a'-'z' 'A'-'Z' '0'-'9' '_']* as lxm { ID(lxm) }
+
+(* Identifier *)
+| ['a'-'z' 'A'-'Z' '_']['a'-'z' 'A'-'Z' '0'-'9' '_']* as lxm { ID(lxm) }
 
 (* Character Literals *)
 | '\'' printable as lex '\''  { CHARLIT (lex.[0]) }
