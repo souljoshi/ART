@@ -33,7 +33,7 @@ rule token = parse
 | '+'      { PLUS }
 | '-'      { MINUS }
 | '*'      { TIMES }
-| '/'      { DIV }
+| '/'      { DIVIDE }
 | '%'      { MOD }
 | '='      { ASSIGN }
 | "+="     { PLUSASSIGN }
@@ -55,7 +55,7 @@ rule token = parse
  
  (* Integer Literals *)
 | '0' oct*  as lxm { INTLIT( int_of_string ("0o"^lxm))}
-| '0' ('x' | 'X') hex* as lxm { INTLIT( int_of_string )}
+| '0' ('x' | 'X') hex* as lxm { INTLIT( int_of_string lxm)}
 | ['1'-'9'] dec* as lxm { INTLIT(int_of_string lxm) } 
 
 (* Identifier *)
@@ -66,10 +66,10 @@ rule token = parse
  (* More to be added soon *)
 
 (* Double Literal *)
-|  double as lex { FLOATLIT (lex)}
+|  double as lex { FLOATLIT (float_of_string lex)}
 
 (* Vector Literal *)
-|  '<' double as lex1 ',' double as lex2 '>'  { VECTORLIT(lex1, lex2)}
+|  '<' double as lex1 ',' double as lex2 '>'  { VECTORLIT(float_of_string lex1, float_of_string lex2)}
 
 | eof { EOF }
 | _ as char { raise (Failure("illegal character " ^ Char.escaped char)) }

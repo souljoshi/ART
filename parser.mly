@@ -35,18 +35,18 @@
 %%
 
 expr:
-  bexpr                     {$1}
+  bexpr                     { $1 }
 
   /* Conditional */
-  |bexpr QMARK expr COLON expr %prec CONDITIONAL {$1}
+  |bexpr QMARK expr COLON expr %prec CONDITIONAL { Trop(Cond, $1, $3, $5) }
 
   /* Assignment */
-  |posexpr ASSIGN expr      {$1} 
-  |posexpr PLUSASSIGN expr  {$1}
-  |posexpr MINUSASSIGN expr {$1}
-  |posexpr TIMESASSIGN expr {$1}
-  |posexpr DIVASSIGN expr   {$1}
-  |posexpr MODASSIGN expr   {$1}
+  |posexpr ASSIGN expr      { Binop($1, Asn, $3) } 
+  |posexpr PLUSASSIGN expr  { Binop($1, AddAsn, $3) }
+  |posexpr MINUSASSIGN expr { Binop($1, SubAsn, $3) }
+  |posexpr TIMESASSIGN expr { Binop($1, MultAsn, $3) }
+  |posexpr DIVASSIGN expr   { Binop($1, DivAsn, $3) }
+  |posexpr MODASSIGN expr   { Binop($1, ModAsn, $3) }
 
 
 /* all expressions other than assignment/conditional */
@@ -55,53 +55,53 @@ bexpr:
   posexpr                  {$1}
 
   /* unary */
-  | PLUS  bexpr %prec POS        {$2} /* { Unop(Neg, $2) } */
-  | MINUS bexpr %prec NEG        {$2} /* { Unop(Neg, $2) } */
-  | NOT bexpr                    {$2} /* { Unop(Not, $2) } */
-  | PLUSPLUS   bexpr %prec PRE   {$2}
-  | MINUSMINUS bexpr %prec PRE   {$2}
+  | PLUS  bexpr %prec POS        { Unop(Pos, $2) }
+  | MINUS bexpr %prec NEG        { Unop(Neg, $2) }
+  | NOT bexpr                    { Unop(Not, $2) }
+  | PLUSPLUS   bexpr %prec PRE   { Unop(Preinc, $2)}
+  | MINUSMINUS bexpr %prec PRE   { Unop(Predec, $2)}
 
   /* multiplicative */
-  | bexpr TIMES  bexpr      {$1} /* { Binop($1, Mult,  $3) } */
-  | bexpr DIVIDE bexpr      {$1} /* { Binop($1, Div,   $3) } */
-  | bexpr MOD    bexpr      {$1} /* { Binop($1, Div,   $3) } */
+  | bexpr TIMES  bexpr      { Binop($1, Mult,  $3) }
+  | bexpr DIVIDE bexpr      { Binop($1, Div,   $3) }
+  | bexpr MOD    bexpr      { Binop($1, Mod,   $3) }
 
   /* additive */
-  | bexpr PLUS   bexpr      {$1} /* { Binop($1, Add,   $3) } */
-  | bexpr MINUS  bexpr      {$1} /* { Binop($1, Sub,   $3) } */
+  | bexpr PLUS   bexpr      { Binop($1, Add,   $3) }
+  | bexpr MINUS  bexpr      { Binop($1, Sub,   $3) }
 
   /* relational */
-  | bexpr  LT    bexpr      {$1} /* { Binop($1, Less,  $3) } */
-  | bexpr  LEQ   bexpr      {$1} /* { Binop($1, Leq,   $3) } */
-  | bexpr  GT    bexpr      {$1} /* { Binop($1, Greater, $3)} */
-  | bexpr  GEQ   bexpr      {$1} /* { Binop($1, Geq,   $3) } *)/
+  | bexpr  LT    bexpr      { Binop($1, Less,   $3) }
+  | bexpr  LEQ   bexpr      { Binop($1, Leq,    $3) }
+  | bexpr  GT    bexpr      { Binop($1, Greater, $3)}
+  | bexpr  GEQ   bexpr      { Binop($1, Geq,    $3) }
 
   /* equality */
-  | bexpr  EQ    bexpr      {$1} /* { Binop($1, Equal, $3) } */
-  | bexpr  NEQ   bexpr      {$1} /* { Binop($1, Neq,   $3) } */
+  | bexpr  EQ    bexpr      { Binop($1, Equal, $3) }
+  | bexpr  NEQ   bexpr      { Binop($1, Neq,   $3) }
 
   /* logical AND/OR */
-  | bexpr  AND   bexpr      {$1} /* { Binop($1, And,   $3) } */
-  | bexpr  OR    bexpr      {$1} /* { Binop($1, Or,    $3) } */
+  | bexpr  AND   bexpr      { Binop($1, And,   $3) }
+  | bexpr  OR    bexpr      { Binop($1, Or,    $3) }
 
 
 posexpr: 
   /* Literals */
-    INTLIT                {$1} /* { Literal($1) } */
-  | CHARLIT               {$1}
-  | FLOATLIT              {$1}
-  | VECTORLIT             {$1}
+    INTLIT                { IntLit($1) }
+  | CHARLIT               { CharLit($1) }
+  | FLOATLIT              { FloatLit($1) }
+  | VECTORLIT             { VecLit($1) }
 
   /* primary expression */
-  | ID                    {$1} /* { Id($1) } */
-  | LPAREN expr RPAREN    {$2} /* { $2 } */
+  | ID                    { Id($1) }
+  | LPAREN expr RPAREN    { $2 }
 
   /* postfix expression */
-  | posexpr LBRACK expr RBRACK    %prec INDEX   {$1}
-  | posexpr LPAREN arglist RPAREN %prec CALL    {$1}
-  | posexpr DOT ID                %prec MEMB    {$1}
-  | posexpr PLUSPLUS              %prec POST    {$1}
-  | posexpr MINUSMINUS            %prec POST    {$1}
+  | posexpr LBRACK expr RBRACK    %prec INDEX   { Index($1, $3) }
+  | posexpr LPAREN arglist RPAREN %prec CALL    { Call($1, $3) }
+  | posexpr DOT ID                %prec MEMB    { Member($1, $3) }
+  | posexpr PLUSPLUS              %prec POST    { Posop(Postinc, $1) }
+  | posexpr MINUSMINUS            %prec POST    { Posop(Postdec, $1) }
 
 arglist:
   /* nothing */       {[]}

@@ -15,12 +15,12 @@ type expr =
     IntLit of int
   | CharLit of char
   | FloatLit of float
-  | VecLit of float * float
+  | VecLit of (float * float)
   | Id of string
   | Binop of expr * op * expr
   | Unop of uop * expr
   | Posop of pop * expr
-  | Trop of op * expr * expr * expr
-  | Call of string * expr list
+  | Trop of trop * expr * expr * expr
+  | Call of expr * expr list
   | Index of expr * expr
   | Member of expr * string
