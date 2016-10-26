@@ -22,40 +22,54 @@ let double = '.' dec+ exp?
 
 rule token = parse
   [' ' '\t' '\r' '\n'] { token lexbuf }       (* Whitespace *)
-| "/*"     { block_comment lexbuf }           (* Block Comments *)
-| "//"     { line_comment lexbuf }            (* Line Comments *)
-| '('      { LPAREN }
-| ')'      { RPAREN }
-| '['      { LBRACK }
-| ']'      { RBRACK }
-| '.'      { DOT }
-| '?'      { QMARK }
-| ':'      { COLON }
-| ';'      { SEMI }
-| ','      { COMMA }
-| '+'      { PLUS }
-| '-'      { MINUS }
-| '*'      { TIMES }
-| '/'      { DIVIDE }
-| '%'      { MOD }
-| '='      { ASSIGN }
-| "+="     { PLUSASSIGN }
-| "-="     { MINUSASSIGN }
-| "*="     { TIMESASSIGN }
-| "/="     { DIVASSIGN }
-| "%="     { MODASSIGN }
-| "++"     { PLUSPLUS }
-| "--"     { MINUSMINUS }
-| "=="     { EQ }
-| "!="     { NEQ }
-| '<'      { LT }
-| "<="     { LEQ }
-| '>'      { GT }
-| ">="     { GEQ }
-| "&&"     { AND }
-| "||"     { OR }
-| "!"      { NOT }
- 
+| "/*"        { block_comment lexbuf }        (* Block Comments *)
+| "//"        { line_comment lexbuf }         (* Line Comments *)
+| '('         { LPAREN }
+| ')'         { RPAREN }
+| '{'         { LBRACE }
+| '}'         { RBRACE }
+| '['         { LBRACK }
+| ']'         { RBRACK }
+| '.'         { DOT }
+| '?'         { QMARK }
+| ':'         { COLON }
+| ';'         { SEMI }
+| ','         { COMMA }
+| '+'         { PLUS }
+| '-'         { MINUS }
+| '*'         { TIMES }
+| '/'         { DIVIDE }
+| '%'         { MOD }
+| '='         { ASSIGN }
+| "+="        { PLUSASSIGN }
+| "-="        { MINUSASSIGN }
+| "*="        { TIMESASSIGN }
+| "/="        { DIVASSIGN }
+| "%="        { MODASSIGN }
+| "++"        { PLUSPLUS }
+| "--"        { MINUSMINUS }
+| "=="        { EQ }
+| "!="        { NEQ }
+| '<'         { LT }
+| "<="        { LEQ }
+| '>'         { GT }
+| ">="        { GEQ }
+| "&&"        { AND }
+| "||"        { OR }
+| "!"         { NOT }
+| "if"        { IF }
+| "else"      { ELSE }
+| "for"       { FOR }
+| "while"     { WHILE }
+| "timeloop"  { TLOOP }
+| "frameloop" { FLOOP }
+| "break"     { BREAK }
+| "continue"  { CONTINUE }
+| "return"    { RETURN }
+ (* Builtin Functions *)
+| "#add"       { ADDSHAPE }
+| "#drawpoint" { DRAW }
+
  (* Integer Literals *)
 | '0' oct*  as lxm { INTLIT( int_of_string ("0o"^lxm))}
 | '0' ('x' | 'X') hex* as lxm { INTLIT( int_of_string lxm)}

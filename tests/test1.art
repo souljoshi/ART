@@ -7,4 +7,9 @@ Commented out Code
 
 // This is how we do it
 
-f ( x[f(x[y])]) ;
+f ( x[f(x[y])
+]) ;
+
+x[4] = 7;
+
+x = 1 < 2 ? y : 2 < 3 ? 5 : 6;

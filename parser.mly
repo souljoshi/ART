@@ -4,12 +4,14 @@
   open Ast
 %}
 
-%token LPAREN RPAREN LBRACK RBRACK
+%token LPAREN RPAREN LBRACK RBRACK LBRACE RBRACE
 %token DOT QMARK COLON COMMA SEMI
 %token PLUS MINUS TIMES DIVIDE MOD
 %token ASSIGN PLUSASSIGN MINUSASSIGN TIMESASSIGN 
 %token DIVASSIGN MODASSIGN PLUSPLUS MINUSMINUS
 %token EQ NEQ LT LEQ GT GEQ AND OR NOT
+%token RETURN IF ELSE FOR WHILE BREAK CONTINUE
+%token TLOOP FLOOP ADDSHAPE DRAW
 %token <int> INTLIT
 %token <char> CHARLIT
 %token <float> FLOATLIT
@@ -17,6 +19,8 @@
 %token <string> ID
 %token EOF
 
+%nonassoc NOELSE
+%nonassoc ELSE
 %right ASSIGN PLUSASSIGN MINUSASSIGN TIMESASSIGN DIVASSIGN MODASSIGN
 %right CONDITIONAL  /* ? : */
 %left OR
@@ -30,16 +34,46 @@
 %left INDEX CALL MEMB /* member */ POST /* postfix decrement/increment */
 
 %start program
-%type <Ast.expr list> program
+%type <Ast.stmt list> program
 
 %%
 
 program:
-  expr_list EOF {$1}
+  stmt_list EOF {$1}
 
-expr_list:
-  expr SEMI {[$1]}
-  | expr_list expr SEMI {$2 :: $1}
+
+stmt_list:
+    /* nothing */  { [] }
+  | stmt_list stmt { $2 :: $1 }
+
+stmt:
+    expr SEMI                               { Expr $1 }
+  | RETURN SEMI                             { Return Noexpr }
+  | RETURN expr SEMI                        { Return $2 }
+  | BREAK SEMI                              { Break }
+  | CONTINUE SEMI                           { Continue }
+  | LBRACE stmt_list RBRACE                 { Block(List.rev $2) }
+
+  | IF LPAREN expr RPAREN stmt %prec NOELSE { If($3, $5, Block([])) }
+  | IF LPAREN expr RPAREN stmt ELSE stmt    { If($3, $5, $7) }
+
+  | FOR LPAREN expr_opt SEMI expr_opt SEMI expr_opt RPAREN stmt
+     { For($3, $5, $7, $9) }
+  | WHILE LPAREN expr RPAREN stmt { While($3, $5) }
+
+  | TLOOP LPAREN ID ASSIGN expr SEMI ID ASSIGN expr RPAREN stmt
+   { Timeloop($3, $5, $7, $9, $11) }
+  | FLOOP LPAREN ID ASSIGN expr SEMI ID ASSIGN expr RPAREN stmt
+   { Frameloop($3, $5, $7, $9, $11) }
+
+  | DRAW LPAREN expr RPAREN SEMI            { Drawpoint($3) }
+  | ADDSHAPE LPAREN expr RPAREN SEMI        { Addshape([$3]) }
+  | ADDSHAPE LBRACE expr_list RBRACE SEMI   { Addshape($3) }
+
+/* Optional Expression */
+expr_opt:
+  /* nothing */ { Noexpr }
+  | expr          { $1 }
 
 expr:
   bexpr                     { $1 }
@@ -105,12 +139,16 @@ posexpr:
 
   /* postfix expression */
   | posexpr LBRACK expr RBRACK    %prec INDEX   { Index($1, $3) }
-  | posexpr LPAREN arglist RPAREN %prec CALL    { Call($1, $3) }
+  | posexpr LPAREN arg_list RPAREN %prec CALL    { Call($1, $3) }
   | posexpr DOT ID                %prec MEMB    { Member($1, $3) }
   | posexpr PLUSPLUS              %prec POST    { Posop(Postinc, $1) }
   | posexpr MINUSMINUS            %prec POST    { Posop(Postdec, $1) }
 
-arglist:
+arg_list:
   /* nothing */       {[]}
- | expr               {[$1]}
- | arglist COMMA expr {$3::$1}
+ | expr_list          {$1}
+
+/* Inverted List */
+expr_list:
+   expr               {[$1]}
+ | expr_list COMMA expr    {$3::$1}
