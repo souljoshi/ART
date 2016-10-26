@@ -54,6 +54,7 @@ type stmt =
   | Drawpoint of expr
   | Addshape of expr list
 
+type prog = (ustype list) * (stmt list)
 (* Pretty-printing functions *)
 
 let string_of_op = function
@@ -119,9 +120,18 @@ let rec string_of_typ = function
   | Void -> "void"
   | Float -> "double"
   | Vec  -> "vec"
-  | UserType(s,StructType) -> "struct" ^ s
-  | UserType(s, ShapeType) -> "shape" ^ s
+  | UserType(s,StructType) -> "struct " ^ s
+  | UserType(s, ShapeType) -> "shape " ^ s
   | Array(t, i) -> string_of_typ t ^ "[" ^ string_of_expr i ^ "]"
+ 
+let string_of_bind (t,s) = 
+    string_of_typ t ^" "^ s
+let string_of_ustype = function
+      Struct(s,l) -> "struct "^s^" {\n" 
+        ^ String.concat ";\n" (List.map string_of_bind l) ^  ";\n}\n"
+    | Shape(s,l) -> "shape "^s^" {\n" 
+        ^ String.concat ";\n" (List.map string_of_bind l) ^  ";\n}\n"
+
 
 let rec  string_of_initer = function
     Exprinit(e) -> string_of_expr e
@@ -168,5 +178,6 @@ let rec string_of_stmt = function
     "#add{" ^ String.concat ", " (List.map string_of_expr (List.rev el)) ^ "};\n"
  
 
-let string_of_program prog =
-    String.concat "" (List.map string_of_stmt (List.rev prog))
+let string_of_program (typs, stms) =
+    String.concat "" (List.map string_of_ustype typs) ^ 
+    String.concat "" (List.map string_of_stmt (List.rev stms))

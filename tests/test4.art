@@ -1,0 +1,10 @@
+struct circle {
+        int x;
+        int y;
+        shape circle z;
+}
+
+shape ball {
+        struct circle c;
+        struct into v;
+}

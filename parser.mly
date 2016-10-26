@@ -4,6 +4,8 @@
   open Ast
   let make_dec_list s l = 
   List.map (fun (a,b) -> (s, a, b)) l ;;
+  let make_struct_dec_list s l = 
+  List.map (fun a -> (s, a)) l ;;
 %}
 
 %token VOID INT CHAR DOUBLE VEC
@@ -38,13 +40,36 @@
 %left INDEX CALL MEMB /* member */ POST /* postfix decrement/increment */
 
 %start program
-%type <Ast.stmt list> program
+%type <Ast.prog> program
 
 %%
 
 program:
-  stmt_list EOF {$1}
+  decls EOF {(List.rev (fst $1)), (List.rev (snd $1))}
 
+decls:
+  /* empty */ { [], []} /* { struct def, stmt } */
+  | decls stmt  { fst $1, ($2 :: snd $1)}
+  | decls struct_or_shape_definition { ($2 :: fst $1), snd $1}
+
+struct_or_shape_specifier:
+    STRUCT ID     { UserType($2, StructType)}
+  | SHAPE  ID     { UserType($2, ShapeType)}
+
+struct_or_shape_definition:
+    STRUCT ID LBRACE struct_declaration_list RBRACE {Struct($2,$4)}
+  | SHAPE  ID LBRACE struct_declaration_list RBRACE {Shape($2,$4)}
+
+struct_declaration_list:
+   struct_declaration                              {$1}
+ | struct_declaration_list struct_declaration      { $1 @ $2 }
+
+struct_declaration:
+  typ struct_declarator_list SEMI  {make_struct_dec_list $1  (List.rev $2)}
+
+struct_declarator_list:
+    ID                         {[$1]}        
+  | struct_declarator_list ID  { $2 :: $1}
 
 /* Matches types */
 typ:
