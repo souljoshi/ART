@@ -58,7 +58,7 @@ type stmt =
   | Timeloop of string * expr * string * expr * stmt
   | Frameloop of string * expr * string * expr * stmt
   (* Builtin Statements *)
-  | Drawpoint of expr
+  | Drawpoint of expr * expr
   | Addshape of expr list
 
 type ftyp = Func | Method | Constructor
@@ -203,7 +203,8 @@ let rec string_of_stmt = function
       id2 ^" = "^ string_of_expr e2 ^ " )\n" ^ string_of_stmt s
 
   (* Builtin Statements *)
-  | Drawpoint(e) -> "#drawpoint(" ^ string_of_expr e ^ ");\n"
+  | Drawpoint(e1, e2) -> "#drawpoint(" ^ string_of_expr e1 ^ " , "^
+                          string_of_expr e2 ^");\n"
   | Addshape([e]) -> "#add( " ^ string_of_expr e ^ " );\n"
   | Addshape(el) ->
     "#add{" ^ String.concat ", " (List.map string_of_expr (List.rev el)) ^ "};\n"

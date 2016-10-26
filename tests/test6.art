@@ -19,7 +19,7 @@ void disk::draw()
 	{
 		for (int rad = 0; rad <= radius; rad += 0.01) 
 {
-			#drawpoint(c + rad*sin(theta)); //vector-type expression.
+			#drawpoint(c + rad*sin(theta), 0XFF); //vector-type expression.
 		}
 }
 }  

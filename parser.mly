@@ -174,7 +174,7 @@ stmt:
   | FLOOP LPAREN ID ASSIGN expr SEMI ID ASSIGN expr RPAREN stmt
    { Frameloop($3, $5, $7, $9, $11) }
 
-  | DRAW LPAREN expr RPAREN SEMI            { Drawpoint($3) }
+  | DRAW LPAREN expr COMMA expr RPAREN SEMI            { Drawpoint($3, $5) }
   | ADDSHAPE LPAREN expr RPAREN SEMI        { Addshape([$3]) }
   | ADDSHAPE LBRACE expr_list RBRACE SEMI   { Addshape($3) }
 
