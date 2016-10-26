@@ -2,8 +2,8 @@
 
 %{
   open Ast
-  let make_dec_list tp l = 
-  List.map (fun (a,b) -> (tp, a, b)) l
+  let make_dec_list s l = 
+  List.map (fun (a,b) -> (s, a, b)) l ;;
 %}
 
 %token VOID INT CHAR DOUBLE VEC
@@ -53,8 +53,8 @@ typ:
   | CHAR              { Char }
   | DOUBLE            { Float}
   | VEC               { Vec }
-  | typ LPAREN expr RPAREN { Array($1, expr)}
-  | typ LPAREN RPAREN      { Array($1, Noexpr)}
+  | typ LBRACK expr RBRACK { Array($1, $3)}
+  | typ LBRACK RBRACK      { Array($1, Noexpr)}
   | STRUCT ID                { UserType($2, StructType)}
   | SHAPE  ID                { UserType($2, ShapeType)}
 
@@ -64,7 +64,7 @@ declaration_list:
  | declaration_list declaration      { $1 @ $2 }
 
 declaration:
-  typ init_declarator_list SEMI { make_dec_list($1, List.rev $2)}
+  typ init_declarator_list SEMI { make_dec_list $1  (List.rev $2) }
 
 init_declarator_list: 
     init_declarator         { [$1] }
@@ -72,7 +72,7 @@ init_declarator_list:
 
 init_declarator:
     ID                      { ($1, Noinit) }
-  | ID ASSIGN init          { ($1, init)   }
+  | ID ASSIGN init          { ($1, $3)   }
 
 init:
   expr    {Exprinit($1)}
