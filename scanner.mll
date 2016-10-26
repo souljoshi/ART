@@ -2,6 +2,8 @@
 
 { open Parser }
 
+let spc = [' ' '\t' '\r' '\n']
+
 let oct = ['0' - '7']                         (* Octal digits *)
 let dec = ['0' - '9']                         (* Decimal digits *)
 let hex = dec | ['A' -'F' 'a' - 'f']          (* Hex digits *)  
@@ -29,6 +31,7 @@ rule token = parse
 | '.'      { DOT }
 | '?'      { QMARK }
 | ':'      { COLON }
+| ';'      { SEMI }
 | ','      { COMMA }
 | '+'      { PLUS }
 | '-'      { MINUS }
@@ -62,14 +65,15 @@ rule token = parse
 | ['a'-'z' 'A'-'Z' '_']['a'-'z' 'A'-'Z' '0'-'9' '_']* as lxm { ID(lxm) }
 
 (* Character Literals *)
-| '\'' printable as lex '\''  { CHARLIT (lex.[0]) }
+| '\'' (printable as lex) '\''  { CHARLIT (lex) }
  (* More to be added soon *)
 
 (* Double Literal *)
 |  double as lex { FLOATLIT (float_of_string lex)}
 
 (* Vector Literal *)
-|  '<' double as lex1 ',' double as lex2 '>'  { VECTORLIT(float_of_string lex1, float_of_string lex2)}
+|  '<' spc* (double as lex1) spc*
+    ',' spc* (double as lex2) spc* '>'  { VECTORLIT(float_of_string lex1, float_of_string lex2)}
 
 | eof { EOF }
 | _ as char { raise (Failure("illegal character " ^ Char.escaped char)) }

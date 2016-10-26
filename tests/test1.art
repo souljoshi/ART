@@ -1,0 +1,10 @@
+x  = 7 ; // Comments should be invisible
+/*
+
+Commented out Code
+
+*/
+
+// This is how we do it
+
+f ( x[f(x[y])]) ;

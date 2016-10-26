@@ -5,7 +5,7 @@
 %}
 
 %token LPAREN RPAREN LBRACK RBRACK
-%token DOT QMARK COLON COMMA
+%token DOT QMARK COLON COMMA SEMI
 %token PLUS MINUS TIMES DIVIDE MOD
 %token ASSIGN PLUSASSIGN MINUSASSIGN TIMESASSIGN 
 %token DIVASSIGN MODASSIGN PLUSPLUS MINUSMINUS
@@ -29,10 +29,17 @@
 %right NOT NEG POS
 %left INDEX CALL MEMB /* member */ POST /* postfix decrement/increment */
 
-%start expr
-%type <Ast.expr> expr
+%start program
+%type <Ast.expr list> program
 
 %%
+
+program:
+  expr_list EOF {$1}
+
+expr_list:
+  expr SEMI {[$1]}
+  | expr_list expr SEMI {$2 :: $1}
 
 expr:
   bexpr                     { $1 }
