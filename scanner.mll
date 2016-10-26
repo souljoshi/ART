@@ -69,8 +69,18 @@ rule token = parse
  (* Builtin Functions *)
 | "#add"       { ADDSHAPE }
 | "#drawpoint" { DRAW }
+(* Builtin Types *)
+| "void"        { VOID }
+| "int"         { INT  }
+| "char"        { CHAR }
+| "double"      { DOUBLE }
+| "vec"         { VEC }
+(* Type keywords *)
+| "struct"      { STRUCT }
+| "shape"       { SHAPE }
 
  (* Integer Literals *)
+
 | '0' oct*  as lxm { INTLIT( int_of_string ("0o"^lxm))}
 | '0' ('x' | 'X') hex* as lxm { INTLIT( int_of_string lxm)}
 | ['1'-'9'] dec* as lxm { INTLIT(int_of_string lxm) } 

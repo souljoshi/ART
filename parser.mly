@@ -2,8 +2,11 @@
 
 %{
   open Ast
+  let make_dec_list tp l = 
+  List.map (fun (a,b) -> (tp, a, b)) l
 %}
 
+%token VOID INT CHAR DOUBLE VEC
 %token LPAREN RPAREN LBRACK RBRACK LBRACE RBRACE
 %token DOT QMARK COLON COMMA SEMI
 %token PLUS MINUS TIMES DIVIDE MOD
@@ -11,6 +14,7 @@
 %token DIVASSIGN MODASSIGN PLUSPLUS MINUSMINUS
 %token EQ NEQ LT LEQ GT GEQ AND OR NOT
 %token RETURN IF ELSE FOR WHILE BREAK CONTINUE
+%token STRUCT SHAPE
 %token TLOOP FLOOP ADDSHAPE DRAW
 %token <int> INTLIT
 %token <char> CHARLIT
@@ -42,6 +46,43 @@ program:
   stmt_list EOF {$1}
 
 
+/* Matches types */
+typ:
+    VOID              { Void }
+  | INT               { Int }
+  | CHAR              { Char }
+  | DOUBLE            { Float}
+  | VEC               { Vec }
+  | typ LPAREN expr RPAREN { Array($1, expr)}
+  | typ LPAREN RPAREN      { Array($1, Noexpr)}
+  | STRUCT ID                { UserType($2, StructType)}
+  | SHAPE  ID                { UserType($2, ShapeType)}
+
+/* Declarations */
+declaration_list:
+  declaration                       {$1}
+ | declaration_list declaration      { $1 @ $2 }
+
+declaration:
+  typ init_declarator_list SEMI { make_dec_list($1, List.rev $2)}
+
+init_declarator_list: 
+    init_declarator         { [$1] }
+  | init_declarator_list COMMA init_declarator {$3 :: $1}
+
+init_declarator:
+    ID                      { ($1, Noinit) }
+  | ID ASSIGN init          { ($1, init)   }
+
+init:
+  expr    {Exprinit($1)}
+  | LBRACE init_list RBRACE  {Listinit( List.rev $2)}
+  | LBRACE init_list COMMA RBRACE {IListinit( List.rev $2 )}
+
+init_list:
+    init                  { [$1] }
+  | init_list COMMA init  { $3 :: $1}
+
 stmt_list:
     /* nothing */  { [] }
   | stmt_list stmt { $2 :: $1 }
@@ -52,9 +93,12 @@ stmt:
   | RETURN expr SEMI                        { Return $2 }
   | BREAK SEMI                              { Break }
   | CONTINUE SEMI                           { Continue }
-  | LBRACE stmt_list RBRACE                 { Block(List.rev $2) }
 
-  | IF LPAREN expr RPAREN stmt %prec NOELSE { If($3, $5, Block([])) }
+  /* Block */
+  | LBRACE stmt_list RBRACE                 { Block([], List.rev $2) }
+  | LBRACE declaration_list stmt_list RBRACE{ Block($2, List.rev $3)} /* Already Reversed */
+
+  | IF LPAREN expr RPAREN stmt %prec NOELSE { If($3, $5, Block([],[])) }
   | IF LPAREN expr RPAREN stmt ELSE stmt    { If($3, $5, $7) }
 
   | FOR LPAREN expr_opt SEMI expr_opt SEMI expr_opt RPAREN stmt

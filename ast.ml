@@ -9,7 +9,8 @@ type pop = Postinc |Postdec
 
 type trop = Cond
 
-type typ = Int | Char | Float | Vec
+(*type typ = Int | Char | Float | Vec | Void | Array of typ * expr | UserType of string*)
+
 
 type expr =
     IntLit of int
@@ -26,8 +27,20 @@ type expr =
   | Member of expr * string
   | Noexpr
 
+type ss = StructType | ShapeType
+type typ = Int | Char | Float | Vec | Void | Array of typ * expr | UserType of string*ss
+
+type initer = Exprinit of expr | Listinit of initer | IListinit of initer (* Incomplete List *)
+              | Noinit
+
+type bind = typ * string
+
+type ustype = Struct of string * bind list 
+            | Shape of string * bind list 
+
+type vdecl = typ * string * initer
 type stmt =
-    Block of stmt list (* Future Version will have declaration list *)
+    Block of vdecl list * stmt list 
   | Expr of expr
   | Return of expr
   | Break
@@ -41,7 +54,6 @@ type stmt =
   | Drawpoint of expr
   | Addshape of expr list
 
- 
 (* Pretty-printing functions *)
 
 let string_of_op = function
@@ -102,14 +114,14 @@ paren_of_expr *) = function
   | Noexpr -> ""
 
 let rec string_of_stmt = function
-    Block(stmts) ->
+    Block(decls, stmts) ->
       "{\n" ^ String.concat "" (List.map string_of_stmt (List.rev stmts)) ^ "}\n"
   | Expr(expr) -> string_of_expr expr ^ ";\n";
   | Return(expr) -> "return " ^ string_of_expr expr ^ ";\n";
   | Break      -> "break;\n"
   | Continue   -> "continue;\n"
 
-  | If(e, s, Block([])) -> "if (" ^ string_of_expr e ^ ")\n" ^ string_of_stmt s
+  | If(e, s, Block([],[])) -> "if (" ^ string_of_expr e ^ ")\n" ^ string_of_stmt s
   | If(e, s1, s2) ->  "if (" ^ string_of_expr e ^ ")\n" ^
       string_of_stmt s1 ^ "else\n" ^ string_of_stmt s2
 
@@ -130,6 +142,16 @@ let rec string_of_stmt = function
   | Addshape([e]) -> "#add( " ^ string_of_expr e ^ " );\n"
   | Addshape(el) ->
     "#add{" ^ String.concat ", " (List.map string_of_expr (List.rev el)) ^ "};\n"
+
+let rec string_of_typ = function
+    Int -> "int"
+  | Char -> "char"
+  | Void -> "void"
+  | Float -> "double"
+  | Vec  -> "vec"
+  | UserType(s,StructType) -> "struct" ^ s
+  | UserType(s, ShapeType) -> "shape" ^ s
+  | Array(t, i) -> string_of_typ t ^ "[" ^ string_of_expr i ^ "]" 
 
 let string_of_program prog =
     String.concat "" (List.map string_of_stmt (List.rev prog))
