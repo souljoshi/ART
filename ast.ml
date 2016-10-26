@@ -18,6 +18,7 @@ type expr =
   | FloatLit of float
   | VecLit of (float * float)
   | Id of string
+  | Vecexpr of expr * expr
   | Binop of expr * op * expr
   | Unop of uop * expr
   | Posop of pop * expr
@@ -51,7 +52,8 @@ type stmt =
   | Break
   | Continue
   | If of expr * stmt * stmt
-  | For of expr * expr * expr * stmt (* Future version will support decls *)
+  | For of expr * expr * expr * stmt 
+  | ForDec of vdecl list* expr * expr * stmt
   | While of expr * stmt
   | Timeloop of string * expr * string * expr * stmt
   | Frameloop of string * expr * string * expr * stmt
@@ -59,11 +61,15 @@ type stmt =
   | Drawpoint of expr
   | Addshape of expr list
 
+type ftyp = Func | Method | Constructor
+
 type fdecl = {
-    typ : typ;
+    rettyp : typ;
     name : string;
     params : fbind list;
     body : stmt;  (* Must be Block *)
+    typ : ftyp ;
+    owner: string ;  (* Refers to owning struct/shape *)
   }
 
 type prog = {
@@ -119,6 +125,7 @@ paren_of_expr *) = function
   | FloatLit(l) -> string_of_float l
   | VecLit(a,b)  -> "< " ^ (string_of_float a) ^ " , " ^ (string_of_float b) ^ " >"
   | Id(s) -> s
+  | Vecexpr(e1,e2) -> " < "^ string_of_expr e1 ^ " , " ^ string_of_expr e2 ^ " >"
   | Binop(e1, o, e2) ->
       string_of_expr e1 ^ " " ^ string_of_op o ^ " " ^ string_of_expr e2
   | Unop(o, e) -> string_of_uop o ^ string_of_expr e
@@ -183,6 +190,9 @@ let rec string_of_stmt = function
   | For(e1, e2, e3, s) ->
       "for (" ^ string_of_expr e1  ^ " ; " ^ string_of_expr e2 ^ " ; " ^
       string_of_expr e3  ^ ") \n" ^ string_of_stmt s
+  | ForDec(d1, e2, e3, s) ->
+      "for (" ^ String.concat "" (List.map string_of_vdecl (d1)) ^ " ; " ^ 
+      string_of_expr e2 ^ " ; " ^ string_of_expr e3  ^ ") \n" ^ string_of_stmt s
   | While(e, s) -> "while (" ^ string_of_expr e ^ ") \n" ^ string_of_stmt s
 
   | Timeloop(id1, e1, id2, e2, s) -> 
@@ -198,8 +208,16 @@ let rec string_of_stmt = function
   | Addshape(el) ->
     "#add{" ^ String.concat ", " (List.map string_of_expr (List.rev el)) ^ "};\n"
  
+let string_rettyp f = 
+    match f.typ  with
+      Constructor -> ""
+    | _ -> string_of_typ f.rettyp
+let string_fname f = 
+    match f.typ with 
+      Func -> f.name
+    | _ -> f.owner^"::"^f.name
 let string_of_fdecl f = 
-    string_of_typ f.typ ^ " " ^ f.name ^ " ( " ^ 
+    string_rettyp f  ^ " " ^ string_fname f ^ " ( " ^ 
     String.concat ", " (List.map string_of_fbind f.params) ^ " )\n" ^
     string_of_stmt f.body
 

@@ -10,7 +10,7 @@
 
 %token VOID INT CHAR DOUBLE VEC
 %token LPAREN RPAREN LBRACK RBRACK LBRACE RBRACE
-%token DOT QMARK COLON COMMA SEMI AMPS
+%token DOT QMARK COLON COMMA SEMI AMPS DCOLON
 %token PLUS MINUS TIMES DIVIDE MOD
 %token ASSIGN PLUSASSIGN MINUSASSIGN TIMESASSIGN 
 %token DIVASSIGN MODASSIGN PLUSPLUS MINUSMINUS
@@ -52,16 +52,34 @@ decls:
   | decls declaration  {{s = $1.s ; f = $1.f ; v = $1.v@$2}}
   | decls struct_or_shape_definition {{s = $2::$1.s ; f = $1.f ; v = $1.v}}
   | decls fdecl        {{s = $1.s ; f = $2::$1.f ; v = $1.v}}
+  | decls mdecl        {{s = $1.s ; f = $2::$1.f ; v = $1.v}}
+  /*| decls mdecl  {List.find}*/
 
 fdecl:
   function_declarator LPAREN parameter_list RPAREN stmt_block
-        { { typ = fst $1;
+        { { rettyp = fst $1;
             name = snd $1;
             params = List.rev $3;
-            body = $5 } }
+            body = $5;
+            typ = Func;
+            owner= "" } }
 
 function_declarator:
   typ ID {($1, $2)}
+
+mdecl:
+  method_declarator  LPAREN parameter_list RPAREN stmt_block
+          { { rettyp = fst (fst $1);
+            name = snd (fst $1);
+            params = List.rev $3;
+            body = $5;
+            typ = snd (snd $1);
+            owner= fst (snd $1) } }
+
+method_declarator:
+    typ ID DCOLON ID {($1, $4), ($2, Method)}  /* (rettyp, name) (owner, typ)*/
+  | ID DCOLON ID  {(Void, $3), ($1, Constructor)} /* Constructor */
+
 parameter_list:
   /* No parameter case */  {[]}
   | parameter_declaration  {[$1]}
@@ -100,8 +118,7 @@ typ:
   | VEC               { Vec }
   | typ LBRACK expr RBRACK { Array($1, $3)}
   | typ LBRACK RBRACK      { Array($1, Noexpr)}
-  | STRUCT ID                { UserType($2, StructType)}
-  | SHAPE  ID                { UserType($2, ShapeType)}
+  | struct_or_shape_specifier {$1}
 
 /* Declarations */
 declaration_list:
@@ -147,6 +164,9 @@ stmt:
 
   | FOR LPAREN expr_opt SEMI expr_opt SEMI expr_opt RPAREN stmt
      { For($3, $5, $7, $9) }
+  /* Deal with for with declaration */
+  | FOR LPAREN declaration expr_opt SEMI expr_opt RPAREN stmt
+     { ForDec($3, $4, $6, $8) }
   | WHILE LPAREN expr RPAREN stmt { While($3, $5) }
 
   | TLOOP LPAREN ID ASSIGN expr SEMI ID ASSIGN expr RPAREN stmt
