@@ -32,6 +32,7 @@ rule token = parse
 | ']'         { RBRACK }
 | '.'         { DOT }
 | '?'         { QMARK }
+| '&'         { AMPS }
 | ':'         { COLON }
 | ';'         { SEMI }
 | ','         { COMMA }

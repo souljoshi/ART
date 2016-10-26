@@ -10,7 +10,7 @@
 
 %token VOID INT CHAR DOUBLE VEC
 %token LPAREN RPAREN LBRACK RBRACK LBRACE RBRACE
-%token DOT QMARK COLON COMMA SEMI
+%token DOT QMARK COLON COMMA SEMI AMPS
 %token PLUS MINUS TIMES DIVIDE MOD
 %token ASSIGN PLUSASSIGN MINUSASSIGN TIMESASSIGN 
 %token DIVASSIGN MODASSIGN PLUSPLUS MINUSMINUS
@@ -45,12 +45,32 @@
 %%
 
 program:
-  decls EOF {(List.rev (fst $1)), (List.rev (snd $1))}
+  decls EOF {{s = List.rev ($1.s); f = List.rev ($1.f);v = $1.v }}
 
 decls:
-  /* empty */ { [], []} /* { struct def, stmt } */
-  | decls stmt  { fst $1, ($2 :: snd $1)}
-  | decls struct_or_shape_definition { ($2 :: fst $1), snd $1}
+  /* empty */ {{s = []; f = []; v = []}} /* { structs, funcs, vars } */
+  | decls declaration  {{s = $1.s ; f = $1.f ; v = $1.v@$2}}
+  | decls struct_or_shape_definition {{s = $2::$1.s ; f = $1.f ; v = $1.v}}
+  | decls fdecl        {{s = $1.s ; f = $2::$1.f ; v = $1.v}}
+
+fdecl:
+  function_declarator LPAREN parameter_list RPAREN stmt_block
+        { { typ = fst $1;
+            name = snd $1;
+            params = List.rev $3;
+            body = $5 } }
+
+function_declarator:
+  typ ID {($1, $2)}
+parameter_list:
+  /* No parameter case */  {[]}
+  | parameter_declaration  {[$1]}
+  | parameter_list COMMA parameter_declaration {$3::$1}
+
+parameter_declaration:
+    typ ID      {($1, $2, Value)}
+  | typ AMPS ID {($1, $3, Ref)}
+
 
 struct_or_shape_specifier:
     STRUCT ID     { UserType($2, StructType)}
@@ -120,8 +140,7 @@ stmt:
   | CONTINUE SEMI                           { Continue }
 
   /* Block */
-  | LBRACE stmt_list RBRACE                 { Block([], List.rev $2) }
-  | LBRACE declaration_list stmt_list RBRACE{ Block($2, List.rev $3)} /* Already Reversed */
+  | stmt_block                               { $1 }
 
   | IF LPAREN expr RPAREN stmt %prec NOELSE { If($3, $5, Block([],[])) }
   | IF LPAREN expr RPAREN stmt ELSE stmt    { If($3, $5, $7) }
@@ -138,6 +157,11 @@ stmt:
   | DRAW LPAREN expr RPAREN SEMI            { Drawpoint($3) }
   | ADDSHAPE LPAREN expr RPAREN SEMI        { Addshape([$3]) }
   | ADDSHAPE LBRACE expr_list RBRACE SEMI   { Addshape($3) }
+
+stmt_block:
+  /* Block */
+    LBRACE stmt_list RBRACE                 { Block([], List.rev $2) }
+  | LBRACE declaration_list stmt_list RBRACE{ Block($2, List.rev $3)} /* Already Reversed */
 
 /* Optional Expression */
 expr_opt:

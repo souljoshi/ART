@@ -35,10 +35,15 @@ type initer = Exprinit of expr | Listinit of initer list | IListinit of initer l
 
 type bind = typ * string
 
+type pass = Value | Ref
+
+type fbind = typ * string * pass
+
 type ustype = Struct of string * bind list 
             | Shape of string * bind list 
 
 type vdecl = typ * string * initer
+
 type stmt =
     Block of vdecl list * stmt list 
   | Expr of expr
@@ -54,7 +59,19 @@ type stmt =
   | Drawpoint of expr
   | Addshape of expr list
 
-type prog = (ustype list) * (stmt list)
+type fdecl = {
+    typ : typ;
+    name : string;
+    params : fbind list;
+    body : stmt;  (* Must be Block *)
+  }
+
+type prog = {
+    s : ustype list;
+    f : fdecl  list;
+    v : vdecl  list;
+    }
+
 (* Pretty-printing functions *)
 
 let string_of_op = function
@@ -126,6 +143,10 @@ let rec string_of_typ = function
  
 let string_of_bind (t,s) = 
     string_of_typ t ^" "^ s
+let string_of_fbind (t,s, v) = 
+    match v with 
+      Value -> string_of_typ t ^" "^ s
+    | Ref   -> string_of_typ t ^"& "^ s
 let string_of_ustype = function
       Struct(s,l) -> "struct "^s^" {\n" 
         ^ String.concat ";\n" (List.map string_of_bind l) ^  ";\n}\n"
@@ -177,7 +198,12 @@ let rec string_of_stmt = function
   | Addshape(el) ->
     "#add{" ^ String.concat ", " (List.map string_of_expr (List.rev el)) ^ "};\n"
  
+let string_of_fdecl f = 
+    string_of_typ f.typ ^ " " ^ f.name ^ " ( " ^ 
+    String.concat ", " (List.map string_of_fbind f.params) ^ " )\n" ^
+    string_of_stmt f.body
 
-let string_of_program (typs, stms) =
-    String.concat "" (List.map string_of_ustype typs) ^ 
-    String.concat "" (List.map string_of_stmt (List.rev stms))
+let string_of_program p =
+    String.concat "" (List.map string_of_vdecl p.v)  ^
+    String.concat "" (List.map string_of_ustype p.s) ^ 
+    String.concat "" (List.map string_of_fdecl p.f)  

@@ -1,0 +1,13 @@
+int x = 7;
+
+int[][] f (vec x, int y)
+{
+        int x;
+        int y;
+}
+
+int[][] g (int[][]& x, int z)
+{
+        int q;
+        f(<3.0, 3.4>, 4);
+}
