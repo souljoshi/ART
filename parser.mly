@@ -107,7 +107,7 @@ struct_declaration:
 
 struct_declarator_list:
     ID                         {[$1]}        
-  | struct_declarator_list ID  { $2 :: $1}
+  | struct_declarator_list COMMA ID  { $3 :: $1}
 
 /* Matches types */
 typ:
