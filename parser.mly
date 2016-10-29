@@ -176,7 +176,7 @@ stmt:
 
   | DRAW LPAREN expr COMMA expr RPAREN SEMI            { Drawpoint($3, $5) }
   | ADDSHAPE LPAREN expr RPAREN SEMI        { Addshape([$3]) }
-  | ADDSHAPE LBRACE expr_list RBRACE SEMI   { Addshape($3) }
+  | ADDSHAPE LBRACE expr_list RBRACE SEMI   { Addshape(List.rev $3) }
 
 stmt_block:
   /* Block */
@@ -252,7 +252,7 @@ posexpr:
 
   /* postfix expression */
   | posexpr LBRACK expr RBRACK    %prec INDEX   { Index($1, $3) }
-  | posexpr LPAREN arg_list RPAREN %prec CALL    { Call($1, $3) }
+  | posexpr LPAREN arg_list RPAREN %prec CALL    { Call($1, List.rev $3) }
   | posexpr DOT ID                %prec MEMB    { Member($1, $3) }
   | posexpr PLUSPLUS              %prec POST    { Posop(Postinc, $1) }
   | posexpr MINUSMINUS            %prec POST    { Posop(Postdec, $1) }

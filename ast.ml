@@ -133,7 +133,7 @@ paren_of_expr *) = function
   | Trop (o, e1, e2, e3) -> let t = strings_of_trop o in
             string_of_expr e1 ^ fst t ^ string_of_expr e2 ^ snd t ^ string_of_expr e3
   | Call(f, el) ->
-      string_of_expr f ^ "(" ^ String.concat ", " (List.map string_of_expr (List.rev el)) ^ ")"
+      string_of_expr f ^ "(" ^ String.concat ", " (List.map string_of_expr el) ^ ")"
   | Index(e1, e2) -> string_of_expr e1 ^ "[" ^ string_of_expr e2 ^ "]"
   | Member(e1, s) -> string_of_expr e1 ^ "." ^ s
   | Noexpr -> ""
@@ -177,7 +177,7 @@ let string_of_vdecl (t, id,i ) =
 let rec string_of_stmt = function
     Block(decls, stmts) ->
       "{\n" ^  String.concat "" (List.map string_of_vdecl (decls)) 
-      ^ String.concat "" (List.map string_of_stmt (List.rev stmts)) ^ "}\n"
+      ^ String.concat "" (List.map string_of_stmt stmts) ^ "}\n"
   | Expr(expr) -> string_of_expr expr ^ ";\n";
   | Return(expr) -> "return " ^ string_of_expr expr ^ ";\n";
   | Break      -> "break;\n"
@@ -207,7 +207,7 @@ let rec string_of_stmt = function
                           string_of_expr e2 ^");\n"
   | Addshape([e]) -> "#add( " ^ string_of_expr e ^ " );\n"
   | Addshape(el) ->
-    "#add{" ^ String.concat ", " (List.map string_of_expr (List.rev el)) ^ "};\n"
+    "#add{" ^ String.concat ", " (List.map string_of_expr el) ^ "};\n"
  
 let string_rettyp f = 
     match f.typ  with

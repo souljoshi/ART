@@ -21,7 +21,9 @@ let double = '.' dec+ exp?
 
 
 rule token = parse
-  [' ' '\t' '\r' '\n'] { token lexbuf }       (* Whitespace *)
+  '\n'        {Lexing.new_line lexbuf;
+                   token lexbuf}              (* Keep track of new lines for error printing *)
+| [' ' '\t' '\r'] { token lexbuf }            (* Whitespace *)
 | "/*"        { block_comment lexbuf }        (* Block Comments *)
 | "//"        { line_comment lexbuf }         (* Line Comments *)
 | '('         { LPAREN }
