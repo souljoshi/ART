@@ -3,7 +3,7 @@
 %{
   open Ast
   let make_dec_list s l = 
-  List.map (fun (a,b) -> (s, a, b)) l ;;
+  List.map (fun (a,b) -> (s, a, b)) l ;; (* if there is a list of a,b, then s is appended infront *)
   let make_struct_dec_list s l = 
   List.map (fun a -> (s, a)) l ;;
 %}
@@ -94,6 +94,7 @@ struct_or_shape_specifier:
     STRUCT ID     { UserType($2, StructType)}
   | SHAPE  ID     { UserType($2, ShapeType)}
 
+
 struct_or_shape_definition:
     STRUCT ID LBRACE struct_declaration_list RBRACE {Struct($2,$4)}
   | SHAPE  ID LBRACE struct_declaration_list RBRACE {Shape($2,$4)}
@@ -110,6 +111,7 @@ struct_declarator_list:
   | struct_declarator_list COMMA ID  { $3 :: $1}
 
 /* Matches types */
+(* all the different types you can retun *)
 typ:
     VOID              { Void }
   | INT               { Int }
@@ -133,7 +135,7 @@ init_declarator_list:
   | init_declarator_list COMMA init_declarator {$3 :: $1}
 
 init_declarator:
-    ID                      { ($1, Noinit) }
+    ID                      { ($1, Noinit) } (* without initialiser *)
   | ID ASSIGN init          { ($1, $3)   }
 
 init:
@@ -142,10 +144,10 @@ init:
   | LBRACE init_list COMMA RBRACE {IListinit( List.rev $2 )}
 
 init_list:
-    init                  { [$1] }
+    init                  { [$1] } (* usefull for 2d arrays *)
   | init_list COMMA init  { $3 :: $1}
 
-stmt_list:
+stmt_list: (* inverted list of the statements *)
     /* nothing */  { [] }
   | stmt_list stmt { $2 :: $1 }
 
@@ -157,7 +159,7 @@ stmt:
   | CONTINUE SEMI                           { Continue }
 
   /* Block */
-  | stmt_block                               { $1 }
+  | stmt_block                               { $1 }   (* defined in stmt_block: *)
 
   | IF LPAREN expr RPAREN stmt %prec NOELSE { If($3, $5, Block([],[])) }
   | IF LPAREN expr RPAREN stmt ELSE stmt    { If($3, $5, $7) }
@@ -192,8 +194,10 @@ expr:
   bexpr                     { $1 }
 
   /* Conditional */
+  (* $1 = bexpr, $3 = expr, $5 = expr *)
   |bexpr QMARK expr COLON expr %prec CONDITIONAL { Trop(Cond, $1, $3, $5) }
 
+  (* postfix expressions *)
   /* Assignment */
   |posexpr ASSIGN expr      { Binop($1, Asn, $3) } 
   |posexpr PLUSASSIGN expr  { Binop($1, AddAsn, $3) }
@@ -239,6 +243,7 @@ bexpr:
   | bexpr  OR    bexpr      { Binop($1, Or,    $3) }
 
 
+
 posexpr: 
   /* Literals */
     INTLIT                { IntLit($1) }
@@ -252,7 +257,8 @@ posexpr:
 
   /* postfix expression */
   | posexpr LBRACK expr RBRACK    %prec INDEX   { Index($1, $3) }
-  | posexpr LPAREN arg_list RPAREN %prec CALL    { Call($1, List.rev $3) }
+  | posexpr LPAREN arg_list RPAREN %prec CALL    { Call($1, List.rev $3) } 
+  (* List.rev is used because in arg_list, expr_list is build from the back cause it is more efficient*)
   | posexpr DOT ID                %prec MEMB    { Member($1, $3) }
   | posexpr PLUSPLUS              %prec POST    { Posop(Postinc, $1) }
   | posexpr MINUSMINUS            %prec POST    { Posop(Postdec, $1) }

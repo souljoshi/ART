@@ -1,12 +1,16 @@
 (* Abstract Syntax Tree and functions for printing it *)
 
+(* binary operations *)
 type op = Add | Sub | Mult | Div | Mod | Equal | Neq | Less | Leq | Greater | Geq |
           And | Or  | Asn  | AddAsn | SubAsn | MultAsn | DivAsn | ModAsn 
 
+(* unary operators *)
 type uop = Neg | Not | Pos | Preinc | Predec 
 
+(* postfix operation*)
 type pop = Postinc |Postdec
 
+(* trinary operation *)
 type trop = Cond
 
 (*type typ = Int | Char | Float | Vec | Void | Array of typ * expr | UserType of string*)
@@ -23,26 +27,30 @@ type expr =
   | Unop of uop * expr
   | Posop of pop * expr
   | Trop of trop * expr * expr * expr
-  | Call of expr * expr list
-  | Index of expr * expr
+  | Call of expr * expr list (* expr list = list of arguments *)
+  | Index of expr * expr (* more general than it needs to be, needs to be checked for symantec *)
   | Member of expr * string
   | Noexpr
 
 type ss = StructType | ShapeType
+(* these are the types you can use to declare an object *)
 type typ = Int | Char | Float | Vec | Void | Array of typ * expr | UserType of string*ss
 
 type initer = Exprinit of expr | Listinit of initer list | IListinit of initer list(* Incomplete List *)
               | Noinit
 
+(* bind is for variable declaration *)
 type bind = typ * string
 
+(*you have to specify if it is passed by reference or by value*)
 type pass = Value | Ref
 
+(* methods stored as functions *)
 type fbind = typ * string * pass
 
 type ustype = Struct of string * bind list 
             | Shape of string * bind list 
-
+(* variable declaration *)
 type vdecl = typ * string * initer
 
 type stmt =
@@ -61,8 +69,11 @@ type stmt =
   | Drawpoint of expr * expr
   | Addshape of expr list
 
+
+(* types of functions *)
 type ftyp = Func | Method | Constructor
 
+(* allows us to store all function data in one struct *)
 type fdecl = {
     rettyp : typ;
     name : string;
@@ -72,6 +83,7 @@ type fdecl = {
     owner: string ;  (* Refers to owning struct/shape *)
   }
 
+(* Type of program: user type, function declaration and variable declaration *)
 type prog = {
     s : ustype list;
     f : fdecl  list;

@@ -85,15 +85,15 @@ rule token = parse
 
  (* Integer Literals *)
 
-| '0' oct*  as lxm { INTLIT( int_of_string ("0o"^lxm))}
-| '0' ('x' | 'X') hex* as lxm { INTLIT( int_of_string lxm)}
-| ['1'-'9'] dec* as lxm { INTLIT(int_of_string lxm) } 
+| '0' oct*  as lxm { INTLIT( int_of_string ("0o"^lxm))} (* reads octal and converts to int *)
+| '0' ('x' | 'X') hex* as lxm { INTLIT( int_of_string lxm)} (*reads hex and converts to int *)
+| ['1'-'9'] dec* as lxm { INTLIT(int_of_string lxm) } (* reads int *)
 
 (* Identifier *)
 | ['a'-'z' 'A'-'Z' '_']['a'-'z' 'A'-'Z' '0'-'9' '_']* as lxm { ID(lxm) }
 
 (* Character Literals *)
-| '\'' (printable as lex) '\''  { CHARLIT (lex) }
+| '\'' (printable as lex) '\''  { CHARLIT (lex) } (* printable within single quotes *)
  (* More to be added soon *)
 
 (* Double Literal *)
@@ -103,7 +103,7 @@ rule token = parse
 |  '<' spc* (double as lex1) spc*
     ',' spc* (double as lex2) spc* '>'  { VECTORLIT(float_of_string lex1, float_of_string lex2)}
 
-| eof { EOF }
+| eof { EOF } (* end of line rule *)
 | _ as char { raise (Failure("illegal character " ^ Char.escaped char)) }
 
 and block_comment = parse
