@@ -111,7 +111,7 @@ struct_declarator_list:
   | struct_declarator_list COMMA ID  { $3 :: $1}
 
 /* Matches types */
-(* all the different types you can retun *)
+/* all the different types you can retun */
 typ:
     VOID              { Void }
   | INT               { Int }
@@ -135,7 +135,7 @@ init_declarator_list:
   | init_declarator_list COMMA init_declarator {$3 :: $1}
 
 init_declarator:
-    ID                      { ($1, Noinit) } (* without initialiser *)
+    ID                      { ($1, Noinit) } /* without initialiser */
   | ID ASSIGN init          { ($1, $3)   }
 
 init:
@@ -144,10 +144,10 @@ init:
   | LBRACE init_list COMMA RBRACE {IListinit( List.rev $2 )}
 
 init_list:
-    init                  { [$1] } (* usefull for 2d arrays *)
+    init                  { [$1] } /* usefull for 2d arrays */
   | init_list COMMA init  { $3 :: $1}
 
-stmt_list: (* inverted list of the statements *)
+stmt_list: /* inverted list of the statements */
     /* nothing */  { [] }
   | stmt_list stmt { $2 :: $1 }
 
@@ -159,7 +159,7 @@ stmt:
   | CONTINUE SEMI                           { Continue }
 
   /* Block */
-  | stmt_block                               { $1 }   (* defined in stmt_block: *)
+  | stmt_block                               { $1 }   /* defined in stmt_block: */
 
   | IF LPAREN expr RPAREN stmt %prec NOELSE { If($3, $5, Block([],[])) }
   | IF LPAREN expr RPAREN stmt ELSE stmt    { If($3, $5, $7) }
@@ -194,10 +194,10 @@ expr:
   bexpr                     { $1 }
 
   /* Conditional */
-  (* $1 = bexpr, $3 = expr, $5 = expr *)
+  /* $1 = bexpr, $3 = expr, $5 = expr */
   |bexpr QMARK expr COLON expr %prec CONDITIONAL { Trop(Cond, $1, $3, $5) }
 
-  (* postfix expressions *)
+  /* postfix expressions */
   /* Assignment */
   |posexpr ASSIGN expr      { Binop($1, Asn, $3) } 
   |posexpr PLUSASSIGN expr  { Binop($1, AddAsn, $3) }
@@ -258,7 +258,7 @@ posexpr:
   /* postfix expression */
   | posexpr LBRACK expr RBRACK    %prec INDEX   { Index($1, $3) }
   | posexpr LPAREN arg_list RPAREN %prec CALL    { Call($1, List.rev $3) } 
-  (* List.rev is used because in arg_list, expr_list is build from the back cause it is more efficient*)
+  /* List.rev is used because in arg_list, expr_list is build from the back cause it is more efficient*/
   | posexpr DOT ID                %prec MEMB    { Member($1, $3) }
   | posexpr PLUSPLUS              %prec POST    { Posop(Postinc, $1) }
   | posexpr MINUSMINUS            %prec POST    { Posop(Postdec, $1) }
