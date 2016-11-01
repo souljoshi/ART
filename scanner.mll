@@ -108,8 +108,9 @@ rule token = parse
 
 and block_comment = parse
   "*/" { token lexbuf }
+|'\n'  {Lexing.new_line lexbuf; block_comment lexbuf}
 | _    { block_comment lexbuf }
 
 and line_comment = parse
-  '\n' { token lexbuf }
+  '\n' { Lexing.new_line lexbuf; token lexbuf }
 | _    { line_comment lexbuf }
