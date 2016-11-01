@@ -11,7 +11,6 @@
      [] -> t
    | [i] -> Array(t, i)
    | i::l -> List.fold_left (fun at e -> Array(at,e)) (Array(t, i)) l
-   (*(fun m i -> (fun x -> x)(*Array(m, i)*)*)
 %}
 
 %token VOID INT CHAR DOUBLE VEC
@@ -71,7 +70,8 @@ fdecl:
             owner= "" } }
 
 function_declarator:
-  typ ID {($1, $2)}
+    vdecl_typ ID {($1, $2)}
+  | VOID ID {(Void, $2)}
 
 mdecl:
   method_declarator  LPAREN parameter_list RPAREN stmt_block
@@ -83,7 +83,8 @@ mdecl:
             owner= fst (snd $1) } }
 
 method_declarator:
-    typ ID DCOLON ID {($1, $4), ($2, Method)}  /* (rettyp, name) (owner, typ)*/
+    vdecl_typ ID DCOLON ID {($1, $4), ($2, Method)}  /* (rettyp, name) (owner, typ)*/
+  | VOID ID DCOLON ID {(Void, $4), ($2, Method)}  /* (rettyp, name) (owner, typ)*/
   | ID DCOLON ID  {(Void, $3), ($1, Constructor)} /* Constructor */
 
 parameter_list:
@@ -92,8 +93,8 @@ parameter_list:
   | parameter_list COMMA parameter_declaration {$3::$1}
 
 parameter_declaration:
-    typ ID      {($1, $2, Value)}
-  | typ AMPS ID {($1, $3, Ref)}
+    vdecl_typ ID      {($1, $2, Value)}
+  | vdecl_typ AMPS ID {($1, $3, Ref)}
 
 
 struct_or_shape_specifier:
@@ -110,18 +111,26 @@ struct_declaration_list:
  | struct_declaration_list struct_declaration      { $1 @ $2 }
 
 struct_declaration:
-  typ struct_declarator_list SEMI  {make_struct_dec_list $1  (List.rev $2)}
+  sdecl_typ struct_declarator_list SEMI  {make_struct_dec_list $1  (List.rev $2)}
 
 struct_declarator_list:
     ID                         {[$1]}        
   | struct_declarator_list COMMA ID  { $3 :: $1}
 
-/* Matches types */
-/* all the different types you can retun */
-typ:
+ /* This causes conflicts
+ ret_typ:
     VOID              { Void }
-  | basic_typ         { $1 }
-  | array_typ         { $1 }
+  | vdecl_typ         { $1 }
+
+  */
+
+vdecl_typ: /* Types that can be used in as func_param or variable declaration*/
+    sdecl_typ         { $1 }
+  | incompl_array_typ { $1 }
+
+sdecl_typ: /* Types that can be used in declaring struct/shape members */
+    basic_typ         { $1 }
+  | full_array_typ    { $1 }
 
 basic_typ:
     INT               { Int }
@@ -130,9 +139,10 @@ basic_typ:
   | VEC               { Vec }
   | struct_or_shape_specifier {$1}
 
-array_typ:
-    basic_typ LBRACK expr RBRACK array_dim_list /*{ Array($1, $3)  }*/ {Array((build_array $1 $5), $3)}
-  | basic_typ LBRACK RBRACK array_dim_list      /*{ Array($1, Noexpr) }*/ {Array((build_array $1 $4),Noexpr)}
+full_array_typ:
+    basic_typ LBRACK expr RBRACK array_dim_list {Array((build_array $1 $5), $3)}
+incompl_array_typ:
+    basic_typ LBRACK RBRACK array_dim_list      {Array((build_array $1 $4),Noexpr)}
 
 array_dim_list: /* List of array dimension declarations */
     /* Nothing */                     { [] }
@@ -145,7 +155,7 @@ declaration_list:
  | declaration_list declaration      { $1 @ $2 }
 
 declaration:
-  typ init_declarator_list SEMI { make_dec_list $1  (List.rev $2) }
+  vdecl_typ init_declarator_list SEMI { make_dec_list $1  (List.rev $2) }
 
 init_declarator_list: 
     init_declarator         { [$1] }

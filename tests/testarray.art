@@ -1,11 +1,11 @@
 struct book {
-        int [] x; // should fail
-        int [][4] x; // fail
+        //int [] x; // should fail
+        //int [][4] x; // fail
         int [4] y; // works
         int [3][4] z; // works
 
 }
-int main()
+int main(int x, int[][23] x)
 {
         int[] x; // works
         int[][3][4] x ; //works
