@@ -36,8 +36,7 @@ type ss = StructType | ShapeType
 (* these are the types you can use to declare an object *)
 type typ = Int | Char | Float | Vec | Void | Array of typ * expr | UserType of string*ss
 
-type initer = Exprinit of expr | Listinit of initer list | IListinit of initer list(* Incomplete List *)
-              | Noinit
+type initer = Exprinit of expr | Listinit of initer list | Noinit
 
 (* bind is for variable declaration *)
 type bind = typ * string
@@ -177,7 +176,6 @@ let rec  string_of_initer = function
     Exprinit(e) -> string_of_expr e
     (* Already Reversed *)
     | Listinit(el) -> "{" ^ String.concat ", " (List.map string_of_initer (el)) ^ "}" 
-    | IListinit(el) -> "{" ^ String.concat ", " (List.map string_of_initer (el)) ^ ", }" 
     | Noinit -> ""
 
 let string_of_vdecl (t, id,i ) = 

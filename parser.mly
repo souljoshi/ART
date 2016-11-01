@@ -141,7 +141,7 @@ init_declarator:
 init:
   expr    {Exprinit($1)}
   | LBRACE init_list RBRACE  {Listinit( List.rev $2)}
-  | LBRACE init_list COMMA RBRACE {IListinit( List.rev $2 )}
+  | LBRACE init_list COMMA RBRACE {Listinit( List.rev $2 )}
 
 init_list:
     init                  { [$1] } /* usefull for 2d arrays */
