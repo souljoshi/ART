@@ -127,12 +127,18 @@ let string_of_pop = function
 let strings_of_trop = function
     Cond -> (" ? ", " :")
 
+let string_of_chr =  function
+  '\b' | '\t' | '\n' | '\r' as c -> Char.escaped c
+  | c when Char.code(c) > 31  && Char.code(c) < 127 -> Char.escaped c
+  | c -> "\\" ^ Printf.sprintf "%o" (Char.code c)
+
+
 (* Uncomment the next comment for full parenthesized *)
 let rec string_of_expr (*e = "( "^ paren_of_expr e ^ " )"
 and 
 paren_of_expr *) = function
     IntLit(l) -> string_of_int l
-  | CharLit(l) -> "'" ^ (Char.escaped l) ^ "'"
+  | CharLit(l) -> "'" ^ (string_of_chr l) ^ "'"
   | FloatLit(l) -> string_of_float l
   | VecLit(a,b)  -> "< " ^ (string_of_float a) ^ " , " ^ (string_of_float b) ^ " >"
   | Id(s) -> s

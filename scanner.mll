@@ -1,6 +1,21 @@
 (* Ocamllex scanner for ART *)
 
-{ open Parser }
+{ open Parser
+  (* Converts escape sequences into characters *)
+  let char_esc = function
+      "\\n"  -> Char.chr(0XA)
+    | "\\t"  -> Char.chr(0X9)
+    | "\\v"  -> Char.chr(0XB)
+    |"\\b"   -> Char.chr(0X8)
+    | "\\r"  -> Char.chr(0XD)
+    | "\\f"  -> Char.chr(0XC)
+    |"\\a"   -> Char.chr(0X7)
+    | "\\\\" -> '\\'
+    | "\\?"  -> '?'
+    |"\\'"   -> '\''
+    | "\\\"" -> '"'
+    | e      -> raise (Failure("illegal escape " ^ e))
+}
 
 let spc = [' ' '\t' '\r' '\n']
 
@@ -9,11 +24,13 @@ let dec = ['0' - '9']                         (* Decimal digits *)
 let hex = dec | ['A' -'F' 'a' - 'f']          (* Hex digits *)  
 
 let printable = [' ' -'~']                    (* All printable *)
-(*let escapes = "\\n" | "\\t"  | "\\v"          (* Escaped chars *)
+let escapes = "\\n" | "\\t"  | "\\v"          (* Escaped chars *)
             |"\\b"  | "\\r"  | "\\f"
             |"\\a"  | "\\\\" | "\\?"
-            |"\\'"  | "\\\"" | 
-*)
+            |"\\'"  | "\\\""
+
+let octescp = (oct | oct oct | oct oct oct) (* Octal escapes *)
+let hexescp = hex+                         (* Hex escapes *)
 
 let exp = 'e' ('+' | '-')? dec+               (* Floating point exponent *)
 let double = '.' dec+ exp? 
@@ -93,8 +110,13 @@ rule token = parse
 | ['a'-'z' 'A'-'Z' '_']['a'-'z' 'A'-'Z' '0'-'9' '_']* as lxm { ID(lxm) }
 
 (* Character Literals *)
-| '\'' (printable as lex) '\''  { CHARLIT (lex) } (* printable within single quotes *)
- (* More to be added soon *)
+| '\'' (printable as lex) '\''  { CHARLIT (lex) }  (* printable within single quotes *)
+| '\'' (escapes as lex) '\''    { CHARLIT (char_esc lex) }    (* escapes single quotes *)
+| '\''"\\" (octescp as lex)'\'' { CHARLIT (Char.chr(int_of_string ("0o"^lex)))}
+                                                    (* oct escapes *)
+| '\''"\\x" (hexescp as lex)'\''{ CHARLIT (Char.chr(int_of_string ("0x"^lex)))}
+                                                    (* hex escapes *)
+| '\''("\\" printable+ as lex)'\'' { CHARLIT (char_esc lex) } (* Catch invalid escapes *)
 
 (* Double Literal *)
 |  double as lex { FLOATLIT (float_of_string lex)}
