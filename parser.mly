@@ -6,6 +6,12 @@
   List.map (fun (a,b) -> (s, a, b)) l ;; (* if there is a list of a,b, then s is appended infront *)
   let make_struct_dec_list s l = 
   List.map (fun a -> (s, a)) l ;;
+  (* Build array of type t from the list of dimensions *)
+  let build_array t = function
+     [] -> t
+   | [i] -> Array(t, i)
+   | i::l -> List.fold_left (fun at e -> Array(at,e)) (Array(t, i)) l
+   (*(fun m i -> (fun x -> x)(*Array(m, i)*)*)
 %}
 
 %token VOID INT CHAR DOUBLE VEC
@@ -114,13 +120,24 @@ struct_declarator_list:
 /* all the different types you can retun */
 typ:
     VOID              { Void }
-  | INT               { Int }
+  | basic_typ         { $1 }
+  | array_typ         { $1 }
+
+basic_typ:
+    INT               { Int }
   | CHAR              { Char }
   | DOUBLE            { Float}
   | VEC               { Vec }
-  | typ LBRACK expr RBRACK { Array($1, $3)}
-  | typ LBRACK RBRACK      { Array($1, Noexpr)}
   | struct_or_shape_specifier {$1}
+
+array_typ:
+    basic_typ LBRACK expr RBRACK array_dim_list /*{ Array($1, $3)  }*/ {Array((build_array $1 $5), $3)}
+  | basic_typ LBRACK RBRACK array_dim_list      /*{ Array($1, Noexpr) }*/ {Array((build_array $1 $4),Noexpr)}
+
+array_dim_list: /* List of array dimension declarations */
+    /* Nothing */                     { [] }
+  | array_dim_list LBRACK expr RBRACK { $3::$1 }
+
 
 /* Declarations */
 declaration_list:

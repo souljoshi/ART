@@ -1,0 +1,16 @@
+struct book {
+        int [] x; // should fail
+        int [][4] x; // fail
+        int [4] y; // works
+        int [3][4] z; // works
+
+}
+int main()
+{
+        int[] x; // works
+        int[][3][4] x ; //works
+        int[4][4][4] y;// works
+        //int[1][] z ; //fails
+
+        int[3] z = {1, 2, 3, 4, 5, 6,};
+}
