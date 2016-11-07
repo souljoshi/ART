@@ -155,6 +155,11 @@ paren_of_expr *) = function
   | Member(e1, s) -> string_of_expr e1 ^ "." ^ s
   | Noexpr -> ""
 
+let rec list_of_arr = function
+    Array(Array(_,_) as a , i) ->  let (t,l) = list_of_arr a in (t, i::l)
+  | Array(t, i) -> (t, [i])
+  | t -> (t, []) (* Syntactically Required but not used *)
+
 let rec string_of_typ = function
     Int -> "int"
   | Char -> "char"
@@ -163,8 +168,10 @@ let rec string_of_typ = function
   | Vec  -> "vec"
   | UserType(s,StructType) -> "struct " ^ s
   | UserType(s, ShapeType) -> "shape " ^ s
-  | Array(t, i) -> string_of_typ t ^ "[" ^ string_of_expr i ^ "]"
+  | Array(_, _) as a -> let (t,l) = list_of_arr a
+     in string_of_typ t ^ String.concat "" (List.map (fun e -> "[" ^ string_of_expr e ^ "]") l)
  
+
 let string_of_bind (t,s) = 
     string_of_typ t ^" "^ s
 let string_of_fbind (t,s, v) = 
