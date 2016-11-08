@@ -1,0 +1,17 @@
+#!/bin/bash
+# Compiles an art program to an executable
+
+file=$(echo "$1" | cut -f 1 -d '.')
+base=$(basename "$file")
+
+if [ -z $2 ]
+then 
+    out=./$base
+else
+    out=$2
+fi
+
+./art < $1 > /tmp/${base}.bc &&
+llc /tmp/${base}.bc &&
+gcc /tmp/${base}.s -o $out 
+

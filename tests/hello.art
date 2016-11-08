@@ -1,0 +1,17 @@
+/* Test escape sequences */
+
+int main()
+{
+    printc('H');
+    printc('e');    
+    printc('l');
+    printc('l');    
+    printc('o');    
+    printc(' '); 
+    printc('W');
+    printc('o');    
+    printc('r');
+    printc('l');    
+    printc('d');    
+    printc('\n');   
+}
