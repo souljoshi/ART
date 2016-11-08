@@ -59,8 +59,12 @@ let translate prog =
         let function_decl m fdecl =
           let name = fdecl.A.name
           and formal_types = (* Types of parameters in llvm type repr *)
-            (* Note: Ignoring pass by reference for now *)
-            Array.of_list (List.map (fun (t,_,_) -> ltype_of_typ t) fdecl.A.params)
+            Array.of_list (List.map (fun (t,_,pass) ->
+                        let lt = ltype_of_typ t in
+                        match pass with
+                          A.Value -> lt
+                        | A.Ref  -> L.pointer_type lt (* If pass by reference use pointers *)
+                                ) fdecl.A.params)
             (* ftype from return type and formal_types *)
           in let ftype = L.function_type (ltype_of_typ fdecl.A.rettyp) formal_types in
           StringMap.add name (L.define_function name ftype the_module, fdecl) m in
@@ -81,12 +85,19 @@ let translate prog =
            declared variables.  Allocate each on the stack, initialize their
            value, if appropriate, and remember their values in the "locals" map *)
         let local_vars =
-          (* Arguments: map (type, name,_) param  (llvm  of params)*)
-          let add_formal m (t, n,_) p = L.set_value_name n p;
+          (* Arguments: map (type, name, pass) param  (llvm  of params)*)
+          let add_formal m (t, n,pass) p = L.set_value_name n p;
           (* name appended with nums as necessary: eg  a1,a2 *)
           (* Look at microc lecture: pg 39 *)
-            let local = L.build_alloca (ltype_of_typ t) n builder in (* allocate stack for params *)
-            ignore (L.build_store p local builder); (* Store the param in the allocated place *)
+            let local =  match pass with
+                A.Value -> L.build_alloca (ltype_of_typ t) n builder (* allocate stack for value params *)
+             |  A.Ref  -> p
+
+            in
+            ignore (match pass with
+                A.Value -> ignore(L.build_store p local builder); (* Store the value param in the allocated place *)
+             |  A.Ref -> () );
+
             StringMap.add n local m in (* We add the stack version *)
           let add_local m (t,n) =
             let local_var = L.build_alloca (ltype_of_typ t) n builder (* allocate space for local *)
@@ -149,8 +160,15 @@ let translate prog =
           | A.Call (A.Id "printc", [e]) -> L.build_call printf_func [|char_format_str ; (expr builder e) |] "printf" builder
           | A.Call (A.Id f, act) ->
              let (fdef, fdecl) = StringMap.find f function_decls in
+             (* Helper function for pass by value handling *)
+             let arg_passer builder (_,_,pass) = function
+                A.Id(s) as e -> (match pass with
+                          A.Ref -> lookup s (* This gets the pointer to the variable *)
+                        | A.Value -> expr builder e )
+              | e  -> expr builder e
+            in
              (* This makes right to left evaluation order. What order should we use? *)
-             let actuals = List.rev (List.map (expr builder) (List.rev act)) in
+             let actuals = List.rev (List.map2 (arg_passer builder) (List.rev fdecl.params) (List.rev act)) in
              let result = (match fdecl.A.rettyp with A.Void -> "" (* don't name result for void llvm issue*)
                                                 | _ -> f^"_result") in
              L.build_call fdef (Array.of_list actuals) result builder

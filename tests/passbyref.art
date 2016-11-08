@@ -1,0 +1,45 @@
+int set(int &x, int v)
+{
+    x = v;
+}
+
+int xchg(int &x1, int &x2)
+{
+    int tmp;
+    tmp = x1;
+    x1 = x2;
+    x2 = tmp;
+}
+
+int no_change(int x)
+{
+    x = 322;
+}
+
+int main ()
+{
+    int a, b, c;
+    b = 3;
+    c = 4;
+
+    printi(a);
+    printi(b);
+    printi(c);
+
+    no_change(a); 
+    no_change(a);
+    no_change(a);
+
+    printc('\n');
+    printi(a);
+    printi(b);
+    printi(c);
+
+    set (a, 7);
+    xchg (b, c);
+
+    printc('\n');
+    printi(a);
+    printi(b);
+    printi(c);
+}
