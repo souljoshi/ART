@@ -1,0 +1,37 @@
+int gcd(int a, int b) {
+    while (a != b)
+        if ( a > b) a = a - b;
+        else b = b - a;
+    return a;
+}
+
+int fact(int a)
+{
+    if (a > 1) 
+        return a * fact (a - 1);
+    else
+        return  a;
+}
+
+int main() {
+    int i, fib, curr, tmp;
+
+    printi( gcd (3232, 2323));
+    printi(fact (10));
+
+    printc('f');
+    printc('i');
+    printc('b');
+    printc(':');
+    printc('\n');
+
+     curr = 1;
+
+    for (i = 0; i < 10; i = i + 1) 
+    {
+        tmp = curr + fib;
+        fib = curr;
+        curr = tmp;
+        printi(fib);
+    }
+}
