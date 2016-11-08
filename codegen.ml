@@ -7,8 +7,8 @@ module StringMap = Map.Make(String)
 
 let translate prog = 
     (* Get the global variables and functions *)
-    let globals = prog.v
-    and functions = prog.f in
+    let globals = prog.A.v      (* Use this format when referencing records in other modules *)
+    and functions = prog.A.f in
 
     (* Set up Llvm module and context *)
     let context = L.global_context () in 
