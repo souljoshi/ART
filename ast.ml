@@ -77,7 +77,8 @@ type fdecl = {
     rettyp : typ;
     name : string;
     params : fbind list;
-    body : stmt;  (* Must be Block *)
+    locals : vdecl list;
+    body : stmt list;
     typ : ftyp ;
     owner: string ;  (* Refers to owning struct/shape *)
   }
@@ -243,7 +244,7 @@ let string_fname f =
 let string_of_fdecl f = 
     string_rettyp f  ^ " " ^ string_fname f ^ " ( " ^ 
     String.concat ", " (List.map string_of_fbind f.params) ^ " )\n" ^
-    string_of_stmt f.body
+    string_of_stmt (Block(f.locals, f.body))
 
 let string_of_program p =
     String.concat "" (List.map string_of_vdecl p.v)  ^

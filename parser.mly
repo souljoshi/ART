@@ -61,11 +61,12 @@ decls:
   /*| decls mdecl  {List.find}*/
 
 fdecl:
-  function_declarator LPAREN parameter_list RPAREN stmt_block
+  function_declarator LPAREN parameter_list RPAREN func_block
         { { rettyp = fst $1;
             name = snd $1;
             params = List.rev $3;
-            body = $5;
+            locals = fst $5;
+            body = snd $5;
             typ = Func;
             owner= "" } }
 
@@ -74,11 +75,12 @@ function_declarator:
   | VOID ID {(Void, $2)}
 
 mdecl:
-  method_declarator  LPAREN parameter_list RPAREN stmt_block
+  method_declarator  LPAREN parameter_list RPAREN func_block
           { { rettyp = fst (fst $1);
             name = snd (fst $1);
             params = List.rev $3;
-            body = $5;
+            locals = fst $5;
+            body = snd $5;
             typ = snd (snd $1);
             owner= fst (snd $1) } }
 
@@ -86,6 +88,11 @@ method_declarator:
     vdecl_typ ID DCOLON ID {($1, $4), ($2, Method)}  /* (rettyp, name) (owner, typ)*/
   | VOID ID DCOLON ID {(Void, $4), ($2, Method)}  /* (rettyp, name) (owner, typ)*/
   | ID DCOLON ID  {(Void, $3), ($1, Constructor)} /* Constructor */
+
+func_block:
+  /* Function Block */
+    LBRACE stmt_list RBRACE                  { ([], List.rev $2) }
+  | LBRACE declaration_list stmt_list RBRACE { ($2, List.rev $3) } /* Already Reversed */
 
 parameter_list:
   /* No parameter case */  {[]}

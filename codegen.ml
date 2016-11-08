@@ -25,17 +25,6 @@ let translate prog =
         (* Currently only allowing void and int types *)
       | _   -> raise (Failure "Only valid types are int/char/void") in
 
-    (* This two helper functions suggest that that fdecls needs to be modified *)
-    (* Takes a function and return the list of declarations *)
-    let locals_of_fdecl fdecl = match fdecl.A.body with
-        A.Block(decls, stmts) -> List.map (fun (a,b,_) -> (a,b)) decls
-      | _ -> raise (Failure "Illegal function block") (* guaranteed to never happen *)
-    and body_of_fdecl fdecl = match fdecl.A.body with
-        A.Block(decls, stmts) -> stmts
-      | _ -> raise (Failure "Illegal function block") (* guaranteed to never happen *)
-    in
-
-
     (* Declaring each global variable and storing value in a map.
        global_vars is a map of var names to llvm global vars representation.
        Global decls are three tuples (typ, name, initer) *)
@@ -105,7 +94,7 @@ let translate prog =
 
           let formals = List.fold_left2 add_formal StringMap.empty fdecl.A.params
             (Array.to_list (L.params the_function)) in
-          List.fold_left add_local formals (locals_of_fdecl fdecl) in
+          List.fold_left add_local formals (List.map (fun (a,b,_) -> (a,b)) fdecl.A.locals) in
 
         (* Return the value for a variable or formal argument *)
         (* Note: this checks local scope before global. We have to do more complicated scoping *)
@@ -168,7 +157,7 @@ let translate prog =
               | e  -> expr builder e
             in
              (* This makes right to left evaluation order. What order should we use? *)
-             let actuals = List.rev (List.map2 (arg_passer builder) (List.rev fdecl.params) (List.rev act)) in
+             let actuals = List.rev (List.map2 (arg_passer builder) (List.rev fdecl.A.params) (List.rev act)) in
              let result = (match fdecl.A.rettyp with A.Void -> "" (* don't name result for void llvm issue*)
                                                 | _ -> f^"_result") in
              L.build_call fdef (Array.of_list actuals) result builder
@@ -229,7 +218,7 @@ let translate prog =
             | _  -> raise (Failure "Unsupported statement type")(* Ignore other statement type *)
         in
         (* Build the code for each statement in the function *)
-        let builder = stmt builder fdecl.A.body in
+        let builder = stmt builder (A.Block(fdecl.A.locals, fdecl.A.body)) in
 
         (* Add a return if the last block falls off the end *)
         add_terminal builder (match fdecl.A.rettyp with
