@@ -17,6 +17,8 @@ let _ =
         print_endline ("Syntax Error: Line " ^ string_of_int line ^ " Column " ^ string_of_int cnum);
         exit 1
   in
+  let ast = Semant.check ast
+  in
   match action with
     Ast -> print_string (Ast.string_of_program ast)
   | LLVM_IR -> print_string (Llvm.string_of_llmodule (Codegen.translate ast))
