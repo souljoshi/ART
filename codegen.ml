@@ -113,28 +113,35 @@ let translate prog =
               let e1' = expr builder e1
               and e2' = expr builder e2 in
               (match op with
-                  A.Add     -> L.build_add  e1' e2' "tmp" builder
-                | A.Sub     -> L.build_sub  e1' e2' "tmp" builder
-                | A.Mult    -> L.build_mul  e1' e2' "tmp" builder
-                | A.Div     -> L.build_sdiv e1' e2' "tmp" builder
-                | A.Mod     -> L.build_srem e1' e2' "tmp" builder
-                | A.And     -> L.build_and  e1' e2' "tmp" builder
-                | A.Or      -> L.build_or   e1' e2' "tmp" builder
+                  A.Add     -> L.build_add
+                | A.Sub     -> L.build_sub
+                | A.Mult    -> L.build_mul
+                | A.Div     -> L.build_sdiv
+                | A.Mod     -> L.build_srem
+                | A.And     -> L.build_and
+                | A.Or      -> L.build_or
 
-                | A.Equal   -> L.build_icmp L.Icmp.Eq  e1' e2' "tmp" builder
-                | A.Neq     -> L.build_icmp L.Icmp.Ne  e1' e2' "tmp" builder
-                | A.Less    -> L.build_icmp L.Icmp.Slt e1' e2' "tmp" builder
-                | A.Leq     -> L.build_icmp L.Icmp.Sle e1' e2' "tmp" builder
-                | A.Greater -> L.build_icmp L.Icmp.Sgt e1' e2' "tmp" builder
-                | A.Geq     -> L.build_icmp L.Icmp.Sge e1' e2' "tmp" builder
+                | A.Equal   -> L.build_icmp L.Icmp.Eq
+                | A.Neq     -> L.build_icmp L.Icmp.Ne
+                | A.Less    -> L.build_icmp L.Icmp.Slt
+                | A.Leq     -> L.build_icmp L.Icmp.Sle
+                | A.Greater -> L.build_icmp L.Icmp.Sgt
+                | A.Geq     -> L.build_icmp L.Icmp.Sge
+              ) e1' e2' "tmp" builder
 
-                (* Need to move assignment away from bin *)
-                | A.Asn -> ignore (L.build_store e2' (lookup
-                        (match e1 with (* Only works with ID *)
-                          A.Id s -> s
-                        | _   -> raise (Failure "Assignment only allowed to identifier") )
-                    ) builder ); e2'
-                | _  -> raise (Failure "Unsupported binary op") )(* Ignore other binary ops *)
+          | A.Asnop (el, op, er) ->
+               let s = (match el with (* Only supported with ID for now*)
+                           A.Id s -> s
+                         | _   -> raise (Failure "Assignment only allowed to identifier") )
+               in
+               (match op with
+                   A.Asn -> let e' = expr builder er in
+                             ignore (L.build_store e' (lookup s) builder); e'
+                   (* The code here must change if supporting non-identifiers *)
+                 | A.CmpAsn bop -> let e' = expr builder (A.Binop(el, bop, er)) in
+                             ignore (L.build_store e' (lookup s) builder); e'
+               )
+
           | A.Unop(op, e) ->
               let e' = expr builder e in
               (match op with

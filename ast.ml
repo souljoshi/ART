@@ -2,7 +2,10 @@
 
 (* binary operations *)
 type op = Add | Sub | Mult | Div | Mod | Equal | Neq | Less | Leq | Greater | Geq |
-          And | Or  | Asn  | AddAsn | SubAsn | MultAsn | DivAsn | ModAsn 
+          And | Or
+
+(* Assignment operations *)
+type asnop = Asn | CmpAsn of op (* Compound Assignment operator op= *) (*| AddAsn | SubAsn | MultAsn | DivAsn | ModAsn*)
 
 (* unary operators *)
 type uop = Neg | Not | Pos | Preinc | Predec 
@@ -24,6 +27,7 @@ type expr =
   | Id of string
   | Vecexpr of expr * expr
   | Binop of expr * op * expr
+  | Asnop of expr * asnop * expr (* Assignment operation *)
   | Unop of uop * expr
   | Posop of pop * expr
   | Trop of trop * expr * expr * expr
@@ -106,12 +110,15 @@ let string_of_op = function
   | Geq -> ">="
   | And -> "&&"
   | Or -> "||"
-  | Asn -> "="
-  | AddAsn -> "+="
+
+let string_of_asnop = function
+    Asn -> "="
+  | CmpAsn o -> string_of_op o ^ "="
+  (*| AddAsn -> "+="
   | SubAsn -> "-="
   | MultAsn -> "*="
   | DivAsn -> "/="
-  | ModAsn -> "%="
+  | ModAsn -> "%="*)
   
 
 let string_of_uop = function
@@ -146,6 +153,8 @@ paren_of_expr *) = function
   | Vecexpr(e1,e2) -> " < "^ string_of_expr e1 ^ " , " ^ string_of_expr e2 ^ " >"
   | Binop(e1, o, e2) ->
       string_of_expr e1 ^ " " ^ string_of_op o ^ " " ^ string_of_expr e2
+  | Asnop(e1, o, e2) ->
+      string_of_expr e1 ^ " " ^ string_of_asnop o ^ " " ^ string_of_expr e2
   | Unop(o, e) -> string_of_uop o ^ string_of_expr e
   | Posop(o, e) -> string_of_expr e ^ string_of_pop o
   | Trop (o, e1, e2, e3) -> let t = strings_of_trop o in

@@ -233,12 +233,12 @@ expr:
 
   /* postfix expressions */
   /* Assignment */
-  |posexpr ASSIGN expr      { Binop($1, Asn, $3) } 
-  |posexpr PLUSASSIGN expr  { Binop($1, AddAsn, $3) }
-  |posexpr MINUSASSIGN expr { Binop($1, SubAsn, $3) }
-  |posexpr TIMESASSIGN expr { Binop($1, MultAsn, $3) }
-  |posexpr DIVASSIGN expr   { Binop($1, DivAsn, $3) }
-  |posexpr MODASSIGN expr   { Binop($1, ModAsn, $3) }
+  |posexpr ASSIGN expr      { Asnop($1, Asn, $3) }
+  |posexpr PLUSASSIGN expr  { Asnop($1, CmpAsn(Add), $3) }
+  |posexpr MINUSASSIGN expr { Asnop($1, CmpAsn(Sub), $3) }
+  |posexpr TIMESASSIGN expr { Asnop($1, CmpAsn(Mult), $3) }
+  |posexpr DIVASSIGN expr   { Asnop($1, CmpAsn(Div), $3) }
+  |posexpr MODASSIGN expr   { Asnop($1, CmpAsn(Mod), $3) }
 
 
 /* all expressions other than assignment/conditional */
