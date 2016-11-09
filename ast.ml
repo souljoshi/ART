@@ -5,7 +5,7 @@ type op = Add | Sub | Mult | Div | Mod | Equal | Neq | Less | Leq | Greater | Ge
           And | Or
 
 (* Assignment operations *)
-type asnop = Asn | CmpAsn of op (* Compound Assignment operator op= *) (*| AddAsn | SubAsn | MultAsn | DivAsn | ModAsn*)
+type asnop = Asn | CmpAsn of op (* Compound Assignment operator op= *)
 
 (* unary operators *)
 type uop = Neg | Not | Pos | Preinc | Predec 
@@ -36,9 +36,9 @@ type expr =
   | Member of expr * string
   | Noexpr
 
-type ss = StructType | ShapeType
+type stosh = StructType | ShapeType
 (* these are the types you can use to declare an object *)
-type typ = Int | Char | Float | Vec | Void | Array of typ * expr | UserType of string*ss
+type typ = Int | Char | Float | Vec | Void | Array of typ * expr | UserType of string*stosh
 
 type initer = Exprinit of expr | Listinit of initer list | Noinit
 
@@ -51,8 +51,6 @@ type pass = Value | Ref
 (* methods stored as functions *)
 type fbind = typ * string * pass
 
-type ustype = Struct of string * bind list 
-            | Shape of string * bind list 
 (* variable declaration *)
 type vdecl = typ * string * initer
 
@@ -79,7 +77,7 @@ type ftyp = Func | Method | Constructor
 (* allows us to store all function data in one struct *)
 type fdecl = {
     rettyp : typ;
-    name : string;
+    fname : string;
     params : fbind list;
     locals : vdecl list;
     body : stmt list;
@@ -87,9 +85,18 @@ type fdecl = {
     owner: string ;  (* Refers to owning struct/shape *)
   }
 
+(* Acutally filled in the semantic step *)
+type usrtype = {
+    ss      : stosh; (* struct/shape? *)
+    sname   : string;
+    decls   : bind list; (* member var declarations *)
+    ctor    : fdecl;     (* constructor *)
+    methods : fdecl list;
+  }
+
 (* Type of program: user type, function declaration and variable declaration *)
 type prog = {
-    s : ustype list;
+    s : usrtype list;
     f : fdecl  list;
     v : vdecl  list;
     }
@@ -114,12 +121,7 @@ let string_of_op = function
 let string_of_asnop = function
     Asn -> "="
   | CmpAsn o -> string_of_op o ^ "="
-  (*| AddAsn -> "+="
-  | SubAsn -> "-="
-  | MultAsn -> "*="
-  | DivAsn -> "/="
-  | ModAsn -> "%="*)
-  
+
 
 let string_of_uop = function
     Neg -> "-"
@@ -170,14 +172,17 @@ let rec list_of_arr = function
   | Array(t, i) -> (t, [i])
   | t -> (t, []) (* Syntactically Required but not used *)
 
+let string_of_stosh = function
+    StructType -> "struct"
+  | ShapeType -> "shape"
+
 let rec string_of_typ = function
     Int -> "int"
   | Char -> "char"
   | Void -> "void"
   | Float -> "double"
   | Vec  -> "vec"
-  | UserType(s,StructType) -> "struct " ^ s
-  | UserType(s, ShapeType) -> "shape " ^ s
+  | UserType(n,ss) -> string_of_stosh ss ^ n
   | Array(_, _) as a -> let (t,l) = list_of_arr a
      in string_of_typ t ^ String.concat "" (List.map (fun e -> "[" ^ string_of_expr e ^ "]") l)
  
@@ -188,11 +193,9 @@ let string_of_fbind (t,s, v) =
     match v with 
       Value -> string_of_typ t ^" "^ s
     | Ref   -> string_of_typ t ^"& "^ s
-let string_of_ustype = function
-      Struct(s,l) -> "struct "^s^" {\n" 
-        ^ String.concat ";\n" (List.map string_of_bind l) ^  ";\n}\n"
-    | Shape(s,l) -> "shape "^s^" {\n" 
-        ^ String.concat ";\n" (List.map string_of_bind l) ^  ";\n}\n"
+
+let string_of_usrtype s = string_of_stosh s.ss ^ " "^s.sname^" {\n"
+        ^ String.concat ";\n" (List.map string_of_bind s.decls) ^  ";\n}\n"
 
 
 let rec  string_of_initer = function
@@ -248,8 +251,8 @@ let string_rettyp f =
     | _ -> string_of_typ f.rettyp
 let string_fname f = 
     match f.typ with 
-      Func -> f.name
-    | _ -> f.owner^"::"^f.name
+      Func -> f.fname
+    | _ -> f.owner^"::"^f.fname
 let string_of_fdecl f = 
     string_rettyp f  ^ " " ^ string_fname f ^ " ( " ^ 
     String.concat ", " (List.map string_of_fbind f.params) ^ " )\n" ^
@@ -257,5 +260,5 @@ let string_of_fdecl f =
 
 let string_of_program p =
     String.concat "" (List.map string_of_vdecl p.v)  ^
-    String.concat "" (List.map string_of_ustype p.s) ^ 
+    String.concat "" (List.map string_of_usrtype p.s) ^
     String.concat "" (List.map string_of_fdecl p.f)  

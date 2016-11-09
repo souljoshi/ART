@@ -46,7 +46,7 @@ let translate prog =
       and Ast declarations *)
     let function_decls =
         let function_decl m fdecl =
-          let name = fdecl.A.name
+          let name = fdecl.A.fname
           and formal_types = (* Types of parameters in llvm type repr *)
             Array.of_list (List.map (fun (t,_,pass) ->
                         let lt = ltype_of_typ t in
@@ -62,7 +62,7 @@ let translate prog =
    (* Fill in the body of the given function *)
     let build_function_body fdecl =
         (* Get the corresponding llvm function value *)
-        let (the_function, _) = StringMap.find fdecl.A.name function_decls in
+        let (the_function, _) = StringMap.find fdecl.A.fname function_decls in
         (* Get an instruction builder that will emit instructions in the current function *)
         let builder = L.builder_at_end context (L.entry_block the_function) in
 

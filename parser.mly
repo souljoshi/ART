@@ -11,6 +11,9 @@
      [] -> t
    | [i] -> Array(t, i)
    | i::l -> List.fold_left (fun at e -> Array(at,e)) (Array(t, i)) l
+
+  let default_ctr n = { rettyp = Void; fname = n; params = []; locals = [];
+                        body = [] ; typ = Constructor; owner = n }
 %}
 
 %token VOID INT CHAR DOUBLE VEC
@@ -63,7 +66,7 @@ decls:
 fdecl:
   function_declarator LPAREN parameter_list RPAREN func_block
         { { rettyp = fst $1;
-            name = snd $1;
+            fname = snd $1;
             params = List.rev $3;
             locals = fst $5;
             body = snd $5;
@@ -77,7 +80,7 @@ function_declarator:
 mdecl:
   method_declarator  LPAREN parameter_list RPAREN func_block
           { { rettyp = fst (fst $1);
-            name = snd (fst $1);
+            fname = snd (fst $1);
             params = List.rev $3;
             locals = fst $5;
             body = snd $5;
@@ -85,8 +88,8 @@ mdecl:
             owner= fst (snd $1) } }
 
 method_declarator:
-    vdecl_typ ID DCOLON ID {($1, $4), ($2, Method)}  /* (rettyp, name) (owner, typ)*/
-  | VOID ID DCOLON ID {(Void, $4), ($2, Method)}  /* (rettyp, name) (owner, typ)*/
+    vdecl_typ ID DCOLON ID {($1, $4), ($2, Method)}  /* (rettyp, fname) (owner, typ)*/
+  | VOID ID DCOLON ID {(Void, $4), ($2, Method)}  /* (rettyp, fname) (owner, typ)*/
   | ID DCOLON ID  {(Void, $3), ($1, Constructor)} /* Constructor */
 
 func_block:
@@ -103,15 +106,16 @@ parameter_declaration:
     vdecl_typ ID      {($1, $2, Value)}
   | vdecl_typ AMPS ID {($1, $3, Ref)}
 
+struct_or_shape:
+    STRUCT          { StructType }
+  | SHAPE           { ShapeType }
 
 struct_or_shape_specifier:
-    STRUCT ID     { UserType($2, StructType)}
-  | SHAPE  ID     { UserType($2, ShapeType)}
-
+    struct_or_shape ID  { UserType($2, $1)}
 
 struct_or_shape_definition:
-    STRUCT ID LBRACE struct_declaration_list RBRACE {Struct($2,$4)}
-  | SHAPE  ID LBRACE struct_declaration_list RBRACE {Shape($2,$4)}
+    struct_or_shape ID LBRACE struct_declaration_list RBRACE
+    { { ss = $1 ; sname = $2; decls = $4 ; ctor = default_ctr $2; methods = []} }
 
 struct_declaration_list:
    struct_declaration                              {$1}
