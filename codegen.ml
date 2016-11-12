@@ -24,9 +24,8 @@ let translate prog =
       | A.Void -> void_t
       | A.Array(t,e) -> (match e with 
             |A.IntLit(i) -> L.array_type (ltype_of_typ t) i
-            | _ -> raise(Failure "Arrays can only be type int for now"))
+            | _ -> raise(Failure "Arrays declaration requires int literals for now"))
 
-      (*| A.Array(A.Int,A.IntLit(i32_t)) -> i32_array_t *)
         (* Currently only allowing void and int types *)
       | _   -> raise (Failure "Only valid types are int/char/void") in
 
@@ -106,10 +105,17 @@ let translate prog =
         let lookup n = try StringMap.find n local_vars
                        with Not_found -> StringMap.find n global_vars
         in
-    
-        (* Construct code for an expression; return its value *)
 
-        let rec expr builder = function (* Takes args builder and Ast.expr *)
+        (* Construct code for an lvalue; return a pointer to access object *)
+        let rec lexpr builder = function
+            A.Id s -> lookup s
+          | A.Index(e1,e2) -> let e2' = expr builder e2 in
+                L.build_gep (lexpr builder e1) [|L.const_int i32_t 0; e2'|] "tmp" builder
+          | _ -> raise (Failure "Trying to assign to an non l-value")
+
+
+        (* Construct code for an expression; return its value *)
+        and expr builder = function (* Takes args builder and Ast.expr *)
             A.IntLit i -> L.const_int i32_t i
           | A.CharLit c -> L.const_int i8_t (int_of_char c) (* 1 byte characters *)
           | A.Noexpr -> L.const_int i32_t 0  (* No expression is 0 *)
@@ -134,29 +140,17 @@ let translate prog =
                 | A.Geq     -> L.build_icmp L.Icmp.Sge
               ) e1' e2' "tmp" builder
 
-          | A.Index(e1,e2) ->
-          
-                  let s = (match e1 with
-                    A.Id s -> s
+          | A.Index(e1,e2) as arr-> L.build_load (lexpr builder arr) "tmp" builder
 
-                    |_ -> raise (Failure "Assignment only allowed on ids")
-                  )
-                in
-              let e2' = expr builder e2 in 
-                  L.build_load(L.build_gep (lookup s) [|L.const_int i32_t 0;e2'|] "temp" builder) "tmp" builder
-            
 
           | A.Asnop (el, op, er) ->
-               let s = (match el with (* Only supported with ID for now*)
-                           A.Id s -> s
-                         | _   -> raise (Failure "Assignment only allowed to identifier") )
-               in
+               let el' = lexpr builder el in
                (match op with
                    A.Asn -> let e' = expr builder er in
-                             ignore (L.build_store e' (lookup s) builder); e'
+                             ignore (L.build_store e' el' builder); e'
                    (* The code here must change if supporting non-identifiers *)
                  | A.CmpAsn bop -> let e' = expr builder (A.Binop(el, bop, er)) in
-                             ignore (L.build_store e' (lookup s) builder); e'
+                             ignore (L.build_store e' el' builder); e'
                )
 
           | A.Unop(op, e) ->

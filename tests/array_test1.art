@@ -1,10 +1,21 @@
 int main()
 {
-    // int[10][5] s;
+    int[10][5] v;
     int[10] s;
     int y;
+    int i, j;
 
-    y = s[5];
-    // y = s[5][4];
+    s[5] = 8;
+    printi(s[5]);
+    v[2][4] = 9;
+    printi(v[2][4]);
+
+    for (i = 0; i < 10 ; i += 1)
+        for (j = 0; j < 5; j += 1)
+            v[i][j] = i*5 + j;
+    for (i = 0; i < 10 ; i += 1)
+        for (j = 0; j < 5; j += 1)
+            printi(v[i][j]);
+
 }
 
