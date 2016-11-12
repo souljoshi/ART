@@ -106,7 +106,7 @@ let translate prog =
         let lookup n = try StringMap.find n local_vars
                        with Not_found -> StringMap.find n global_vars
         in
-
+    
         (* Construct code for an expression; return its value *)
 
         let rec expr builder = function (* Takes args builder and Ast.expr *)
@@ -133,6 +133,18 @@ let translate prog =
                 | A.Greater -> L.build_icmp L.Icmp.Sgt
                 | A.Geq     -> L.build_icmp L.Icmp.Sge
               ) e1' e2' "tmp" builder
+
+          | A.Index(e1,e2) ->
+          
+                  let s = (match e1 with
+                    A.Id s -> s
+
+                    |_ -> raise (Failure "Assignment only allowed on ids")
+                  )
+                in
+              let e2' = expr builder e2 in 
+                  L.build_load(L.build_gep (lookup s) [|L.const_int i32_t 0;e2'|] "temp" builder) "tmp" builder
+            
 
           | A.Asnop (el, op, er) ->
                let s = (match el with (* Only supported with ID for now*)
