@@ -18,10 +18,15 @@ let translate prog =
     and void_t = L.void_type context in
 
     (* Function takes ast types and returns corresponding llvm type *)
-    let ltype_of_typ = function
+    let rec ltype_of_typ = function
         A.Int -> i32_t
       | A.Char -> i8_t
       | A.Void -> void_t
+      | A.Array(t,e) -> (match e with 
+            |A.IntLit(i) -> L.array_type (ltype_of_typ t) i
+            | _ -> raise(Failure "Arrays can only be type int for now"))
+
+      (*| A.Array(A.Int,A.IntLit(i32_t)) -> i32_array_t *)
         (* Currently only allowing void and int types *)
       | _   -> raise (Failure "Only valid types are int/char/void") in
 
