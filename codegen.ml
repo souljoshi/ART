@@ -57,7 +57,7 @@ let translate prog =
         (* Ignoring initer for now and just setting to zero *)
           let init = L.const_int (ltype_of_typ t) 0
           (* Define the llvm global and add to the map *)
-          in StringMap.add n (L.define_global n init the_module) m in
+          in StringMap.add n (L.define_global n init the_module, t) m in
         List.fold_left global_var StringMap.empty globals in
 
     (* Declare printf() *)
@@ -111,10 +111,10 @@ let translate prog =
                 A.Value -> ignore(L.build_store p local builder); (* Store the value param in the allocated place *)
              |  A.Ref -> () );
 
-            StringMap.add n local m in (* We add the stack version *)
+            StringMap.add n (local,t) m in (* We add the stack version *)
           let add_local m (t,n) =
             let local_var = L.build_alloca (ltype_of_typ t) n builder (* allocate space for local *)
-            in StringMap.add n local_var m in
+            in StringMap.add n (local_var,t) m in
 
           let formals = List.fold_left2 add_formal StringMap.empty fdecl.A.params
             (Array.to_list (L.params the_function)) in
@@ -122,8 +122,12 @@ let translate prog =
 
         (* Return the value for a variable or formal argument *)
         (* Note: this checks local scope before global. We have to do more complicated scoping *)
-        let lookup n = try StringMap.find n local_vars
-                       with Not_found -> StringMap.find n global_vars
+        let lookup n = try fst(StringMap.find n local_vars)
+                       with Not_found -> fst(StringMap.find n global_vars)
+        in
+
+        let lookup_type n = try snd(StringMap.find n local_vars)
+                       with Not_found -> snd(StringMap.find n global_vars)
         in
 
         (* Construct code for an lvalue; return a pointer to access object *)
