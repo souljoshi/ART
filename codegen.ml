@@ -8,7 +8,8 @@ module StringMap = Map.Make(String)
 let translate prog = 
     (* Get the global variables and functions *)
     let globals = prog.A.v      (* Use this format when referencing records in other modules *)
-    and functions = prog.A.f in
+    and functions = prog.A.f
+    and structs = prog.A.s in
 
     (* Set up Llvm module and context *)
     let context = L.global_context () in 
@@ -17,18 +18,37 @@ let translate prog =
     and i8_t   = L.i8_type   context
     and void_t = L.void_type context in
 
-    (* Function takes ast types and returns corresponding llvm type *)
-    let rec ltype_of_typ = function
+    (* General verson of lltype_of_typ that takes a struct map *)
+    (* The struct map helps to get member types for structs in terms of previously *)
+    (* defined structs *)
+    let rec _ltype_of_typ m = function
         A.Int -> i32_t
       | A.Char -> i8_t
       | A.Void -> void_t
       | A.Array(t,e) -> (match e with 
-            |A.IntLit(i) -> L.array_type (ltype_of_typ t) i
+            |A.IntLit(i) -> L.array_type (_ltype_of_typ m t) i
             | _ -> raise(Failure "Arrays declaration requires int literals for now"))
+      | A.UserType(s,_) -> StringMap.find s m
+        (* Currently supporting only void, int and struct types *)
+      | _   -> raise (Failure "Only valid types are int/char/void")
 
-        (* Currently only allowing void and int types *)
-      | _   -> raise (Failure "Only valid types are int/char/void") in
+    in
+    let struct_ltypes =
+        let struct_ltype m st =
+          (* Ocaml Array containing llvm lltypes of the member variables *)
+          let decls_array = Array.of_list( List.rev ( List.fold_left
+                  (fun l (t,_) -> (_ltype_of_typ m t)::l) [] st.A.decls) )
+          (* Define the llvm struct type *)
+        in let named_struct = L.named_struct_type context st.A.sname
+        in  L.struct_set_body named_struct decls_array false ; (* false -> not packed *)
+        StringMap.add st.A.sname named_struct m in
+        List.fold_left struct_ltype StringMap.empty structs
+    in
 
+    (* Function takes ast types and returns corresponding llvm type *)
+    let ltype_of_typ t = _ltype_of_typ struct_ltypes t
+
+    in
     (* Declaring each global variable and storing value in a map.
        global_vars is a map of var names to llvm global vars representation.
        Global decls are three tuples (typ, name, initer) *)

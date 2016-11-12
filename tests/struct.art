@@ -1,0 +1,16 @@
+struct test {
+
+    int x;
+    int y;
+}
+
+struct fun
+{
+        struct test[10][10] m;
+}
+int main ()
+{
+    struct test s;
+    struct fun b;
+    int z;
+}
