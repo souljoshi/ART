@@ -37,6 +37,11 @@ struct screen
 screen::screen()
 {
         int i, j;
+
+        struct test z;
+
+        z = test(1, 1);
+
         for ( i = 0 ; i < 100 ; i+=1)
                 for (j = 0 ; j < 100; j+=1)
         {

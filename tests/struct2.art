@@ -1,0 +1,45 @@
+/* Testing basic scoping Rules */
+
+int z;
+
+struct first { int z; }
+struct second { int y; }
+
+first::first(int b) { z = b; }
+second::second(int a) { y = a; }
+
+void first::member()
+{
+        z = 0;
+}
+
+void second::member()
+{
+        int y;
+        y = 100;
+        z = 10;
+}
+
+int main()
+{
+        struct first x;
+        struct second y;
+
+        printi(z);
+        printc('\n');
+
+        x = first(-10);
+        y = second(-12);
+
+        printi(z);
+        printi(x.z);
+        printi(y.y);
+        printc('\n');
+
+        x.member();
+        y.member();
+
+        printi(z);
+        printi(x.z);
+        printi(y.y);
+}

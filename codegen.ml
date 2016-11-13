@@ -135,14 +135,14 @@ let translate prog =
     in
     (* Returns index of member memb in struct named sname *)
     let memb_index sname memb =
-    (* Obtain varmap from struct_decls map *)
-    let (varmap, _,_) = try StringMap.find sname struct_decls
-                  with Not_found -> raise (Failure("Varmap not found for : "^sname^"."^memb))
-    in
-    (* Obtain index from varmap *)
-    let (_, i) = try StringMap.find memb varmap
-                  with Not_found -> raise (Failure("Index not found for : "^sname^"."^memb))
-                  in i
+      (* Obtain varmap from struct_decls map *)
+      let (varmap, _,_) = try StringMap.find sname struct_decls
+                    with Not_found -> raise (Failure("Varmap not found for : "^sname^"."^memb))
+      in
+      (* Obtain index from varmap *)
+      let (_, i) = try StringMap.find memb varmap
+                    with Not_found -> raise (Failure("Index not found for : "^sname^"."^memb))
+                    in i
     in
 
    (* Fill in the body of the given function *)
@@ -209,23 +209,19 @@ let translate prog =
 
         (* Return the value for a variable or formal argument *)
         (* Note: this checks local scope before global. We have to do more complicated scoping *)
-        let lookup n builder = try ( match fdecl.A.typ with
-              A.Func -> raise Not_found (* Jump straight to local variable handling *)
-            (* For method/constructor check if local variable or member variable *)
-            | _ -> let ind = try memb_index fdecl.A.owner n with
-              Failure s -> raise Not_found (* If not member, jump to local var handling *)
-              in
-              (* If member, get its pointer by dereferencing the first argument
-                 corresponding to the "this" pointer *)
-              let e' = L.param (fst (lookup_function fdecl.A.fname) ) 0  in
-              L.build_gep e' [|L.const_int i32_t 0; L.const_int i32_t ind |] "tmp" builder
+        let lookup n builder =
+            (* First try to find a local variable *)
+            try fst(StringMap.find n local_vars)
+            (* Then try to find a member, if not member jump to global variable handling *)
+            with Not_found -> try (match fdecl.A.typ with
+                A.Func -> raise Not_found (* Functions can't access members *)
+              |_-> let ind = try memb_index fdecl.A.owner n with Failure s -> raise Not_found in
+                  (* If member, get its pointer by dereferencing the first argument
+                    corresponding to the "this" pointer *)
+                  let e' = L.param (fst (lookup_function fdecl.A.fname) ) 0  in
+                  L.build_gep e' [|L.const_int i32_t 0; L.const_int i32_t ind |] "tmp" builder
+            ) with Not_found -> fst(StringMap.find n global_vars)
 
-            )
-          (* This is reached if we are inside normal function or
-             looking up local variable of method *)
-          with Not_found -> (
-                      try fst(StringMap.find n local_vars)
-                       with Not_found -> fst(StringMap.find n global_vars) )
         in
 
         (* Looks up type of local variables *)
