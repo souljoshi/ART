@@ -12,8 +12,9 @@ shape fun
 int main ()
 {
     struct test s;
-    shape  fun b;
-    s.x; 
-    s[0]=5; // another way of accessing members of the struct
-    printi(s[0]);
+    shape fun b;
+    s.x = 9;
+    printi(s.x);
+    b.m[0][0].y = 5;
+    printi(b.m[0][0].y);
 }

@@ -113,6 +113,18 @@ let translate prog =
 
     in
 
+    (* Returns index of member memb in struct named sname *)
+    let memb_index sname memb =
+    (* Obtain varmap from struct_decls map *)
+    let (varmap, _,_) = try StringMap.find sname struct_decls
+                  with Not_found -> raise (Failure("Varmap not found for : "^sname^"."^memb))
+    in
+    (* Obtain index from varmap *)
+    let (_, i) = try StringMap.find memb varmap
+                  with Not_found -> raise (Failure("Index not found for : "^sname^"."^memb))
+                  in i
+    in
+
    (* Fill in the body of the given function *)
     let build_function_body fdecl =
         (* Get the corresponding llvm function value *)
@@ -192,6 +204,10 @@ let translate prog =
             A.Id s -> lookup s
           | A.Index(e1,e2) -> let e2' = expr builder e2 in
                 L.build_gep (lexpr builder e1) [|L.const_int i32_t 0; e2'|] "tmp" builder
+          | A.Member(e, s) -> let e' = lexpr builder e in
+              (* Obtain index of s in the struct type of expression e *)
+              let (sname, _ ) = expr_type e in let i = memb_index sname s in
+              L.build_gep e' [|L.const_int i32_t 0; L.const_int i32_t i|] "tmp" builder
           | _ -> raise (Failure "Trying to assign to an non l-value")
 
 
@@ -223,6 +239,7 @@ let translate prog =
 
           | A.Index(e1,e2) as arr-> L.build_load (lexpr builder arr) "tmp" builder
 
+          | A.Member(e, s) as mem -> L.build_load (lexpr builder mem) "tmp" builder
 
           | A.Asnop (el, op, er) ->
                let el' = lexpr builder el in
