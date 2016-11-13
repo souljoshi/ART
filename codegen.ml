@@ -148,7 +148,10 @@ let translate prog =
    (* Fill in the body of the given function *)
     let build_function_body fdecl =
         (* Get the corresponding llvm function value *)
-        let (the_function, _) = StringMap.find fdecl.A.fname function_decls in
+        let (the_function, _) = (match fdecl.A.typ with
+                  A.Func -> StringMap.find fdecl.A.fname function_decls
+                  | _ -> lookup_method fdecl.A.owner fdecl.A.fname
+              ) in
         (* Get an instruction builder that will emit instructions in the current function *)
         let builder = L.builder_at_end context (L.entry_block the_function) in
 
@@ -441,4 +444,6 @@ let translate prog =
     in
 
     List.iter build_function_body functions;
+    (* Build methods and constructors for each struct *)
+    List.iter (fun sdecl -> List.iter build_function_body (sdecl.A.ctor::sdecl.A.methods)) structs;
     the_module

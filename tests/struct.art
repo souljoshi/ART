@@ -4,17 +4,83 @@ struct test {
     int y;
 }
 
-
-shape fun
+struct fun
 {
-        struct test[10][10] m;
+        struct test[5][2] m;
 }
+
+test::test(int a, int b)
+{
+        x = a;
+        y = b;
+}
+
+void test::print_test()
+{
+        printc('{');
+        printc('\n');
+        printi(x);
+        printi(y);
+        printc('}');
+        printc('\n');
+}
+void test::unrelated()
+{
+        print_test();
+}
+
+struct screen
+{
+        char[100][100] v;
+}
+
+screen::screen()
+{
+        int i, j;
+        for ( i = 0 ; i < 100 ; i+=1)
+                for (j = 0 ; j < 100; j+=1)
+        {
+                if ((i * 100 + j ) % 2 == 0 )
+                        v[i][j] = '0';
+                else
+                        v[i][j] = '1';
+        }
+
+}
+void screen::dump()
+{
+        int i, j;
+        for ( i = 0 ; i < 100 ; i+=1)
+         for (j = 0 ; j < 100; j+=1)
+        {
+                printc(v[i][j]);
+        }
+}
+
 int main ()
 {
-    struct test s;
-    shape fun b;
-    s.x = 9;
-    printi(s.x);
-    b.m[0][0].y = 5;
-    printi(b.m[0][0].y);
+    struct test s1, s2;
+    struct fun b;
+    struct screen sc;
+    struct screen[10][10]  sca;
+    int i, j;
+    char x;
+
+    for (i = 0; i < 5; i+=1)
+        for ( j = 0 ; j  < 2; j+=1) {
+                b.m[i][j].x = i*2 + j;
+                b.m[i][j].y = -b.m[i][j].x;
+}
+
+
+        for (i = 0; i < 5; i+=1)
+                for (j = 0 ; j < 2;j+=1)
+                        b.m[i][j].print_test();
+
+        s1 = test(3,-3);
+        s2 = s1;
+        sc = screen();
+        sc.dump();
+        s1.unrelated();
+
 }
