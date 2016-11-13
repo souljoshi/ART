@@ -173,9 +173,38 @@ let translate prog =
             let local_var = L.build_alloca (ltype_of_typ t) n builder (* allocate space for local *)
             in StringMap.add n (local_var,t) m in
 
-          let formals = List.fold_left2 add_formal StringMap.empty fdecl.A.params
-            (Array.to_list (L.params the_function)) in
+          (* llvm type list for the params *)
+          let lparams = (match fdecl.A.typ with
+                    A.Func -> Array.to_list (L.params the_function)
+                  (* For Method/Const drop the "this" param as it needs to be inaccessible to user *)
+                  | _ -> List.tl (Array.to_list (L.params the_function)))
+
+          in
+          let formals = List.fold_left2 add_formal StringMap.empty fdecl.A.params lparams
+          in
           List.fold_left add_local formals (List.map (fun (a,b,_) -> (a,b)) fdecl.A.locals) in
+
+        (* Returns (fdef, fdecl) for a method or function *)
+        (* Handles case of normal function call or a method call without dot operator *)
+        (* Second case can happen only within struct scope when calling a struct's method
+           from another method of the same struct *)
+        let lookup_function f =
+        (* Owner of func/method that we are calling in. *)
+        (* The non_identifer "##" for normal functions *)
+        (* This determines whether we are in function scope or struct scope *)
+        let owner = (match fdecl.A.typ with
+                    A.Func -> "##" | _ -> fdecl.A.owner) in
+         (* Try to obtain method map. This will go to the exception handler
+            if we are in function scope *)
+         let (_,methodmap,_) =
+            (try StringMap.find owner struct_decls
+            (* Handler returns an empty methodmap so we can jump to next last handler *)
+            with Not_found -> (StringMap.empty,StringMap.empty, i32_t))
+            in
+            (try StringMap.find f methodmap
+            (* This is reached if we are in function scope or calling a function from a method *)
+            with Not_found -> StringMap.find f function_decls)
+        in
 
         (* Return the value for a variable or formal argument *)
         (* Note: this checks local scope before global. We have to do more complicated scoping *)
