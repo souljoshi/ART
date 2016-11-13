@@ -17,7 +17,7 @@ let translate prog =
     and i32_t = L.i32_type context
     and i8_t   = L.i8_type   context
     and void_t = L.void_type context
-    and float_t = L.double_type context
+    and double_t = L.double_type context
      in
    let string_t = L.pointer_type i8_t
    in
@@ -29,14 +29,14 @@ let translate prog =
         A.Int -> i32_t
       | A.Char -> i8_t
       | A.Void -> void_t
-      | A.Float -> float_t
+      | A.Float -> double_t
       | A.String -> string_t
       | A.Array(t,e) -> (match e with 
             |A.IntLit(i) -> L.array_type (_ltype_of_typ m t) i
             | _ -> raise(Failure "Arrays declaration requires int literals for now"))
       | A.UserType(s,_) -> StringMap.find s m
         (* Currently supporting only void, int and struct types *)
-      | _   -> raise (Failure "Only valid types are int/char/void/string/float")
+      | _   -> raise (Failure "Only valid types are int/char/void/string/double")
 
     in
 
@@ -290,12 +290,12 @@ let translate prog =
           | A.CharLit c -> L.const_int i8_t (int_of_char c) (* 1 byte characters *)
           | A.Noexpr -> L.const_int i32_t 0  (* No expression is 0 *)
           | A.StringLit s -> string_create s builder
-          | A.FloatLit f -> L.const_float float_t f
+          | A.FloatLit f -> L.const_float double_t f
           | A.Id s -> L.build_load (lookup s builder) s builder (* Load the variable into register and return register *)
           | A.Binop (e1, op, e2) ->
               let e1' = expr builder e1
               and e2' = expr builder e2 in
-              let leftyp1=(L.type_of (L.const_int i32_t 1)) and leftyp2 = (L.type_of (L.const_float float_t 1.1))
+              let leftyp1=(L.type_of (L.const_int i32_t 1)) and leftyp2 = (L.type_of (L.const_float double_t 1.1))
               and leftyp3=(L.type_of e1') in
               (match op with
                   A.Add     -> (if leftyp1 = leftyp3 then (L.build_add)  else (L.build_fadd))
@@ -330,8 +330,10 @@ let translate prog =
 
           | A.Unop(op, e) ->
               let e' = expr builder e in
+                let leftyp1=(L.type_of (L.const_int i32_t 1)) and leftyp2 = (L.type_of (L.const_float double_t 1.1))
+                 and leftyp3=(L.type_of e') in
               (match op with
-                A.Neg     -> L.build_neg
+                A.Neg     -> (if leftyp1 = leftyp3 then (L.build_neg) else (L.build_fneg))
               | A.Not     -> L.build_not
               | _  -> raise (Failure "Unsupported unary op")(* Ignore other unary ops *)
                 ) e' "tmp" builder

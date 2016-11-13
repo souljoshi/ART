@@ -1,12 +1,14 @@
 int main()
 {	double[10] points;
 	double f;
+	int g;
 	double g;
 	double total;
 	points[0]=5.5;
 	f=3.314;
-	g=32.441;
+	g=-32.441;
 	total=f+g;
-	printf(total);
+	printf(g);
+	printf(f);
 	printf(points[0]);
 }
