@@ -128,6 +128,11 @@ let translate prog =
 
     in
 
+    (* Returns (fdef, fdecl) for a method in constructor *)
+    let lookup_method sname fname =
+      let (_,methodmap,_) = StringMap.find sname struct_decls in
+      StringMap.find fname methodmap
+
     (* Returns index of member memb in struct named sname *)
     let memb_index sname memb =
     (* Obtain varmap from struct_decls map *)
@@ -184,26 +189,19 @@ let translate prog =
           in
           List.fold_left add_local formals (List.map (fun (a,b,_) -> (a,b)) fdecl.A.locals) in
 
-        (* Returns (fdef, fdecl) for a method or function *)
-        (* Handles case of normal function call or a method call without dot operator *)
+        (* Returns (fdef, fdecl) for a function call in method/function *)
+        (* Handles case of constructor call, a method call without dot operator and
+           normal function call *)
         (* Second case can happen only within struct scope when calling a struct's method
            from another method of the same struct *)
         let lookup_function f =
-        (* Owner of func/method that we are calling in. *)
-        (* The non_identifer "##" for normal functions *)
-        (* This determines whether we are in function scope or struct scope *)
-        let owner = (match fdecl.A.typ with
-                    A.Func -> "##" | _ -> fdecl.A.owner) in
-         (* Try to obtain method map. This will go to the exception handler
-            if we are in function scope *)
-         let (_,methodmap,_) =
-            (try StringMap.find owner struct_decls
-            (* Handler returns an empty methodmap so we can jump to next last handler *)
-            with Not_found -> (StringMap.empty,StringMap.empty, i32_t))
-            in
-            (try StringMap.find f methodmap
-            (* This is reached if we are in function scope or calling a function from a method *)
-            with Not_found -> StringMap.find f function_decls)
+          (* First try to find a matching constructor *)
+          try lookup_method f f
+          (* If that fails try to find a method.
+             this is guaranteed to fail in a normal function *)
+          with (try lookup_method fdecl.A.owner
+          (* Finally look for normal function *)
+                with Not_found -> StringMap.find f function_decls)
         in
 
         (* Return the value for a variable or formal argument *)
@@ -323,20 +321,41 @@ let translate prog =
             (* This ok only for few built_in functions *)
           | A.Call (A.Id "printi", [e]) -> L.build_call printf_func [|int_format_str ; (expr builder e) |] "printf" builder
           | A.Call (A.Id "printc", [e]) -> L.build_call printf_func [|char_format_str ; (expr builder e) |] "printf" builder
+            (* A call without a dot expression refers to three possiblities. In order of precedence: *)
+            (* constructor call, method call (within struct scope), function call *)
           | A.Call (A.Id f, act) ->
-             let (fdef, fdecl) = StringMap.find f function_decls in
+             (* The llvm type array of the calling functions parameters
+                Can be use to retreive the "this" argument *)
+             let myparams  = L.params (fst (lookup_function fdecl.A.fname) ) in
+             let (fdef, fdecl) = lookup_function f in
              (* Helper function for pass by value handling *)
              let arg_passer builder (_,_,pass) = function
-                A.Id(s) as e -> (match pass with
+                (* Identifier, index, and member expressions may be passed by reference.
+                   Other types are required to be passed by value. *)
+                A.Id(_) | A.Index(_,_) | A.Member(_,_) as e -> (match pass with
                           A.Ref -> lookup s builder (* This gets the pointer to the variable *)
                         | A.Value -> expr builder e )
               | e  -> expr builder e
-            in
+             in
              (* This makes right to left evaluation order. What order should we use? *)
              let actuals = List.rev (List.map2 (arg_passer builder) (List.rev fdecl.A.params) (List.rev act)) in
              let result = (match fdecl.A.rettyp with A.Void -> "" (* don't name result for void llvm issue*)
                                                 | _ -> f^"_result") in
-             L.build_call fdef (Array.of_list actuals) result builder
+             (* How the function is called depends on the type *)
+             ( match fdecl.A.typ with
+                A.Func -> L.build_call fdef (Array.of_list actuals) result builder
+                (* For methods pass value  of the callers "this" argument *)
+              | A.Method -> L.build_call fdef (Array.of_list (myparams.(0) :: actuals)) result builder
+                (* Constructors are called like methods but evaluate to their own type
+                  not their return value as they don't have explicit return values *)
+              | A.Constructor -> let (_,_,lstype) =  StringMap.find f struct_decls
+                          (* Create local temporary to hold newly created struct *)
+                          in let loc = L.build_alloca  lstype "tmp" builder in
+                          (* Pass the newly created struct as the "this" arugment of constructor call *)
+                         ignore( L.build_call fdef (Array.of_list (loc :: actuals)) result builder);
+                          (* Return the initialized local temporary *)
+                         L.build_load  loc "tmp" builder
+              )
           |  _  -> raise (Failure "Unsupported expression")(* Ignore other expressions *)
         in
         (* Invoke "f builder" if the current block doesn't already
