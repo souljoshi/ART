@@ -102,9 +102,24 @@ let translate prog =
           List.fold_left (fun vm (n,t,i) -> StringMap.add n (t,i) vm ) StringMap.empty varindex
         in
         (* Map from method/construct name to (llvm func type, fdecl).*)
-        (* Similar to the function_decls map. Code note yet written: curently emptymap*)
+        (* Similar to the function_decls map.*)
         let methodmap =
-          let method_decl m fdecl = m in
+          let method_decl m fdecl =
+            let name = fdecl.A.fname
+            (* Append a pointer to the current struct type to parameter list.
+              It will be used as a this pointer. Method calls always implicitly
+              pass the caller as first argument *)
+            and formal_types = Array.of_list
+            ((L.pointer_type lstype)::(List.map (fun (t, _, pass) ->
+                  let lt = ltype_of_typ t in
+                  match pass with
+                    A.Value -> lt
+                  | A.Ref  -> L.pointer_type lt (* If pass by reference use pointers *)
+                          ) fdecl.A.params) ) in
+            (* NOTE: Return type for constructor is Void *)
+            let ret_type = ltype_of_typ fdecl.A.rettyp
+            in let ftype = L.function_type ret_type formal_types in
+            StringMap.add name (L.define_function name ftype the_module, fdecl) m in
         List.fold_left method_decl StringMap.empty (sdecl.A.ctor::sdecl.A.methods)
       in
 
