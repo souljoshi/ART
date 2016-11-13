@@ -1,0 +1,59 @@
+struct point
+{
+    int x;
+    int y;
+}
+
+point::point(int a, int b)
+{
+    x = a;
+    y = b;
+}
+
+void point::print_test_point()
+{
+    printi(x);
+    printi(y);
+}
+
+
+shape circle
+{
+    struct point origin;
+    int radius;
+}
+
+circle::circle(struct point p, int r)
+{
+    origin = p;
+    radius = r;
+}
+
+void circle::print_test()
+{
+    printi(origin[0]);
+    printi(origin[1]);
+    
+    printi(origin.x);
+    printi(origin.y);
+    
+
+    printi(radius);
+}
+
+
+int main()
+{
+    struct point p1;
+    
+    shape circle c1;
+    
+
+    p1 = point(10, 15);
+    p1.print_test_point();
+    
+    
+    c1 = circle(p1, 5);
+    c1.print_test();
+    
+}
