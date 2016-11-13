@@ -208,10 +208,26 @@ let translate prog =
 
         (* Return the value for a variable or formal argument *)
         (* Note: this checks local scope before global. We have to do more complicated scoping *)
-        let lookup n = try fst(StringMap.find n local_vars)
-                       with Not_found -> fst(StringMap.find n global_vars)
+        let lookup n builder = try ( match fdecl.A.typ with
+              A.Func -> raise Not_found (* Jump straight to local variable handling *)
+            (* For method/constructor check if local variable or member variable *)
+            | _ -> let ind = try memb_index fdecl.A.owner n with
+              Failure s -> raise Not_found (* If not member, jump to local var handling *)
+              in
+              (* If member, get its pointer by dereferencing the first argument
+                 corresponding to the "this" pointer *)
+              let e' = L.param (fst (lookup_function fdecl.A.fname) ) 0  in
+              L.build_gep e' [|L.const_int i32_t 0; L.const_int i32_t ind |] "tmp" builder
+
+            )
+          (* This is reached if we are inside normal function or
+             looking up local variable of method *)
+          with Not_found -> (
+                      try fst(StringMap.find n local_vars)
+                       with Not_found -> fst(StringMap.find n global_vars) )
         in
 
+        (* Looks up type of local variables *)
         let lookup_type n = try snd(StringMap.find n local_vars)
                        with Not_found -> snd(StringMap.find n global_vars)
         in
@@ -245,7 +261,7 @@ let translate prog =
 
         (* Construct code for an lvalue; return a pointer to access object *)
         let rec lexpr builder = function
-            A.Id s -> lookup s
+            A.Id s -> lookup s builder
           | A.Index(e1,e2) -> let e2' = expr builder e2 in
                 L.build_gep (lexpr builder e1) [|L.const_int i32_t 0; e2'|] "tmp" builder
           | A.Member(e, s) -> let e' = lexpr builder e in
@@ -260,7 +276,7 @@ let translate prog =
             A.IntLit i -> L.const_int i32_t i
           | A.CharLit c -> L.const_int i8_t (int_of_char c) (* 1 byte characters *)
           | A.Noexpr -> L.const_int i32_t 0  (* No expression is 0 *)
-          | A.Id s -> L.build_load (lookup s) s builder (* Load the variable into register and return register *)
+          | A.Id s -> L.build_load (lookup s builder) s builder (* Load the variable into register and return register *)
           | A.Binop (e1, op, e2) ->
               let e1' = expr builder e1
               and e2' = expr builder e2 in
@@ -312,7 +328,7 @@ let translate prog =
              (* Helper function for pass by value handling *)
              let arg_passer builder (_,_,pass) = function
                 A.Id(s) as e -> (match pass with
-                          A.Ref -> lookup s (* This gets the pointer to the variable *)
+                          A.Ref -> lookup s builder (* This gets the pointer to the variable *)
                         | A.Value -> expr builder e )
               | e  -> expr builder e
             in
