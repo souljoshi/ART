@@ -33,6 +33,11 @@ let translate prog =
       | _   -> raise (Failure "Only valid types are int/char/void")
 
     in
+
+    (* Defining each of the structs *)
+    (* struct_ltypes is a map from struct names to their corresponing llvm type. *)
+    (* It's used by ltype_of_typ. It has to be defined this way to allow structs to *)
+    (* have member whose type is of previously defined structs *)
     let struct_ltypes =
         let struct_ltype m st =
           (* Ocaml Array containing llvm lltypes of the member variables *)
@@ -44,8 +49,6 @@ let translate prog =
         StringMap.add st.A.sname named_struct m in
         List.fold_left struct_ltype StringMap.empty structs
     in
-     
-
 
     (* Function takes ast types and returns corresponding llvm type *)
     let ltype_of_typ t = _ltype_of_typ struct_ltypes t
@@ -85,15 +88,30 @@ let translate prog =
           StringMap.add name (L.define_function name ftype the_module, fdecl) m in
         List.fold_left function_decl StringMap.empty functions in
 
-    (* trying to make a map of index to var name
-    let index_of_members = 
-        let index_function m struct=
-           List.inter (fun (typ,str) ->
+    (* Map from struct names to tuples (member variable map, methods map, lltype) *)
+    let struct_decls =
+      (* struct_decl takes a map and an ast sdecl and returns a map which contains sdecl added *)
+      let struct_decl m sdecl =
+        let lstype = ltype_of_typ (A.UserType(sdecl.A.sname, sdecl.A.ss)) in
+        (* Map from struct member variable name to (ast type, index) *)
+        (* index refers to the position of member in struct and is used for calling getelementptr *)
+        (* Note: members in the ast have variant type "bind = typ * string" *)
+        let varmap =
+          let varindex = List.rev ( snd (List.fold_left (fun (i,l) (t,n) -> ( i+1,(n,t,i)::l) )
+              (0,[]) sdecl.A.decls) ) in
+          List.fold_left (fun vm (n,t,i) -> StringMap.add n (t,i) vm ) StringMap.empty varindex
+        in
+        (* Map from method/construct name to (llvm func type, fdecl).*)
+        (* Similar to the function_decls map. Code note yet written: curently emptymap*)
+        let methodmap =
+          let method_decl m fdecl = m in
+        List.fold_left method_decl StringMap.empty (sdecl.A.ctor::sdecl.A.methods)
+      in
 
-    *)
+        StringMap.add sdecl.A.sname (varmap, methodmap, lstype) m in
+      List.fold_left struct_decl StringMap.empty structs
 
-
-
+    in
 
    (* Fill in the body of the given function *)
     let build_function_body fdecl =
@@ -140,6 +158,33 @@ let translate prog =
 
         let lookup_type n = try snd(StringMap.find n local_vars)
                        with Not_found -> snd(StringMap.find n global_vars)
+        in
+
+        (* Like string_of_typ but prints "circle" instead of "shape circle" *)
+        let string_of_typ2 = function
+            A.UserType(s, _) -> s
+          | t -> A.string_of_typ t
+
+        in
+
+        (* Returns a tuple (type name, ast type) for an expression *)
+        (* In final code [with semantic analysis] the ast type should be part of expr *)
+        let rec expr_type  = function
+          A.IntLit i -> ("int", A.Int)
+        | A.Id s -> let t =  lookup_type s in (string_of_typ2 t, t)
+        | A.Index(a, e) -> (match snd(expr_type a) with (* First get type of the expr being indexed *)
+                            (* The type of the index expression is the subtype 't' of the array *)
+                            A.Array (t, e2) -> (string_of_typ2 t, t)
+                          | _ -> raise (Failure ("Indexing non array")))
+
+        | A.Member(e, s) -> let (n,t) = expr_type e (* Get type name of the expression before dot *)
+                      (* Look for it in the structs map and get the var map *)
+                      in  let (varmap, _,_ ) = StringMap.find n struct_decls
+                      (* Look for string after the dot in the varmap *)
+                      in let t = fst(StringMap.find s varmap)
+                      in (string_of_typ2 t, t)
+        |_ -> raise (Failure ("Unsupported Expression for expr_type"))
+
         in
 
         (* Construct code for an lvalue; return a pointer to access object *)
@@ -196,19 +241,6 @@ let translate prog =
               | A.Not     -> L.build_not
               | _  -> raise (Failure "Unsupported unary op")(* Ignore other unary ops *)
                 ) e' "tmp" builder
-
-
-          (*trying right now to grab the struct pointer of e1 for further use*)
-          | A.Member(e1,s1) ->
-          let e1' = (match e1 with
-            A.Id e1' -> e1'
-
-            )
-            in 
-              L.build_load(lookup e1') "temp" builder
-            
-
-
 
 
             (* This ok only for few built_in functions *)
