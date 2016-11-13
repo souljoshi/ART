@@ -7,7 +7,8 @@ name::name(string nj)
 	n=nj;
 }
 int main()
-{	string s;
+{	
+	string s;
 	struct name k;
 	k=name("hey");
 	s = "hello";

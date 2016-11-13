@@ -17,6 +17,7 @@ let translate prog =
     and i32_t = L.i32_type context
     and i8_t   = L.i8_type   context
     and void_t = L.void_type context
+    and float_t = L.double_type context
      in
    let string_t = L.pointer_type i8_t
    in
@@ -28,13 +29,14 @@ let translate prog =
         A.Int -> i32_t
       | A.Char -> i8_t
       | A.Void -> void_t
+      | A.Float -> float_t
       | A.String -> string_t
       | A.Array(t,e) -> (match e with 
             |A.IntLit(i) -> L.array_type (_ltype_of_typ m t) i
             | _ -> raise(Failure "Arrays declaration requires int literals for now"))
       | A.UserType(s,_) -> StringMap.find s m
         (* Currently supporting only void, int and struct types *)
-      | _   -> raise (Failure "Only valid types are int/char/void")
+      | _   -> raise (Failure "Only valid types are int/char/void/string/float")
 
     in
 
@@ -163,6 +165,7 @@ let translate prog =
         let int_format_str = L.build_global_stringptr "%d\n" "fmt" builder in
         let char_format_str = L.build_global_stringptr "%c" "fmt" builder in
         let string_format_str = L.build_global_stringptr "%s\n" "fmt" builder in
+       let float_format_str = L.build_global_stringptr "%f" "fmt" builder in
 
         (* Construct the function's "locals": formal arguments and locally
            declared variables.  Allocate each on the stack, initialize their
@@ -251,6 +254,7 @@ let translate prog =
         (* In final code [with semantic analysis] the ast type should be part of expr *)
         let rec expr_type  = function
           A.IntLit i -> ("int", A.Int)
+        | A.FloatLit f -> ("double", A.Float)
         | A.Id s -> let t =  lookup_type s in (string_of_typ2 t, t)
         | A.Index(a, e) -> (match snd(expr_type a) with (* First get type of the expr being indexed *)
                             (* The type of the index expression is the subtype 't' of the array *)
@@ -286,16 +290,19 @@ let translate prog =
           | A.CharLit c -> L.const_int i8_t (int_of_char c) (* 1 byte characters *)
           | A.Noexpr -> L.const_int i32_t 0  (* No expression is 0 *)
           | A.StringLit s -> string_create s builder
+          | A.FloatLit f -> L.const_float float_t f
           | A.Id s -> L.build_load (lookup s builder) s builder (* Load the variable into register and return register *)
           | A.Binop (e1, op, e2) ->
               let e1' = expr builder e1
               and e2' = expr builder e2 in
+              let leftyp1=(L.type_of (L.const_int i32_t 1)) and leftyp2 = (L.type_of (L.const_float float_t 1.1))
+              and leftyp3=(L.type_of e1') in
               (match op with
-                  A.Add     -> L.build_add
-                | A.Sub     -> L.build_sub
-                | A.Mult    -> L.build_mul
-                | A.Div     -> L.build_sdiv
-                | A.Mod     -> L.build_srem
+                  A.Add     -> (if leftyp1 = leftyp3 then (L.build_add)  else (L.build_fadd))
+                | A.Sub     -> (if leftyp1 = leftyp3 then (L.build_sub) else (L.build_fsub))
+                | A.Mult    -> (if leftyp1 = leftyp3 then (L.build_mul) else (L.build_fmul))
+                | A.Div     -> (if leftyp1 = leftyp3 then (L.build_sdiv) else (L.build_fmul))
+                | A.Mod     -> (L.build_srem)
                 | A.And     -> L.build_and
                 | A.Or      -> L.build_or
 
@@ -334,6 +341,7 @@ let translate prog =
           | A.Call (A.Id "printi", [e]) -> L.build_call printf_func [|int_format_str ; (expr builder e) |] "printf" builder
           | A.Call (A.Id "printc", [e]) -> L.build_call printf_func [|char_format_str ; (expr builder e) |] "printf" builder
           | A.Call (A.Id "prints", [e]) -> L.build_call printf_func [|string_format_str ; (expr builder e) |] "printf" builder
+            | A.Call (A.Id "printf", [e]) -> L.build_call printf_func [|float_format_str ; (expr builder e) |] "printf" builder
             (* A call without a dot expression refers to three possiblities. In order of precedence: *)
             (* constructor call, method call (within struct scope), function call *)
           | A.Call (A.Id f, act) ->
