@@ -16,7 +16,7 @@
                         body = [] ; typ = Constructor; owner = n }
 %}
 
-%token VOID INT CHAR DOUBLE VEC
+%token VOID INT CHAR DOUBLE VEC STRING
 %token LPAREN RPAREN LBRACK RBRACK LBRACE RBRACE
 %token DOT QMARK COLON COMMA SEMI AMPS DCOLON
 %token PLUS MINUS TIMES DIVIDE MOD
@@ -30,6 +30,7 @@
 %token <char> CHARLIT
 %token <float> FLOATLIT
 %token <float * float> VECTORLIT
+%token <string> STRINGLIT
 %token <string> ID
 %token EOF
 
@@ -148,6 +149,7 @@ basic_typ:
   | CHAR              { Char }
   | DOUBLE            { Float}
   | VEC               { Vec }
+  | STRING            { String }
   | struct_or_shape_specifier {$1}
 
 full_array_typ:
@@ -288,6 +290,7 @@ posexpr:
   | CHARLIT               { CharLit($1) }
   | FLOATLIT              { FloatLit($1) }
   | VECTORLIT             { VecLit($1) }
+  | STRINGLIT             { StringLit($1)}
 
   /* primary expression */
   | ID                    { Id($1) }

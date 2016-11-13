@@ -2,6 +2,9 @@
 
 { open Parser
   (* Converts escape sequences into characters *)
+  let string_func s =
+      Scanf.sscanf("\"" ^ s ^ "\"") "%s%!" (fun  y ->y )
+
   let char_esc = function
       "\\n"  -> Char.chr(0XA)
     | "\\t"  -> Char.chr(0X9)
@@ -28,6 +31,7 @@ let escapes = "\\n" | "\\t"  | "\\v"          (* Escaped chars *)
             |"\\b"  | "\\r"  | "\\f"
             |"\\a"  | "\\\\" | "\\?"
             |"\\'"  | "\\\""
+let string = '"' ((printable|escapes)* as str) '"'
 
 let octescp = (oct | oct oct | oct oct oct) (* Octal escapes *)
 let hexescp = hex+                         (* Hex escapes *)
@@ -96,6 +100,7 @@ rule token = parse
 | "char"        { CHAR }
 | "double"      { DOUBLE }
 | "vec"         { VEC }
+| "string"      {STRING}
 (* Type keywords *)
 | "struct"      { STRUCT }
 | "shape"       { SHAPE }
@@ -120,7 +125,7 @@ rule token = parse
 
 (* Double Literal *)
 |  double as lex { FLOATLIT (float_of_string lex)}
-
+| string {STRINGLIT(string_func str )}
 (* Vector Literal *)
 |  '<' spc* (double as lex1) spc*
     ',' spc* (double as lex2) spc* '>'  { VECTORLIT(float_of_string lex1, float_of_string lex2)}
