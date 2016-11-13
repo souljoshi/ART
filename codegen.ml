@@ -16,7 +16,10 @@ let translate prog =
     let the_module = L.create_module context "ART"
     and i32_t = L.i32_type context
     and i8_t   = L.i8_type   context
-    and void_t = L.void_type context in
+    and void_t = L.void_type context
+     in
+   let string_t = L.pointer_type i8_t
+   in
 
     (* General verson of lltype_of_typ that takes a struct map *)
     (* The struct map helps to get member types for structs in terms of previously *)
@@ -25,6 +28,7 @@ let translate prog =
         A.Int -> i32_t
       | A.Char -> i8_t
       | A.Void -> void_t
+      | A.String -> string_t
       | A.Array(t,e) -> (match e with 
             |A.IntLit(i) -> L.array_type (_ltype_of_typ m t) i
             | _ -> raise(Failure "Arrays declaration requires int literals for now"))
@@ -158,6 +162,7 @@ let translate prog =
         (* Format strings for printf call *)
         let int_format_str = L.build_global_stringptr "%d\n" "fmt" builder in
         let char_format_str = L.build_global_stringptr "%c" "fmt" builder in
+        let string_format_str = L.build_global_stringptr "%s\n" "fmt" builder in
 
         (* Construct the function's "locals": formal arguments and locally
            declared variables.  Allocate each on the stack, initialize their
@@ -229,6 +234,12 @@ let translate prog =
                        with Not_found -> snd(StringMap.find n global_vars)
         in
 
+        let string_create s builder =
+          let str = L.build_global_stringptr s "temp" builder
+        in
+        L.build_in_bounds_gep str [|L.const_int i32_t 0|] "temps" builder
+      in
+
         (* Like string_of_typ but prints "circle" instead of "shape circle" *)
         let string_of_typ2 = function
             A.UserType(s, _) -> s
@@ -252,6 +263,7 @@ let translate prog =
                       (* Look for string after the dot in the varmap *)
                       in let t = fst(StringMap.find s varmap)
                       in (string_of_typ2 t, t)
+        | A.StringLit s -> ("string",A.String)
         |_ -> raise (Failure ("Unsupported Expression for expr_type"))
 
         in
@@ -273,6 +285,7 @@ let translate prog =
             A.IntLit i -> L.const_int i32_t i
           | A.CharLit c -> L.const_int i8_t (int_of_char c) (* 1 byte characters *)
           | A.Noexpr -> L.const_int i32_t 0  (* No expression is 0 *)
+          | A.StringLit s -> string_create s builder
           | A.Id s -> L.build_load (lookup s builder) s builder (* Load the variable into register and return register *)
           | A.Binop (e1, op, e2) ->
               let e1' = expr builder e1
@@ -320,6 +333,7 @@ let translate prog =
             (* This ok only for few built_in functions *)
           | A.Call (A.Id "printi", [e]) -> L.build_call printf_func [|int_format_str ; (expr builder e) |] "printf" builder
           | A.Call (A.Id "printc", [e]) -> L.build_call printf_func [|char_format_str ; (expr builder e) |] "printf" builder
+          | A.Call (A.Id "prints", [e]) -> L.build_call printf_func [|string_format_str ; (expr builder e) |] "printf" builder
             (* A call without a dot expression refers to three possiblities. In order of precedence: *)
             (* constructor call, method call (within struct scope), function call *)
           | A.Call (A.Id f, act) ->
