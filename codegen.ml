@@ -44,6 +44,8 @@ let translate prog =
         StringMap.add st.A.sname named_struct m in
         List.fold_left struct_ltype StringMap.empty structs
     in
+     
+
 
     (* Function takes ast types and returns corresponding llvm type *)
     let ltype_of_typ t = _ltype_of_typ struct_ltypes t
@@ -82,6 +84,16 @@ let translate prog =
           in let ftype = L.function_type (ltype_of_typ fdecl.A.rettyp) formal_types in
           StringMap.add name (L.define_function name ftype the_module, fdecl) m in
         List.fold_left function_decl StringMap.empty functions in
+
+    (* trying to make a map of index to var name
+    let index_of_members = 
+        let index_function m struct=
+           List.inter (fun (typ,str) ->
+
+    *)
+
+
+
 
    (* Fill in the body of the given function *)
     let build_function_body fdecl =
@@ -184,6 +196,19 @@ let translate prog =
               | A.Not     -> L.build_not
               | _  -> raise (Failure "Unsupported unary op")(* Ignore other unary ops *)
                 ) e' "tmp" builder
+
+
+          (*trying right now to grab the struct pointer of e1 for further use*)
+          | A.Member(e1,s1) ->
+          let e1' = (match e1 with
+            A.Id e1' -> e1'
+
+            )
+            in 
+              L.build_load(lookup e1') "temp" builder
+            
+
+
 
 
             (* This ok only for few built_in functions *)

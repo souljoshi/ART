@@ -4,13 +4,16 @@ struct test {
     int y;
 }
 
-struct fun
+
+shape fun
 {
         struct test[10][10] m;
 }
 int main ()
 {
     struct test s;
-    struct fun b;
-    int z;
+    shape  fun b;
+    s.x; 
+    s[0]=5; // another way of accessing members of the struct
+    printi(s[0]);
 }
