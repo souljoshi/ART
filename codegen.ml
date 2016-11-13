@@ -132,7 +132,7 @@ let translate prog =
     let lookup_method sname fname =
       let (_,methodmap,_) = StringMap.find sname struct_decls in
       StringMap.find fname methodmap
-
+    in
     (* Returns index of member memb in struct named sname *)
     let memb_index sname memb =
     (* Obtain varmap from struct_decls map *)
@@ -199,7 +199,7 @@ let translate prog =
           try lookup_method f f
           (* If that fails try to find a method.
              this is guaranteed to fail in a normal function *)
-          with (try lookup_method fdecl.A.owner
+          with Not_found -> (try lookup_method fdecl.A.owner f
           (* Finally look for normal function *)
                 with Not_found -> StringMap.find f function_decls)
         in
@@ -333,7 +333,7 @@ let translate prog =
                 (* Identifier, index, and member expressions may be passed by reference.
                    Other types are required to be passed by value. *)
                 A.Id(_) | A.Index(_,_) | A.Member(_,_) as e -> (match pass with
-                          A.Ref -> lookup s builder (* This gets the pointer to the variable *)
+                          A.Ref -> lexpr builder e (* This gets the pointer to the variable *)
                         | A.Value -> expr builder e )
               | e  -> expr builder e
              in
@@ -356,7 +356,26 @@ let translate prog =
                           (* Return the initialized local temporary *)
                          L.build_load  loc "tmp" builder
               )
-          |  _  -> raise (Failure "Unsupported expression")(* Ignore other expressions *)
+          (* Explicit method calls with dot operator *)
+          | A.Call (A.Member(e,s), act) ->
+             let (sname, _ ) = expr_type e in
+             let (fdef, fdecl) = lookup_method sname s in
+             (* Helper function for pass by value handling *)
+             (* Same us the above code *)
+             let arg_passer builder (_,_,pass) = function
+                A.Id(_) | A.Index(_,_) | A.Member(_,_) as e -> (match pass with
+                          A.Ref -> lexpr builder e (* This gets the pointer to the variable *)
+                        | A.Value -> expr builder e )
+              | e  -> expr builder e
+            in
+             (* This makes right to left evaluation order. What order should we use? *)
+             let actuals = List.rev (List.map2 (arg_passer builder) (List.rev fdecl.A.params) (List.rev act)) in
+             (* Append the left side of dot operator to arguments so it is used as a "this" argument *)
+             let actuals = (lexpr builder e )::actuals in
+             let result = (match fdecl.A.rettyp with A.Void -> "" (* don't name result for void llvm issue*)
+                                                | _ -> s^"_result") in
+             L.build_call fdef (Array.of_list actuals) result builder
+          |  e -> raise (Failure ("Unsupported expression: "^(A.string_of_expr e)))(* Ignore other expressions *)
         in
         (* Invoke "f builder" if the current block doesn't already
            have a terminal (e.g., a branch). *)
