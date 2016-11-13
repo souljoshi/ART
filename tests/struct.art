@@ -9,6 +9,7 @@ struct fun
         struct test[5][2] m;
 }
 
+
 test::test(int a, int b)
 {
         x = a;
@@ -62,6 +63,16 @@ void screen::dump()
         }
 }
 
+int  screen::chained(int add)
+{
+    
+    int z;
+    z =2;
+    z=z+add;
+    return z;
+ 
+}
+
 int main ()
 {
     struct test s1, s2;
@@ -70,6 +81,7 @@ int main ()
     struct screen[10][10]  sca;
     int i, j;
     char x;
+    int v;
 
     for (i = 0; i < 5; i+=1)
         for ( j = 0 ; j  < 2; j+=1) {
@@ -85,7 +97,7 @@ int main ()
         s1 = test(3,-3);
         s2 = s1;
         sc = screen();
-        sc.dump();
-        s1.unrelated();
+        v=sc.chained(2);
+        printi(v);
 
 }
