@@ -40,7 +40,7 @@ face::face(shape circle x, shape circle y)
 
 void face::draw()
 {
-	//  eye1.draw(10);cannot access member vars of members vars in nested shape  
+	eye1.draw(10);//cannot access member vars of members vars in nested shape  
 	printc('h');
 }
 

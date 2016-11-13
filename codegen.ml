@@ -134,15 +134,19 @@ let translate prog =
       StringMap.find fname methodmap
     in
     (* Returns index of member memb in struct named sname *)
-    let memb_index sname memb =
+    let memb_index_type sname memb =
       (* Obtain varmap from struct_decls map *)
       let (varmap, _,_) = try StringMap.find sname struct_decls
                     with Not_found -> raise (Failure("Varmap not found for : "^sname^"."^memb))
       in
       (* Obtain index from varmap *)
-      let (_, i) = try StringMap.find memb varmap
+      let r = try StringMap.find memb varmap
                     with Not_found -> raise (Failure("Index not found for : "^sname^"."^memb))
-                    in i
+                    in r
+    in
+    let memb_index sname memb = snd (memb_index_type sname memb)
+    in
+    let memb_type sname memb = fst (memb_index_type sname memb)
     in
 
    (* Fill in the body of the given function *)
@@ -224,9 +228,15 @@ let translate prog =
 
         in
 
-        (* Looks up type of local variables *)
-        let lookup_type n = try snd(StringMap.find n local_vars)
-                       with Not_found -> snd(StringMap.find n global_vars)
+        (* Looks up type of identifier *)
+        let lookup_type n =
+            (* First try to find local variable type *)
+            try snd(StringMap.find n local_vars)
+            (* Then try to find a member, if not member jump to global variable handling *)
+            with Not_found -> try (match fdecl.A.typ with
+                A.Func -> raise Not_found (* Functions can't access members *)
+              |_-> try memb_type fdecl.A.owner n with Failure s -> raise Not_found
+            ) with Not_found -> snd(StringMap.find n global_vars)
         in
 
         (* Like string_of_typ but prints "circle" instead of "shape circle" *)
