@@ -73,6 +73,17 @@ RunFail() {
     return 0
 }
 
+# RunSyntax <args>
+# Report the command, run it, and expect a syntax error
+# Used for tests that are supposed to give a syntax error
+RunSyntax() {
+    echo $* 1>&2
+    eval $* || {
+    SignalError "$1 failed on $*"
+    return 1
+    }
+}
+
 # For tests that are supposed to run without any erros
 Check() {
     error=0
@@ -142,6 +153,40 @@ CheckFail() {
     fi
 }
 
+# For tests that are supposed to give a syntax error rather than an exception
+CheckSyntax() {
+    error=0
+    basename=`echo $1 | sed 's/.*\\///
+                             s/.art//'`
+    reffile=`echo $1 | sed 's/.art$//'`
+    basedir="`echo $1 | sed 's/\/[^\/]*$//'`/."
+
+    echo -n "$basename..."
+
+    echo 1>&2
+    echo "###### Testing $basename" 1>&2
+
+    generatedfiles=""
+
+    generatedfiles="$generatedfiles ${basename}.err ${basename}.diff" &&
+    RunSyntax "$ART" "<" $1 "| tee" "${basename}.err" ">>" $globallog &&
+    Compare ${basename}.err ${reffile}.err ${basename}.diff
+
+    # Report the status and clean up the generated files
+
+    if [ $error -eq 0 ] ; then
+    if [ $keep -eq 0 ] ; then
+        rm -f $generatedfiles
+    fi
+    echo "OK"
+    echo "###### SUCCESS" 1>&2
+    else
+    #rm -f $generatedfiles
+    echo "###### FAILED" 1>&2
+    globalerror=$error
+    fi
+}
+
 # Options
 while getopts kdpsh c; do
     case $c in
@@ -171,7 +216,7 @@ if [ $# -ge 1 ]
 then
     files=$@
 else
-    files="tests/test-*.art tests/fail-*.art"
+    files="tests/test-*.art tests/fail-*.art tests/syntax-*.art"
 fi
 
 for file in $files
@@ -182,6 +227,9 @@ do
         ;;
     *fail-*)
         CheckFail $file 2>> $globallog
+        ;;
+    *syntax-*)
+        CheckSyntax $file 2>> $globallog
         ;;
     *)
         echo "unknown file type $file"
