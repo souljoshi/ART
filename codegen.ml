@@ -250,6 +250,8 @@ let translate prog =
 
         in
 
+          
+
         (* Returns a tuple (type name, ast type) for an expression *)
         (* In final code [with semantic analysis] the ast type should be part of expr *)
         let rec expr_type  = function
@@ -272,6 +274,57 @@ let translate prog =
 
         in
 
+
+        let convert_type e1 e2 builder =
+            let float_type = L.type_of (L.const_float double_t 1.1) and int_type = L.type_of(L.const_int i32_t 1) and type_of_e1=L.type_of(e1) and type_of_e2=L.type_of(e2)
+              in let e1' =
+                      (if type_of_e1=int_type
+                          then L.build_sitofp e1 float_type "temp" builder
+                        else e1)
+              and e2'=(if type_of_e2=int_type
+                        then L.build_sitofp e2 float_type "temp" builder 
+                       else e2 )
+            in (e1',e2')
+
+          in
+
+
+            
+        let match_type typ op =
+              let float_type = (L.type_of (L.const_float double_t 1.1))
+            in if typ=float_type
+              then match op with
+                A.Add -> L.build_fadd
+                | A.Sub     -> L.build_fsub
+                | A.Mult    -> L.build_fmul
+                | A.Div     -> L.build_fdiv
+                | A.And     -> L.build_and
+                | A.Or      -> L.build_or
+                | A.Mod     -> raise (Failure "Cannot mod a float")
+                | A.Equal   -> L.build_icmp L.Icmp.Eq
+                | A.Neq     -> L.build_icmp L.Icmp.Ne
+                | A.Less    -> L.build_icmp L.Icmp.Slt
+                | A.Leq     -> L.build_icmp L.Icmp.Sle
+                | A.Greater -> L.build_icmp L.Icmp.Sgt
+                | A.Geq     -> L.build_icmp L.Icmp.Sge
+                
+            else match op with
+                A.Add -> L.build_add
+                | A.Sub     -> L.build_sub
+                | A.Mult    -> L.build_mul
+                | A.Div     -> L.build_sdiv
+                | A.And     -> L.build_and
+                | A.Or      -> L.build_or
+                | A.Mod     -> L.build_srem
+                | A.Equal   -> L.build_icmp L.Icmp.Eq
+                | A.Neq     -> L.build_icmp L.Icmp.Ne
+                | A.Less    -> L.build_icmp L.Icmp.Slt
+                | A.Leq     -> L.build_icmp L.Icmp.Sle
+                | A.Greater -> L.build_icmp L.Icmp.Sgt
+                | A.Geq     -> L.build_icmp L.Icmp.Sge
+              
+          in
+
         (* Construct code for an lvalue; return a pointer to access object *)
         let rec lexpr builder = function
             A.Id s -> lookup s builder
@@ -293,26 +346,17 @@ let translate prog =
           | A.FloatLit f -> L.const_float double_t f
           | A.Id s -> L.build_load (lookup s builder) s builder (* Load the variable into register and return register *)
           | A.Binop (e1, op, e2) ->
-              let e1' = expr builder e1
-              and e2' = expr builder e2 in
-              let leftyp1=(L.type_of (L.const_int i32_t 1)) and leftyp2 = (L.type_of (L.const_float double_t 1.1))
-              and leftyp3=(L.type_of e1') in
-              (match op with
-                  A.Add     -> (if leftyp1 = leftyp3 then (L.build_add)  else (L.build_fadd))
-                | A.Sub     -> (if leftyp1 = leftyp3 then (L.build_sub) else (L.build_fsub))
-                | A.Mult    -> (if leftyp1 = leftyp3 then (L.build_mul) else (L.build_fmul))
-                | A.Div     -> (if leftyp1 = leftyp3 then (L.build_sdiv) else (L.build_fmul))
-                | A.Mod     -> (L.build_srem)
-                | A.And     -> L.build_and
-                | A.Or      -> L.build_or
-
-                | A.Equal   -> L.build_icmp L.Icmp.Eq
-                | A.Neq     -> L.build_icmp L.Icmp.Ne
-                | A.Less    -> L.build_icmp L.Icmp.Slt
-                | A.Leq     -> L.build_icmp L.Icmp.Sle
-                | A.Greater -> L.build_icmp L.Icmp.Sgt
-                | A.Geq     -> L.build_icmp L.Icmp.Sge
-              ) e1' e2' "tmp" builder
+              let e1' = expr builder e1 
+              and e2' = expr builder e2 
+              and float_type = L.type_of(L.const_float double_t 1.1)
+            in
+              let type_of_e1' = L.type_of(e1') and type_of_e2' = L.type_of(e2')
+            in if type_of_e1' <> type_of_e2'
+                  then let ret= convert_type e1' e2' builder
+                in let x = fst ret and y = snd ret
+                  in match_type float_type op x y "temp" builder
+            else
+              match_type type_of_e1' op e1' e2' "tmp" builder
 
           | A.Index(e1,e2) as arr-> L.build_load (lexpr builder arr) "tmp" builder
 
