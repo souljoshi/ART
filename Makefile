@@ -1,5 +1,11 @@
 # basic makefile
 
+.PHONY : art.native
+
+art.native :
+	ocamlbuild -use-ocamlfind -pkgs llvm,llvm.analysis -cflags -w,+a-4 \
+		art.native
+		
 OBJS =  parser.cmo scanner.cmo ast.cmo semant.cmo codegen.cmo art.cmo
 
 art: scanner parser ast semant codegen
