@@ -154,7 +154,7 @@ while getopts kdpsh c; do
     esac
 done
 
-shift `expr $OPTIND -1`
+shift `expr $OPTIND - 1`
 
 # Error finding LLI
 LLIFail()

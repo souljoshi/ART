@@ -34,3 +34,8 @@ codegen: codegen.ml
 
 clean:
 	rm -f *.cmo *.cmi scanner.ml parser.ml parser.mli parser.output art
+
+.PHONY: clean-tests
+
+clean-tests:
+	rm -f *.diff *.ll *.out *.err
