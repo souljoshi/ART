@@ -1,10 +1,4 @@
 # basic makefile
-
-.PHONY : art.native
-
-art.native :
-	ocamlbuild -use-ocamlfind -pkgs llvm,llvm.analysis -cflags -w,+a-4 \
-		art.native
 		
 OBJS =  parser.cmo scanner.cmo ast.cmo semant.cmo codegen.cmo art.cmo
 
@@ -39,3 +33,11 @@ clean:
 
 clean-tests:
 	rm -f *.diff *.ll *.out *.err
+
+.PHONY : art.native
+
+art.native:
+	make clean
+	make clean-tests
+	ocamlbuild -use-ocamlfind -pkgs llvm,llvm.analysis -cflags -w,+a-4 \
+		art.native
