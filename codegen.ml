@@ -19,6 +19,8 @@ let translate prog =
     and void_t = L.void_type context
     and double_t = L.double_type context
      in
+    let vec_t = L.vector_type double_t 2 (* array of 2 elements of type double *)
+     in
    let string_t = L.pointer_type i8_t
    in
 
@@ -31,12 +33,13 @@ let translate prog =
       | A.Void -> void_t
       | A.Float -> double_t
       | A.String -> string_t
+      | A.Vec -> vec_t
       | A.Array(t,e) -> (match e with 
-            |A.IntLit(i) -> L.array_type (_ltype_of_typ m t) i
+            | A.IntLit(i) -> L.array_type (_ltype_of_typ m t) i
             | _ -> raise(Failure "Arrays declaration requires int literals for now"))
       | A.UserType(s,_) -> StringMap.find s m
         (* Currently supporting only void, int and struct types *)
-      | _   -> raise (Failure "Only valid types are int/char/void/string/double")
+      | _   -> raise (Failure "Only valid types are int/char/void/string/double/vec")
 
     in
 
@@ -165,7 +168,7 @@ let translate prog =
         let int_format_str = L.build_global_stringptr "%d\n" "fmt" builder in
         let char_format_str = L.build_global_stringptr "%c" "fmt" builder in
         let string_format_str = L.build_global_stringptr "%s\n" "fmt" builder in
-       let float_format_str = L.build_global_stringptr "%f" "fmt" builder in
+       let float_format_str = L.build_global_stringptr "%f\n" "fmt" builder in
 
         (* Construct the function's "locals": formal arguments and locally
            declared variables.  Allocate each on the stack, initialize their

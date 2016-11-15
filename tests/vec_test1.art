@@ -1,0 +1,19 @@
+int main()
+{
+    int[2] a;
+    vec v;
+    int b;
+    a[0] = 1;
+    a[1] = 2;
+    // vec v = <10.5, 4.2>;
+    // vec v;
+    v[0] = 10.5;
+    v[1] = 4.2;
+    b = 55;
+    printi(a[0]);
+    printi(a[1]);
+    printf(v[0]);
+    printf(v[1]);
+    printi(b);
+
+}
