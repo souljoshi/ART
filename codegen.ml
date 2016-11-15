@@ -262,6 +262,11 @@ let translate prog =
         | A.FloatLit f -> ("double", A.Float)
         | A.Id s -> let t =  lookup_type s in (string_of_typ2 t, t)
         | A.VecLit(f1, f2) -> ("vec", A.Vec)
+
+        (*
+        | A.Vecexpr(e1, e2) -> ("vec", A.Vec)
+        *)
+
         | A.Index(a, e) -> (match snd(expr_type a) with (* First get type of the expr being indexed *)
                             (* The type of the index expression is the subtype 't' of the array *)
                             A.Array (t, e2) -> (string_of_typ2 t, t)
@@ -349,6 +354,18 @@ let translate prog =
           | A.StringLit s -> string_create s builder
           | A.FloatLit f -> L.const_float double_t f
           | A.VecLit(f1, f2) -> L.const_vector [|(L.const_float double_t f1) ; (L.const_float double_t f2)|]
+
+          (*
+          | A.Vecexpr(e1, e2) -> 
+              let e1' = expr builder e1
+              and e2' = expr builder e1
+            in
+              (*
+              L.const_vector [|L.const_float double_t 10.0 ; L.const_float double_t 20.0|]
+              *)
+              L.const_vector [| e1' ; e2' |]
+          *)
+
           | A.Id s -> L.build_load (lookup s builder) s builder (* Load the variable into register and return register *)
           | A.Binop (e1, op, e2) ->
               let e1' = expr builder e1 
