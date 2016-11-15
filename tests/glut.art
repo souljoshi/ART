@@ -1,0 +1,9 @@
+
+int main()
+{
+	double x;
+	x=5.5;
+	printf(x);
+	glut_init();
+	
+}

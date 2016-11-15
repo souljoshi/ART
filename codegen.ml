@@ -73,8 +73,11 @@ let translate prog =
 
     (* Declare printf() *)
     (* Allowing a print builtin function for debuggin purposes *)
-    let printf_t = L.var_arg_function_type i32_t [| L.pointer_type i8_t |] in
-    let printf_func = L.declare_function "printf" printf_t the_module in
+    let printf_t = L.var_arg_function_type i32_t [| L.pointer_type i8_t |]
+    and  glut_init_t = L.var_arg_function_type void_t[|L.pointer_type i32_t;L.pointer_type(L.pointer_type i8_t)|]  in
+    let printf_func = L.declare_function "printf" printf_t the_module 
+    and glutinit_func = L.declare_function "glutInit" glut_init_t the_module
+    in
 
     (* Defining each of the declared functions *)
     (* Function decls is a map from function names to tuples of llvm function representation
@@ -166,6 +169,9 @@ let translate prog =
         let char_format_str = L.build_global_stringptr "%c" "fmt" builder in
         let string_format_str = L.build_global_stringptr "%s\n" "fmt" builder in
        let float_format_str = L.build_global_stringptr "%f" "fmt" builder in
+        let dummy_arg_1 = L.const_inttoptr (L.const_int i32_t 1) (L.pointer_type i32_t) in
+        let dummy_arg_2 = L.const_array (L.pointer_type i8_t) [|L.build_global_stringptr "glut.art" "str" builder;L.build_global_stringptr "glut.art" "str" builder|]  
+      in
 
         (* Construct the function's "locals": formal arguments and locally
            declared variables.  Allocate each on the stack, initialize their
@@ -388,6 +394,7 @@ let translate prog =
           | A.Call (A.Id "printc", [e]) -> L.build_call printf_func [|char_format_str ; (expr builder e) |] "printf" builder
           | A.Call (A.Id "prints", [e]) -> L.build_call printf_func [|string_format_str ; (expr builder e) |] "printf" builder
             | A.Call (A.Id "printf", [e]) -> L.build_call printf_func [|float_format_str ; (expr builder e) |] "printf" builder
+            |A.Call (A.Id "glut_init",e) -> L.build_call glutinit_func [|dummy_arg_1; dummy_arg_2|] "" builder 
             (* A call without a dot expression refers to three possiblities. In order of precedence: *)
             (* constructor call, method call (within struct scope), function call *)
           | A.Call (A.Id f, act) ->

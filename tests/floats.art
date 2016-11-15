@@ -2,12 +2,11 @@ int main()
 {	int x,y,z;
 	double a,b,c;
 	double total,total2;
-
 	x=5;
 	y=6;
 	z=x%y;
 	printi(z);
-	
+
 
 	a=5.5;
 	b=6.5;
