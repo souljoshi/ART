@@ -301,6 +301,7 @@ let translate prog =
             
         let match_type typ op =
               let float_type = (L.type_of (L.const_float double_t 1.1))
+              and vec_type = L.type_of(L.const_vector [|L.const_float double_t 1.1 ; L.const_float double_t 1.1 |]) 
             in if typ=float_type
               then match op with
                 A.Add -> L.build_fadd
@@ -316,21 +317,22 @@ let translate prog =
                 | A.Leq     -> L.build_icmp L.Icmp.Sle
                 | A.Greater -> L.build_icmp L.Icmp.Sgt
                 | A.Geq     -> L.build_icmp L.Icmp.Sge
-                
-            else match op with
-                A.Add -> L.build_add
-                | A.Sub     -> L.build_sub
-                | A.Mult    -> L.build_mul
-                | A.Div     -> L.build_sdiv
-                | A.And     -> L.build_and
-                | A.Or      -> L.build_or
-                | A.Mod     -> L.build_srem
-                | A.Equal   -> L.build_icmp L.Icmp.Eq
-                | A.Neq     -> L.build_icmp L.Icmp.Ne
-                | A.Less    -> L.build_icmp L.Icmp.Slt
-                | A.Leq     -> L.build_icmp L.Icmp.Sle
-                | A.Greater -> L.build_icmp L.Icmp.Sgt
-                | A.Geq     -> L.build_icmp L.Icmp.Sge
+
+
+              else match op with
+                  A.Add -> L.build_add
+                  | A.Sub     -> L.build_sub
+                  | A.Mult    -> L.build_mul
+                  | A.Div     -> L.build_sdiv
+                  | A.And     -> L.build_and
+                  | A.Or      -> L.build_or
+                  | A.Mod     -> L.build_srem
+                  | A.Equal   -> L.build_icmp L.Icmp.Eq
+                  | A.Neq     -> L.build_icmp L.Icmp.Ne
+                  | A.Less    -> L.build_icmp L.Icmp.Slt
+                  | A.Leq     -> L.build_icmp L.Icmp.Sle
+                  | A.Greater -> L.build_icmp L.Icmp.Sgt
+                  | A.Geq     -> L.build_icmp L.Icmp.Sge
               
           in
 
@@ -371,6 +373,7 @@ let translate prog =
               let e1' = expr builder e1 
               and e2' = expr builder e2 
               and float_type = L.type_of(L.const_float double_t 1.1)
+              and vec_type = L.type_of(L.const_vector [|L.const_float double_t 1.1 ; L.const_float double_t 1.1 |])
             in
               let type_of_e1' = L.type_of(e1') and type_of_e2' = L.type_of(e2')
             in if type_of_e1' <> type_of_e2'
@@ -378,7 +381,21 @@ let translate prog =
                 in let x = fst ret and y = snd ret
                   in match_type float_type op x y "temp" builder
             else
-              match_type type_of_e1' op e1' e2' "tmp" builder
+              (* Vector Operations *)
+              if type_of_e1' = vec_type
+              (*
+                then let fst_of_e1 = L.const_extractelement e1' (L.const_int i32_t 0)
+                  and snd_of_e1 = L.const_extractelement e1' (L.const_int i32_t 1)
+                  and fst_of_e2 = L.const_extractelement e2' (L.const_int i32_t 0)
+                  and snd_of_e2 = L.const_extractelement e2' (L.const_int i32_t 1)
+              in
+                L.const_vector [| (match_type float_type op fst_of_e1 fst_of_e2 "tmp1" builder) ; (match_type float_type op snd_of_e1 snd_of_e2 "tmp2" builder) |]
+                (*match_type float_type op fst_of_e1 fst_of_e2 "tmp1" builder*)
+                (*match_type float_type op snd_of_e1 snd_of_e2 "tmp2" builder*)
+                *)
+                then match_type float_type op (L.const_float double_t 1.5) (L.const_float double_t 2.5) "tmp" builder
+              else
+                match_type type_of_e1' op e1' e2' "tmp" builder
 
           | A.Index(e1,e2) as arr-> L.build_load (lexpr builder arr) "tmp" builder
 
