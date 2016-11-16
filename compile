@@ -13,5 +13,5 @@ fi
 
 ./art < $1 > /tmp/${base}.bc &&
 llc /tmp/${base}.bc &&
-gcc /tmp/${base}.s -g -lglut -o $out 
+gcc /tmp/${base}.s -g -lglut -lGLU -lGL -o $out 
 

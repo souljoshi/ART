@@ -1,15 +1,23 @@
-
+// Definition is necessary
 void idle()
 {
     
 }
 
-void draw()
+// Definition is necessary
+void timer_callback(int nothing)
 {
     
+}
+
+// Definition is necessary
+void draw()
+{
+    glclear();
     // Put Here
 
     // End Here
+    glswap();
 }
 
 int y;
@@ -17,7 +25,7 @@ int main()
 {
     
     int display_mode = 2;
-	glut_init();
-    //glut_init_display_mode();
+	glut_init(100); //(* Inputing timer value *)
+    draw_point(0.0,0.0,0,0);
 	
 }
