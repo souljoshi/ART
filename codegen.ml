@@ -120,8 +120,25 @@ let translate prog =
           in let ftype = L.function_type (ltype_of_typ fdecl.A.rettyp) formal_types in
           StringMap.add name (L.define_function name ftype the_module, fdecl) m in
         List.fold_left function_decl StringMap.empty functions in
-    (*let do_glut_int argc argv title = *)
 
+
+    let do_glut_int argc argv title builder = 
+        let (draw_func,_) = try StringMap.find "draw" function_decls with Not_found -> raise (Failure("draw not defined"))
+        in 
+        let (idle_func,_) = try StringMap.find "idle" function_decls with Not_found -> raise (Failure("idle not defined"))
+        in let const = L.const_int i32_t
+        (* Call all the boilerplate functions *)
+        in ignore(L.build_call glutinit_func      [|argc; argv|]            "" builder);
+           ignore(L.build_call glutinitdmode_func [|const 2|]               "" builder);
+           ignore(L.build_call glutinitwpos_func  [|const 100 ; const 200|] "" builder);
+           ignore(L.build_call glutinitwsiz_func  [|const 800 ; const 600|] "" builder);
+           ignore(L.build_call glutcreatewin_func [|title|]                 "" builder);
+           ignore(L.build_call glutdisplay_func   [| draw_func |]           "" builder);
+           ignore(L.build_call glutidle_func      [| idle_func |]           "" builder);
+           ignore(L.build_call glutsetopt_func    [|const 0x01F9; const 1|] "" builder);
+                  L.build_call glutmainloop_func  [| |]   "" builder
+
+       in 
     (* Map from struct names to tuples (member variable map, methods map, lltype) *)
     let struct_decls =
       (* struct_decl takes a map and an ast sdecl and returns a map which contains sdecl added *)
@@ -202,7 +219,7 @@ let translate prog =
         let dummy_arg_1 = L.define_global "argc" (L.const_int i32_t 1) the_module in
 
         (* The first element of argv *)
-        let glut_argv_0 = L.const_bitcast (L.build_global_stringptr "glut.art" "glutstr" builder) i8ptr_t
+        let glut_argv_0  = L.const_bitcast (L.build_global_stringptr "glut.art" "glutstr" builder) i8ptr_t
         in
         (* Second elment of argv *)
         let glut_argv_1 = (L.const_null i8ptr_t ) in
@@ -434,7 +451,7 @@ let translate prog =
           | A.Call (A.Id "printc", [e]) -> L.build_call printf_func [|char_format_str ; (expr builder e) |] "printf" builder
           | A.Call (A.Id "prints", [e]) -> L.build_call printf_func [|string_format_str ; (expr builder e) |] "printf" builder
           | A.Call (A.Id "printf", [e]) -> L.build_call printf_func [|float_format_str ; (expr builder e) |] "printf" builder
-          | A.Call (A.Id "glut_init",e) -> L.build_call glutinit_func [|dummy_arg_1; L.const_bitcast dummy_arg_2 i8ptrptr_t|] "" builder
+          | A.Call (A.Id "glut_init",e) -> do_glut_int dummy_arg_1 (L.const_bitcast dummy_arg_2 i8ptrptr_t) glut_argv_0 builder
             (* A call without a dot expression refers to three possiblities. In order of precedence: *)
             (* constructor call, method call (within struct scope), function call *)
           | A.Call (A.Id f, act) ->
