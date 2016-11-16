@@ -1,9 +1,23 @@
 
+void idle()
+{
+    
+}
+
+void draw()
+{
+    
+    // Put Here
+
+    // End Here
+}
+
+int y;
 int main()
 {
-	double x;
-	x=5.5;
-	printf(x);
+    
+    int display_mode = 2;
 	glut_init();
+    //glut_init_display_mode();
 	
 }

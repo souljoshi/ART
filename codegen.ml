@@ -74,9 +74,33 @@ let translate prog =
     (* Declare printf() *)
     (* Allowing a print builtin function for debuggin purposes *)
     let printf_t = L.var_arg_function_type i32_t [| L.pointer_type i8_t |]
-    and  glut_init_t = L.var_arg_function_type void_t[|L.pointer_type i32_t;L.pointer_type(L.pointer_type i8_t)|]  in
+
+    (* GLUT FUNCTION ARG TYPES *)
+    and  glut_init_t = L.function_type void_t[|L.pointer_type i32_t;L.pointer_type(L.pointer_type i8_t)|]
+    and  glut_crwin_t = L.function_type i32_t [| L.pointer_type i8_t |]
+    and  void_void_t = L.function_type void_t[|  |]
+    and  void_int_t  = L.function_type  void_t [| i32_t |]
+    and  void_int_int_t  = L.function_type  void_t [| i32_t ; i32_t|]
+    in
+    let  void_callback_t = L.function_type void_t[| L.pointer_type void_void_t |]
+  in
+
+    (* END OF GLUT ARG TYPES *)
     let printf_func = L.declare_function "printf" printf_t the_module 
-    and glutinit_func = L.declare_function "glutInit" glut_init_t the_module
+
+    (* GLUT FUNCTION DELCARATIONS *)
+    and glutinit_func      = L.declare_function "glutInit" glut_init_t the_module
+    and glutinitdmode_func = L.declare_function "glutInitDisplayMode" void_int_t the_module
+    and glutinitwpos_func  = L.declare_function "glutInitWindowPosition" void_int_int_t the_module
+    and glutinitwsiz_func  = L.declare_function "glutInitWindowSize" void_int_int_t the_module
+    and glutcreatewin_func = L.declare_function "glutCreateWindow" glut_crwin_t the_module
+    and glutdisplay_func   = L.declare_function "glutDisplayFunc" void_callback_t  the_module
+    and glutidle_func      = L.declare_function "glutIdleFunc" void_callback_t  the_module
+    and glutsetopt_func    = L.declare_function "glutSetOption" void_int_int_t  the_module
+    and glutmainloop_func  = L.declare_function "glutMainLoop" void_void_t  the_module
+
+    (* END OF GLUT FUNCTION DECLARATIONS *)
+
     in
 
     (* Defining each of the declared functions *)
@@ -96,6 +120,7 @@ let translate prog =
           in let ftype = L.function_type (ltype_of_typ fdecl.A.rettyp) formal_types in
           StringMap.add name (L.define_function name ftype the_module, fdecl) m in
         List.fold_left function_decl StringMap.empty functions in
+    (*let do_glut_int argc argv title = *)
 
     (* Map from struct names to tuples (member variable map, methods map, lltype) *)
     let struct_decls =
@@ -165,13 +190,28 @@ let translate prog =
         let builder = L.builder_at_end context (L.entry_block the_function) in
 
         (* Format strings for printf call *)
+        let i8ptr_t = L.pointer_type i8_t in
+        let i8ptrptr_t = L.pointer_type i8ptr_t in 
         let int_format_str = L.build_global_stringptr "%d\n" "fmt" builder in
         let char_format_str = L.build_global_stringptr "%c" "fmt" builder in
         let string_format_str = L.build_global_stringptr "%s\n" "fmt" builder in
        let float_format_str = L.build_global_stringptr "%f" "fmt" builder in
-        let dummy_arg_1 = L.const_inttoptr (L.const_int i32_t 1) (L.pointer_type i32_t) in
-        let dummy_arg_2 = L.const_array (L.pointer_type i8_t) [|L.build_global_stringptr "glut.art" "str" builder;L.build_global_stringptr "glut.art" "str" builder|]  
+
+(* GLUT RELATED *)
+        (* Need to define an actual argc. dummy_arg_1 is now the address of argc *)
+        let dummy_arg_1 = L.define_global "argc" (L.const_int i32_t 1) the_module in
+
+        (* The first element of argv *)
+        let glut_argv_0 = L.const_bitcast (L.build_global_stringptr "glut.art" "glutstr" builder) i8ptr_t
+        in
+        (* Second elment of argv *)
+        let glut_argv_1 = (L.const_null i8ptr_t ) in
+
+        (* The argv object itself *)
+        let dummy_arg_2 =  L.define_global "glutargv" ( L.const_array i8ptr_t [|glut_argv_0; glut_argv_1|]) the_module
       in
+
+(* END OF GLUT RELATED *)
 
         (* Construct the function's "locals": formal arguments and locally
            declared variables.  Allocate each on the stack, initialize their
@@ -393,8 +433,8 @@ let translate prog =
           | A.Call (A.Id "printi", [e]) -> L.build_call printf_func [|int_format_str ; (expr builder e) |] "printf" builder
           | A.Call (A.Id "printc", [e]) -> L.build_call printf_func [|char_format_str ; (expr builder e) |] "printf" builder
           | A.Call (A.Id "prints", [e]) -> L.build_call printf_func [|string_format_str ; (expr builder e) |] "printf" builder
-            | A.Call (A.Id "printf", [e]) -> L.build_call printf_func [|float_format_str ; (expr builder e) |] "printf" builder
-            |A.Call (A.Id "glut_init",e) -> L.build_call glutinit_func [|dummy_arg_1; dummy_arg_2|] "" builder 
+          | A.Call (A.Id "printf", [e]) -> L.build_call printf_func [|float_format_str ; (expr builder e) |] "printf" builder
+          | A.Call (A.Id "glut_init",e) -> L.build_call glutinit_func [|dummy_arg_1; L.const_bitcast dummy_arg_2 i8ptrptr_t|] "" builder
             (* A call without a dot expression refers to three possiblities. In order of precedence: *)
             (* constructor call, method call (within struct scope), function call *)
           | A.Call (A.Id f, act) ->
