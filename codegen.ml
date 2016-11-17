@@ -160,7 +160,7 @@ let translate prog =
     (* No type checking done *)
     let do_glut_func fdef act builder = 
            if glcolor_func    == fdef then   L.build_call glcolor_func     [|act.(0) ; act.(1); act.(2)|] "" builder   
-      else if glbegin_func    == fdef then   L.build_call glbegin_func     [|L.const_int i32_t 0 |] "" builder   
+      else if glbegin_func    == fdef then   L.build_call glbegin_func     [|act.(0) |] "" builder   
       else if glvertex_func   == fdef then   L.build_call glvertex_func    [|act.(0) ; act.(1) |] "" builder  
       else if glend_func      == fdef then   L.build_call glend_func       [|  |] "" builder     
       else if glclear_func    == fdef then   L.build_call glclear_func     [|L.const_int i32_t 0x4000|] "" builder 
@@ -265,7 +265,7 @@ let translate prog =
         let i8ptrptr_t = L.pointer_type i8ptr_t in 
         let int_format_str = L.build_global_stringptr "%d\n" "fmt" builder in
         let char_format_str = L.build_global_stringptr "%c" "fmt" builder in
-        let string_format_str = L.build_global_stringptr "%s\n" "fmt" builder in
+        let string_format_str = L.build_global_stringptr "%s" "fmt" builder in
        let float_format_str = L.build_global_stringptr "%f" "fmt" builder in
 
 (* GLUT RELATED *)
@@ -388,7 +388,7 @@ let translate prog =
                       in let t = fst(StringMap.find s varmap)
                       in (string_of_typ2 t, t)
         | A.StringLit s -> ("string",A.String)
-        |_ -> raise (Failure ("Unsupported Expression for expr_type"))
+        |e -> raise (Failure ("Unsupported Expression for expr_type"^A.string_of_expr e))
 
         in
 
