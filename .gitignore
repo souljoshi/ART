@@ -4,3 +4,7 @@ scanner.ml
 parser.ml
 parser.mli
 art
+_build/
+art.native
+results/
+testall.log

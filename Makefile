@@ -58,4 +58,5 @@ clean :
 .PHONY: clean-tests
 
 clean-tests:
+	rm -rf results
 	rm -f *.diff *.ll *.out *.err

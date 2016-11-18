@@ -10,7 +10,23 @@
 LLI="lli"
 
 # Path to ART compiler
-ART="./art.native"
+if [ -e "./art.native" ]
+then
+    ART="./art.native"
+elif [ -e "./art" ]
+then
+    ART="./art"
+else
+    echo "No art compiler found. Attempting build..."
+    echo ""
+    make clean
+    if make 
+    then
+        ART="./art.native"
+    else
+        echo -e "\nBuild Failed!!!" && exit 2
+    fi
+fi
 
 # Time limit for all operations
 ulimit -t 30
@@ -43,8 +59,8 @@ SignalError() {
 # Differences, if any, are written to <difffile>
 Compare() {
     generatedfiles="$generatedfiles $3"
-    echo diff -b $1 $2 ">" $3 1>&2
-    diff -b "$1" "$2" > "$3" 2>&1 || {
+    echo diff -bu $1 $2 ">" $3 1>&2
+    diff -bu "$1" "$2" > "$3" 2>&1 || {
     SignalError "$1 differs"
     echo "FAILED $1 differs from $2" 1>&2
     }
@@ -73,16 +89,6 @@ RunFail() {
     return 0
 }
 
-## RunSyntax <args>
-## Report the command, run it, and expect a syntax error
-## Used for tests that are supposed to give a syntax error
-#RunSyntax() {
-#    echo $* 1>&2
-#    eval $* || {
-#    SignalError "$1 failed on $*"
-#    return 1
-#    }
-#}
 
 # For tests that are supposed to run without any erros
 Check() {
@@ -91,6 +97,7 @@ Check() {
                              s/.art//'`
     reffile=`echo $1 | sed 's/.art$//'`
     basedir="`echo $1 | sed 's/\/[^\/]*$//'`/."
+    resultname="results/"${basename}
 
     echo -n "$basename..."
 
@@ -99,10 +106,10 @@ Check() {
 
     generatedfiles=""
 
-    generatedfiles="$generatedfiles ${basename}.ll ${basename}.out" &&
-    Run "$ART" "<" $1 ">" "${basename}.ll" &&
-    Run "$LLI" "${basename}.ll" ">" "${basename}.out" &&
-    Compare ${basename}.out ${reffile}.out ${basename}.diff
+    generatedfiles="$generatedfiles ${resultname}.ll ${resultname}.out" &&
+    Run "$ART" "<" $1 ">" "${resultname}.ll" &&
+    Run "$LLI" "${resultname}.ll" ">" "${resultname}.out" &&
+    Compare "${resultname}.out" ${reffile}.out "${resultname}.diff"
 
     # Report the status and clean up the generated files
 
@@ -126,6 +133,7 @@ CheckFail() {
                              s/.art//'`
     reffile=`echo $1 | sed 's/.art$//'`
     basedir="`echo $1 | sed 's/\/[^\/]*$//'`/."
+    resultname="results/"${basename}
 
     echo -n "$basename..."
 
@@ -134,9 +142,9 @@ CheckFail() {
 
     generatedfiles=""
 
-    generatedfiles="$generatedfiles ${basename}.err ${basename}.diff" &&
-    RunFail "$ART" "<" $1 "2>" "${basename}.err" ">>" $globallog &&
-    Compare ${basename}.err ${reffile}.err ${basename}.diff
+    generatedfiles="$generatedfiles ${resultname}.err ${resultname}.diff" &&
+    RunFail "$ART" "<" $1 "2>" "${resultname}.err" ">>" $globallog &&
+    Compare "${resultname}.err" ${reffile}.err "${resultname}.diff"
 
     # Report the status and clean up the generated files
 
@@ -153,39 +161,6 @@ CheckFail() {
     fi
 }
 
-# For tests that are supposed to give a syntax error rather than an exception
-#CheckSyntax() {
-#    error=0
-#    basename=`echo $1 | sed 's/.*\\///
-#                             s/.art//'`
-#    reffile=`echo $1 | sed 's/.art$//'`
-#    basedir="`echo $1 | sed 's/\/[^\/]*$//'`/."
-#
-#    echo -n "$basename..."
-#
-#    echo 1>&2
-#    echo "###### Testing $basename" 1>&2
-#
-#    generatedfiles=""
-#
-#    generatedfiles="$generatedfiles ${basename}.err ${basename}.diff" &&
-#    RunSyntax "$ART" "<" $1 "| tee" "${basename}.err" ">>" $globallog &&
-#    Compare ${basename}.err ${reffile}.err ${basename}.diff
-#
-#    # Report the status and clean up the generated files
-#
-#    if [ $error -eq 0 ] ; then
-#    if [ $keep -eq 0 ] ; then
-#        rm -f $generatedfiles
-#    fi
-#    echo "OK"
-#    echo "###### SUCCESS" 1>&2
-#    else
-#    #rm -f $generatedfiles
-#    echo "###### FAILED" 1>&2
-#    globalerror=$error
-#    fi
-#}
 
 # Options
 while getopts kdpsh c; do
@@ -219,6 +194,12 @@ else
     files="tests/test-*.art tests/fail-*.art"
 fi
 
+# Make the results directory
+if [ ! -e results ]
+then
+    mkdir results
+fi
+
 for file in $files
 do
     case $file in
@@ -228,9 +209,6 @@ do
     *fail-*)
         CheckFail $file 2>> $globallog
         ;;
-#    *syntax-*)
-#       CheckSyntax $file 2>> $globallog
-#        ;;
     *)
         echo "unknown file type $file"
         globalerror=1
