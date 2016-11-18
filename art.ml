@@ -14,7 +14,7 @@ let _ =
         let curr = lexbuf.Lexing.lex_curr_p in
         let line = curr.Lexing.pos_lnum in
         let cnum = curr.Lexing.pos_cnum - curr.Lexing.pos_bol in
-        print_endline ("Syntax Error: Line " ^ string_of_int line ^ " Column " ^ string_of_int cnum);
+        prerr_endline("Syntax Error: Line " ^ string_of_int line ^ " Column " ^ string_of_int cnum);
         exit 1
   in
   let ast = Semant.check ast
