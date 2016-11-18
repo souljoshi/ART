@@ -1,8 +1,29 @@
 #!/bin/bash
 # Compiles an art program to an executable
 
-file=$(echo "$1" | cut -f 1 -d '.')
-base=$(basename "$file")
+# Path to ART compiler
+if [ -e "./art.native" ]
+then
+    ART="./art.native"
+elif [ -e "./art" ]
+then
+    ART="./art"
+else
+    echo "No art compiler found. Attempting build..."
+    echo ""
+    make clean
+    if make 
+    then
+        ART="./art.native"
+    else
+        echo -e "\nBuild Failed!!!" && exit 2
+    fi
+fi
+
+
+
+base=`echo $1 | sed 's/.*\\///
+                             s/.art//'`
 
 if [ -z $2 ]
 then 
@@ -11,7 +32,7 @@ else
     out=$2
 fi
 
-./art < $1 > /tmp/${base}.bc &&
+${ART} < $1 > /tmp/${base}.bc &&
 llc /tmp/${base}.bc &&
-gcc /tmp/${base}.s -o $out 
+gcc /tmp/${base}.s -o ${out}
 
