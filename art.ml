@@ -14,7 +14,9 @@ let _ =
         let curr = lexbuf.Lexing.lex_curr_p in
         let line = curr.Lexing.pos_lnum in
         let cnum = curr.Lexing.pos_cnum - curr.Lexing.pos_bol in
-        print_endline ("Syntax Error: Line " ^ string_of_int line ^ " Column " ^ string_of_int cnum);
+        (* print_endline ("Syntax Error: Line " ^ string_of_int line ^ " Column " ^ string_of_int cnum); *)
+        ignore(raise (Failure("Syntax Error: Line " ^ string_of_int line ^ " Column " ^ string_of_int cnum)));
+        (* Changing print_endline to raise without ignore gives "Warning 21: this statement never returns (or has an unsound type.)" *)
         exit 1
   in
   let ast = Semant.check ast
