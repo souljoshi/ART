@@ -347,17 +347,31 @@ let translate prog =
 
 
         (* Build the body of a code execution block and return builder *)
-        let build_block_body (local_decls, stmt_list) builder scopes =
+        let rec build_block_body (local_decls, stmt_list) builder scopes =
 
             (* Prepend the block local variables to the scopes list *)
-            let scopes = 
+            (* Prepend any initializers to the statment list *)
+            let (stmt_list, scopes) = 
                 let add_local m (t,n) =
+                  (* Currently all block local variables are allocated at the entry block 
+                     This prevents multiple allocas for loop local variables. The only issue with this
+                     method is that in the output file, variables are allocated in reverse order *)
+                     (* NOTE this translation should be moved to the semantic part of the code *)
+                  let builder = L.builder_at context (L.instr_begin(L.entry_block the_function)) in
                   let local_var = L.build_alloca (ltype_of_typ t) n builder (* allocate space for local *)
                   in StringMap.add n (local_var,t) m in
-                let locals = 
-                  (* Note that we are ignoring initializers for now *)
-                  List.fold_left add_local StringMap.empty (List.map (fun (a,b,_) -> (a,b)) local_decls)
-                in (locals, LocalScope)::scopes
+                let (stmt_list, local_decls) = List.fold_left
+                      (* Handle expression initers by adding them as assignment expression statments *)
+                      (fun (sl, ld) (t,n,i) -> 
+                            ( match i with A.Exprinit e -> A.Expr( A.Asnop(A.Id(n),A.Asn, e) )::sl , (t,n)::ld  
+                              | _  -> sl, (t,n)::ld (* Silently ingore NoInit and ListInit *) 
+                            )
+                      ) (stmt_list, [])
+                    (* Need to reverse since we are pushing to top of stmt_list. Luckily, the fold unreversed local_decls *)
+                    (List.rev local_decls)
+                in
+                let locals =  List.fold_left add_local StringMap.empty local_decls
+                in stmt_list,(locals, LocalScope)::scopes
             in
 
             (* Return the value for a variable by going through the scope chain *)
@@ -617,7 +631,7 @@ let translate prog =
             (* Build the code for the given statement; return the builder for
              the statement's successor *)
             let rec stmt builder = function
-                  A.Block (vl, sl) -> List.fold_left stmt builder sl (* Ignore the decls for now *)
+                  A.Block (vl, sl) -> build_block_body (vl, sl) builder scopes
                 | A.Expr e -> ignore (expr builder e); builder  (* Simply evaluate expression *)
 
                 | A.Return e -> ignore (match fdecl.A.rettyp with  (* Different cases for void and non-void *)
@@ -659,7 +673,8 @@ let translate prog =
                 (*  make equivalent while *)
                 | A.For (e1, e2, e3, body) -> stmt builder
                     ( A.Block ( [], [  A.Expr e1; A.While (e2, A.Block ([], [body; A.Expr e3]) ) ] ) )
-                | t -> raise (Failure ("Unsupported statement type"^A.string_of_stmt t))(* Ignore other statement type *)
+                | A.ForDec (vdecls, e2, e3, body) -> stmt builder ( A.Block(vdecls, [A.For(A.Noexpr , e2, e3, body)]) )
+                | t -> raise (Failure ("Unsupported statement type "^A.string_of_stmt t))(* Ignore other statement type *)
             in
             (* Build the code for each statement in the block 
               and return the builder *)
