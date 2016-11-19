@@ -5,6 +5,9 @@ module A = Ast
 
 module StringMap = Map.Make(String)
 
+(* scope types *)
+type scope = GlobalScope | LocalScope | StructScope
+
 let translate prog = 
     (* Get the global variables and functions *)
     let globals = prog.A.v      (* Use this format when referencing records in other modules *)
@@ -239,15 +242,18 @@ let translate prog =
       StringMap.find fname methodmap
     in
     (* Returns index of member memb in struct named sname *)
-    let memb_index sname memb =
+    let memb_index_type sname memb =
       (* Obtain varmap from struct_decls map *)
       let (varmap, _,_) = try StringMap.find sname struct_decls
                     with Not_found -> raise (Failure("Varmap not found for : "^sname^"."^memb))
       in
       (* Obtain index from varmap *)
-      let (_, i) = try StringMap.find memb varmap
-                    with Not_found -> raise (Failure("Index not found for : "^sname^"."^memb))
-                    in i
+      try StringMap.find memb varmap
+      with Not_found -> raise (Failure("Index not found for : "^sname^"."^memb))
+    in
+    let memb_index sname memb = snd (memb_index_type sname memb)
+    in
+    let memb_type sname memb = fst (memb_index_type sname memb)
     in
 
    (* Fill in the body of the given function *)
@@ -266,7 +272,7 @@ let translate prog =
         let int_format_str = L.build_global_stringptr "%d\n" "fmt" builder in
         let char_format_str = L.build_global_stringptr "%c" "fmt" builder in
         let string_format_str = L.build_global_stringptr "%s" "fmt" builder in
-       let float_format_str = L.build_global_stringptr "%f" "fmt" builder in
+        let float_format_str = L.build_global_stringptr "%f" "fmt" builder in
 
 (* GLUT RELATED *)
         let time_value  = L.define_global "tv" (L.const_null timeval_struct_t) the_module in
@@ -285,39 +291,6 @@ let translate prog =
 
 (* END OF GLUT RELATED *)
 
-        (* Construct the function's "locals": formal arguments and locally
-           declared variables.  Allocate each on the stack, initialize their
-           value, if appropriate, and remember their values in the "locals" map *)
-        let local_vars =
-          (* Arguments: map (type, name, pass) param  (llvm  of params)*)
-          let add_formal m (t, n,pass) p = L.set_value_name n p;
-          (* name appended with nums as necessary: eg  a1,a2 *)
-          (* Look at microc lecture: pg 39 *)
-            let local =  match pass with
-                A.Value -> L.build_alloca (ltype_of_typ t) n builder (* allocate stack for value params *)
-             |  A.Ref  -> p
-
-            in
-            ignore (match pass with
-                A.Value -> ignore(L.build_store p local builder); (* Store the value param in the allocated place *)
-             |  A.Ref -> () );
-
-            StringMap.add n (local,t) m in (* We add the stack version *)
-          let add_local m (t,n) =
-            let local_var = L.build_alloca (ltype_of_typ t) n builder (* allocate space for local *)
-            in StringMap.add n (local_var,t) m in
-
-          (* llvm type list for the params *)
-          let lparams = (match fdecl.A.typ with
-                    A.Func -> Array.to_list (L.params the_function)
-                  (* For Method/Const drop the "this" param as it needs to be inaccessible to user *)
-                  | _ -> List.tl (Array.to_list (L.params the_function)))
-
-          in
-          let formals = List.fold_left2 add_formal StringMap.empty fdecl.A.params lparams
-          in
-          List.fold_left add_local formals (List.map (fun (a,b,_) -> (a,b)) fdecl.A.locals) in
-
         (* Returns (fdef, fdecl) for a function call in method/function *)
         (* Handles case of constructor call, a method call without dot operator and
            normal function call *)
@@ -333,308 +306,376 @@ let translate prog =
                 with Not_found -> StringMap.find f function_decls)
         in
 
-        (* Return the value for a variable or formal argument *)
-        (* Note: this checks local scope before global. We have to do more complicated scoping *)
-        let lookup n builder =
-            (* First try to find a local variable *)
-            try fst(StringMap.find n local_vars)
-            (* Then try to find a member, if not member jump to global variable handling *)
-            with Not_found -> try (match fdecl.A.typ with
-                A.Func -> raise Not_found (* Functions can't access members *)
-              |_-> let ind = try memb_index fdecl.A.owner n with Failure s -> raise Not_found in
-                  (* If member, get its pointer by dereferencing the first argument
-                    corresponding to the "this" pointer *)
-                  let e' = L.param (fst (lookup_function fdecl.A.fname) ) 0  in
-                  L.build_gep e' [|L.const_int i32_t 0; L.const_int i32_t ind |] "tmp" builder
-            ) with Not_found -> fst(StringMap.find n global_vars)
+        (* Construct the function's formal arguments. Allocate each on the stack, initialize their
+           value,  and remember their values in the "formals" map *)
+        (* NOTE: the functions top level local vars are constructed in the build_block_body. This means formal vars (params)
+          are check after top level local var during lookup, even though they are semantically at the same level. While local hiding
+          formal is technically possible it is prohibited during the semantic check stage. *)
+        let formal_vars =
+          (* Arguments: map (type, name, pass) param  (llvm  of params)*)
+          let add_formal m (t, n,pass) p = L.set_value_name n p;
+          (* name appended with nums as necessary: eg  a1,a2 *)
+          (* Look at microc lecture: pg 39 *)
+            let local =  match pass with
+                A.Value -> L.build_alloca (ltype_of_typ t) n builder (* allocate stack for value params *)
+             |  A.Ref  -> p
+
+            in
+            ignore (match pass with
+                A.Value -> ignore(L.build_store p local builder); (* Store the value param in the allocated place *)
+             |  A.Ref -> () );
+
+            StringMap.add n (local,t) m in (* We add the stack version *)
+
+          (* llvm type list for the params *)
+          let lparams = (match fdecl.A.typ with
+                    A.Func -> Array.to_list (L.params the_function)
+                  (* For Method/Const drop the "this" param as it needs to be inaccessible to user *)
+                  | _ -> List.tl (Array.to_list (L.params the_function)))
+          in
+          List.fold_left2 add_formal StringMap.empty fdecl.A.params lparams
 
         in
-
-        (* Looks up type of local variables *)
-        let lookup_type n = try snd(StringMap.find n local_vars)
-                       with Not_found -> snd(StringMap.find n global_vars)
-        in
-
-        let string_create s builder =
-          let str = L.build_global_stringptr s "temp" builder
-        in
-        L.build_in_bounds_gep str [|L.const_int i32_t 0|] "temps" builder
-      in
-
-        (* Like string_of_typ but prints "circle" instead of "shape circle" *)
-        let string_of_typ2 = function
-            A.UserType(s, _) -> s
-          | t -> A.string_of_typ t
-
-        in
-
           
-
-        (* Returns a tuple (type name, ast type) for an expression *)
-        (* In final code [with semantic analysis] the ast type should be part of expr *)
-        let rec expr_type  = function
-          A.IntLit i -> ("int", A.Int)
-        | A.FloatLit f -> ("double", A.Float)
-        | A.Id s -> let t =  lookup_type s in (string_of_typ2 t, t)
-        | A.Index(a, e) -> (match snd(expr_type a) with (* First get type of the expr being indexed *)
-                            (* The type of the index expression is the subtype 't' of the array *)
-                            A.Array (t, e2) -> (string_of_typ2 t, t)
-                          | _ -> raise (Failure ("Indexing non array")))
-
-        | A.Member(e, s) -> let (n,t) = expr_type e (* Get type name of the expression before dot *)
-                      (* Look for it in the structs map and get the var map *)
-                      in  let (varmap, _,_ ) = StringMap.find n struct_decls
-                      (* Look for string after the dot in the varmap *)
-                      in let t = fst(StringMap.find s varmap)
-                      in (string_of_typ2 t, t)
-        | A.StringLit s -> ("string",A.String)
-        |e -> raise (Failure ("Unsupported Expression for expr_type"^A.string_of_expr e))
-
-        in
-
-
-        let convert_type e1 e2 builder =
-            let float_type = L.type_of (L.const_float double_t 1.1) and int_type = L.type_of(L.const_int i32_t 1) and type_of_e1=L.type_of(e1) and type_of_e2=L.type_of(e2)
-              in let e1' =
-                      (if type_of_e1=int_type
-                          then L.build_sitofp e1 float_type "temp" builder
-                        else e1)
-              and e2'=(if type_of_e2=int_type
-                        then L.build_sitofp e2 float_type "temp" builder 
-                       else e2 )
-            in (e1',e2')
-
-          in
-
-
-            
-        let match_type typ op =
-              let float_type = (L.type_of (L.const_float double_t 1.1))
-            in if typ=float_type
-              then match op with
-                A.Add -> L.build_fadd
-                | A.Sub     -> L.build_fsub
-                | A.Mult    -> L.build_fmul
-                | A.Div     -> L.build_fdiv
-                | A.And     -> L.build_and
-                | A.Or      -> L.build_or
-                | A.Mod     -> raise (Failure "Cannot mod a float")
-                (* Need to think about these ops *)
-                | A.Equal   -> L.build_fcmp L.Fcmp.Oeq
-                | A.Neq     -> L.build_fcmp L.Fcmp.One
-                | A.Less    -> L.build_fcmp L.Fcmp.Olt
-                | A.Leq     -> L.build_fcmp L.Fcmp.Ole
-                | A.Greater -> L.build_fcmp L.Fcmp.Ogt
-                | A.Geq     -> L.build_fcmp L.Fcmp.Oge
-                
-            else match op with
-                A.Add -> L.build_add
-                | A.Sub     -> L.build_sub
-                | A.Mult    -> L.build_mul
-                | A.Div     -> L.build_sdiv
-                | A.And     -> L.build_and
-                | A.Or      -> L.build_or
-                | A.Mod     -> L.build_srem
-                | A.Equal   -> L.build_icmp L.Icmp.Eq
-                | A.Neq     -> L.build_icmp L.Icmp.Ne
-                | A.Less    -> L.build_icmp L.Icmp.Slt
-                | A.Leq     -> L.build_icmp L.Icmp.Sle
-                | A.Greater -> L.build_icmp L.Icmp.Sgt
-                | A.Geq     -> L.build_icmp L.Icmp.Sge
-              
-          in
-
-        (* Construct code for an lvalue; return a pointer to access object *)
-        let rec lexpr builder = function
-            A.Id s -> lookup s builder
-          | A.Index(e1,e2) -> let e2' = expr builder e2 in
-                L.build_gep (lexpr builder e1) [|L.const_int i32_t 0; e2'|] "tmp" builder
-          | A.Member(e, s) -> let e' = lexpr builder e in
-              (* Obtain index of s in the struct type of expression e *)
-              let (sname, _ ) = expr_type e in let i = memb_index sname s in
-              L.build_gep e' [|L.const_int i32_t 0; L.const_int i32_t i|] "tmp" builder
-          | _ -> raise (Failure "Trying to assign to an non l-value")
-
-
-        (* Construct code for an expression; return its value *)
-        and expr builder = function (* Takes args builder and Ast.expr *)
-            A.IntLit i -> L.const_int i32_t i
-          | A.CharLit c -> L.const_int i8_t (int_of_char c) (* 1 byte characters *)
-          | A.Noexpr -> L.const_int i32_t 0  (* No expression is 0 *)
-          | A.StringLit s -> string_create s builder
-          | A.FloatLit f -> L.const_float double_t f
-          | A.Id s -> L.build_load (lookup s builder) s builder (* Load the variable into register and return register *)
-          | A.Binop (e1, op, e2) ->
-              let e1' = expr builder e1 
-              and e2' = expr builder e2 
-              and float_type = L.type_of(L.const_float double_t 1.1)
-            in
-              let type_of_e1' = L.type_of(e1') and type_of_e2' = L.type_of(e2')
-            in if type_of_e1' <> type_of_e2'
-                  then let ret= convert_type e1' e2' builder
-                in let x = fst ret and y = snd ret
-                  in match_type float_type op x y "temp" builder
-            else
-              match_type type_of_e1' op e1' e2' "tmp" builder
-
-          | A.Index(e1,e2) as arr-> L.build_load (lexpr builder arr) "tmp" builder
-
-          | A.Member(e, s) as mem -> L.build_load (lexpr builder mem) "tmp" builder
-
-          | A.Asnop (el, op, er) ->
-               let el' = lexpr builder el in
-               (match op with
-                   A.Asn -> let e' = expr builder er in
-                             ignore (L.build_store e' el' builder); e'
-                   (* The code here must change if supporting non-identifiers *)
-                 | A.CmpAsn bop -> let e' = expr builder (A.Binop(el, bop, er)) in
-                             ignore (L.build_store e' el' builder); e'
-               )
-
-          | A.Unop(op, e) ->
-              let e' = expr builder e in
-                let leftyp1=(L.type_of (L.const_int i32_t 1)) and leftyp2 = (L.type_of (L.const_float double_t 1.1))
-                 and leftyp3=(L.type_of e') in
-              (match op with
-                A.Neg     -> (if leftyp1 = leftyp3 then (L.build_neg) else (L.build_fneg))
-              | A.Not     -> L.build_not
-              | _  -> raise (Failure "Unsupported unary op")(* Ignore other unary ops *)
-                ) e' "tmp" builder
-
-
-            (* This ok only for few built_in functions *)
-          | A.Call (A.Id "printi", [e]) -> L.build_call printf_func [|int_format_str ; (expr builder e) |] "printf" builder
-          | A.Call (A.Id "printc", [e]) -> L.build_call printf_func [|char_format_str ; (expr builder e) |] "printf" builder
-          | A.Call (A.Id "prints", [e]) -> L.build_call printf_func [|string_format_str ; (expr builder e) |] "printf" builder
-          | A.Call (A.Id "printf", [e]) -> L.build_call printf_func [|float_format_str ; (expr builder e) |] "printf" builder
-          | A.Call (A.Id "seconds", e) -> let secptr = ignore(L.build_call  get_tday_func [|time_value ; L.const_null i8ptr_t |] "" builder);
-                                L.build_gep time_value [|L.const_int i32_t 0; L.const_int i32_t 0 |] "sec" builder in
-                                let usecptr = L.build_gep time_value [|L.const_int i32_t 0; L.const_int i32_t 1 |] "usec" builder in
-                                let sec = L.build_sitofp (L.build_load secptr "tmp" builder) double_t "tmp" builder
-                                and usec = L.build_sitofp (L.build_load usecptr "tmp" builder) double_t "tmp" builder
-                                in
-                                let usecisec = L.build_fmul usec (L.const_float double_t 1.0e-6) "tmp" builder in 
-                                        L.build_fadd sec usecisec "tmp" builder
-          | A.Call (A.Id "glut_init",e) -> do_glut_init dummy_arg_1 (L.const_bitcast dummy_arg_2 i8ptrptr_t) glut_argv_0  builder
-            (* A call without a dot expression refers to three possiblities. In order of precedence: *)
-            (* constructor call, method call (within struct scope), function call *)
-          | A.Call (A.Id f, act) ->
-             (* The llvm type array of the calling functions parameters
-                Can be use to retreive the "this" argument *)
-             (try let fdef = StringMap.find f glut_decls in 
-              let actuals = List.rev (List.map (expr builder) (List.rev act)) in
-              do_glut_func fdef (Array.of_list actuals) builder
-            with Not_found -> (
-            
-             let myparams  = L.params (fst (lookup_function fdecl.A.fname) ) in
-             let (fdef, fdecl) = lookup_function f in
-             (* Helper function for pass by value handling *)
-             let arg_passer builder (_,_,pass) = function
-                (* Identifier, index, and member expressions may be passed by reference.
-                   Other types are required to be passed by value. *)
-                A.Id(_) | A.Index(_,_) | A.Member(_,_) as e -> (match pass with
-                          A.Ref -> lexpr builder e (* This gets the pointer to the variable *)
-                        | A.Value -> expr builder e )
-              | e  -> expr builder e
-             in
-             (* This makes right to left evaluation order. What order should we use? *)
-             let actuals = List.rev (List.map2 (arg_passer builder) (List.rev fdecl.A.params) (List.rev act)) in
-             let result = (match fdecl.A.rettyp with A.Void -> "" (* don't name result for void llvm issue*)
-                                                | _ -> f^"_result") in
-             (* How the function is called depends on the type *)
-             ( match fdecl.A.typ with
-                A.Func -> L.build_call fdef (Array.of_list actuals) result builder
-                (* For methods pass value  of the callers "this" argument *)
-              | A.Method -> L.build_call fdef (Array.of_list (myparams.(0) :: actuals)) result builder
-                (* Constructors are called like methods but evaluate to their own type
-                  not their return value as they don't have explicit return values *)
-              | A.Constructor -> let (_,_,lstype) =  StringMap.find f struct_decls
-                          (* Create local temporary to hold newly created struct *)
-                          in let loc = L.build_alloca  lstype "tmp" builder in
-                          (* Pass the newly created struct as the "this" arugment of constructor call *)
-                         ignore( L.build_call fdef (Array.of_list (loc :: actuals)) result builder);
-                          (* Return the initialized local temporary *)
-                         L.build_load  loc "tmp" builder
-              )
-           ))
-          (* Explicit method calls with dot operator *)
-          | A.Call (A.Member(e,s), act) ->
-             let (sname, _ ) = expr_type e in
-             let (fdef, fdecl) = lookup_method sname s in
-             (* Helper function for pass by value handling *)
-             (* Same us the above code *)
-             let arg_passer builder (_,_,pass) = function
-                A.Id(_) | A.Index(_,_) | A.Member(_,_) as e -> (match pass with
-                          A.Ref -> lexpr builder e (* This gets the pointer to the variable *)
-                        | A.Value -> expr builder e )
-              | e  -> expr builder e
-            in
-             (* This makes right to left evaluation order. What order should we use? *)
-             let actuals = List.rev (List.map2 (arg_passer builder) (List.rev fdecl.A.params) (List.rev act)) in
-             (* Append the left side of dot operator to arguments so it is used as a "this" argument *)
-             let actuals = (lexpr builder e )::actuals in
-             let result = (match fdecl.A.rettyp with A.Void -> "" (* don't name result for void llvm issue*)
-                                                | _ -> s^"_result") in
-             L.build_call fdef (Array.of_list actuals) result builder
-          |  e -> raise (Failure ("Unsupported expression: "^(A.string_of_expr e)))(* Ignore other expressions *)
-        in
         (* Invoke "f builder" if the current block doesn't already
-           have a terminal (e.g., a branch). *)
+            have a terminal (e.g., a branch). *)
         let add_terminal builder f =
             match L.block_terminator (L.insertion_block builder) with
                 Some _ -> ()
-              | None -> ignore (f builder) in
-
-        (* Build the code for the given statement; return the builder for
-         the statement's successor *)
-        let rec stmt builder = function
-              A.Block (vl, sl) -> List.fold_left stmt builder sl (* Ignore the decls for now *)
-            | A.Expr e -> ignore (expr builder e); builder  (* Simply evaluate expression *)
-
-            | A.Return e -> ignore (match fdecl.A.rettyp with  (* Different cases for void and non-void *)
-                A.Void -> L.build_ret_void builder
-                | _ -> L.build_ret (expr builder e) builder); builder
-            | A.If (predicate, then_stmt, else_stmt) ->
-                let bool_val = expr builder predicate in
-                let merge_bb = L.append_block context "merge" the_function in (* Merge block *)
-                let then_bb = L.append_block context "then" the_function in
-                (* Get the builder for the then block, emit then_stmt and then add branch statement to
-                    merge block *)
-                add_terminal (stmt (L.builder_at_end context then_bb) then_stmt)
-                    (L.build_br merge_bb);
-
-                let else_bb = L.append_block context "else" the_function in
-                add_terminal (stmt (L.builder_at_end context else_bb) else_stmt)
-                    (L.build_br merge_bb);
-                (* add_terminal used to avoid insert two terminals to basic blocks *)
-
-                (* builder is in block that contains if stmt *)
-                ignore (L.build_cond_br bool_val then_bb else_bb builder);
-                L.builder_at_end context merge_bb (* Return builder at end of merge block *)
-
-            | A.While (predicate, body) ->
-                let pred_bb = L.append_block context "while" the_function in
-                ignore (L.build_br pred_bb builder); (* builder is in block that contains while stm *)
-
-                let body_bb = L.append_block context "while_body" the_function in
-                add_terminal (stmt (L.builder_at_end context body_bb) body)
-                (L.build_br pred_bb);
-
-                let pred_builder = L.builder_at_end context pred_bb in
-                let bool_val = expr pred_builder predicate in
-
-                let merge_bb = L.append_block context "merge" the_function in
-                ignore (L.build_cond_br bool_val body_bb merge_bb pred_builder);
-                L.builder_at_end context merge_bb
-
-            (*  make equivalent while *)
-            | A.For (e1, e2, e3, body) -> stmt builder
-                ( A.Block ( [], [  A.Expr e1; A.While (e2, A.Block ([], [body; A.Expr e3]) ) ] ) )
-            | t -> raise (Failure ("Unsupported statement type"^A.string_of_stmt t))(* Ignore other statement type *)
+              | None -> ignore (f builder) 
         in
-        (* Build the code for each statement in the function *)
-        let builder = stmt builder (A.Block(fdecl.A.locals, fdecl.A.body)) in
 
+
+        (* Build the body of a code execution block and return builder *)
+        let build_block_body (local_decls, stmt_list) builder scopes =
+
+            (* Prepend the block local variables to the scopes list *)
+            let scopes = 
+                let add_local m (t,n) =
+                  let local_var = L.build_alloca (ltype_of_typ t) n builder (* allocate space for local *)
+                  in StringMap.add n (local_var,t) m in
+                let locals = 
+                  (* Note that we are ignoring initializers for now *)
+                  List.fold_left add_local StringMap.empty (List.map (fun (a,b,_) -> (a,b)) local_decls)
+                in (locals, LocalScope)::scopes
+            in
+
+            (* Return the value for a variable by going through the scope chain *)
+            let rec _lookup n builder scopes =
+                let hd = List.hd scopes in
+                (match hd with
+                    (globs, GlobalScope) -> fst(StringMap.find n globs)
+                  | (locls, LocalScope)  -> ( try fst(StringMap.find n locls)
+                                              with Not_found -> _lookup n builder (List.tl scopes) )
+                  | (_, StructScope) -> try (
+                    let ind = try memb_index fdecl.A.owner n with Failure s -> raise Not_found in
+                      (* If member, get its pointer by dereferencing the first argument
+                        corresponding to the "this" pointer *)
+                      let e' = L.param (fst (lookup_function fdecl.A.fname) ) 0  in
+                      L.build_gep e' [|L.const_int i32_t 0; L.const_int i32_t ind |] "tmp" builder
+                    ) with Not_found -> _lookup n builder (List.tl scopes)
+                )
+            in
+
+            (* Return the type for a variable by going through the scope chain *)
+            let rec _lookup_type n scopes =
+                let hd = List.hd scopes in
+                (match hd with
+                    (globs, GlobalScope) -> snd(StringMap.find n globs)
+                  | (locls, LocalScope)  -> ( try snd(StringMap.find n locls)
+                                              with Not_found -> _lookup_type n (List.tl scopes) )
+                  | (_, StructScope) -> try memb_type fdecl.A.owner n
+                                        with Failure s -> _lookup_type n (List.tl scopes)
+                )
+            in
+            let lookup n builder = _lookup n builder scopes 
+            in
+            let lookup_type n = _lookup_type n scopes 
+            in 
+            let string_create s builder =
+              let str = L.build_global_stringptr s "temp" builder in
+              L.build_in_bounds_gep str [|L.const_int i32_t 0|] "temps" builder
+            in
+
+            (* Like string_of_typ but prints "circle" instead of "shape circle" *)
+            let string_of_typ2 = function
+                A.UserType(s, _) -> s
+              | t -> A.string_of_typ t
+
+            in
+     
+
+            (* Returns a tuple (type name, ast type) for an expression *)
+            (* In final code [with semantic analysis] the ast type should be part of expr *)
+            let rec expr_type  = function
+              A.IntLit i -> ("int", A.Int)
+            | A.FloatLit f -> ("double", A.Float)
+            | A.Id s -> let t =  lookup_type s in (string_of_typ2 t, t)
+            | A.Index(a, e) -> (match snd(expr_type a) with (* First get type of the expr being indexed *)
+                                (* The type of the index expression is the subtype 't' of the array *)
+                                A.Array (t, e2) -> (string_of_typ2 t, t)
+                              | _ -> raise (Failure ("Indexing non array")))
+
+            | A.Member(e, s) -> let (n,t) = expr_type e (* Get type name of the expression before dot *)
+                          (* Look for it in the structs map and get the var map *)
+                          in  let (varmap, _,_ ) = StringMap.find n struct_decls
+                          (* Look for string after the dot in the varmap *)
+                          in let t = fst(StringMap.find s varmap)
+                          in (string_of_typ2 t, t)
+            | A.StringLit s -> ("string",A.String)
+            |e -> raise (Failure ("Unsupported Expression for expr_type"^A.string_of_expr e))
+
+            in
+
+
+            let convert_type e1 e2 builder =
+                let float_type = L.type_of (L.const_float double_t 1.1) and int_type = L.type_of(L.const_int i32_t 1) and type_of_e1=L.type_of(e1) and type_of_e2=L.type_of(e2)
+                  in let e1' =
+                          (if type_of_e1=int_type
+                              then L.build_sitofp e1 float_type "temp" builder
+                            else e1)
+                  and e2'=(if type_of_e2=int_type
+                            then L.build_sitofp e2 float_type "temp" builder 
+                           else e2 )
+                in (e1',e2')
+
+              in
+
+
+            
+            let match_type typ op =
+                  let float_type = (L.type_of (L.const_float double_t 1.1))
+                in if typ=float_type
+                  then match op with
+                    A.Add -> L.build_fadd
+                    | A.Sub     -> L.build_fsub
+                    | A.Mult    -> L.build_fmul
+                    | A.Div     -> L.build_fdiv
+                    | A.And     -> L.build_and
+                    | A.Or      -> L.build_or
+                    | A.Mod     -> raise (Failure "Cannot mod a float")
+                    (* Need to think about these ops *)
+                    | A.Equal   -> L.build_fcmp L.Fcmp.Oeq
+                    | A.Neq     -> L.build_fcmp L.Fcmp.One
+                    | A.Less    -> L.build_fcmp L.Fcmp.Olt
+                    | A.Leq     -> L.build_fcmp L.Fcmp.Ole
+                    | A.Greater -> L.build_fcmp L.Fcmp.Ogt
+                    | A.Geq     -> L.build_fcmp L.Fcmp.Oge
+                    
+                else match op with
+                    A.Add -> L.build_add
+                    | A.Sub     -> L.build_sub
+                    | A.Mult    -> L.build_mul
+                    | A.Div     -> L.build_sdiv
+                    | A.And     -> L.build_and
+                    | A.Or      -> L.build_or
+                    | A.Mod     -> L.build_srem
+                    | A.Equal   -> L.build_icmp L.Icmp.Eq
+                    | A.Neq     -> L.build_icmp L.Icmp.Ne
+                    | A.Less    -> L.build_icmp L.Icmp.Slt
+                    | A.Leq     -> L.build_icmp L.Icmp.Sle
+                    | A.Greater -> L.build_icmp L.Icmp.Sgt
+                    | A.Geq     -> L.build_icmp L.Icmp.Sge
+              
+              in
+
+            (* Construct code for an lvalue; return a pointer to access object *)
+            let rec lexpr builder = function
+                A.Id s -> lookup s builder
+              | A.Index(e1,e2) -> let e2' = expr builder e2 in
+                    L.build_gep (lexpr builder e1) [|L.const_int i32_t 0; e2'|] "tmp" builder
+              | A.Member(e, s) -> let e' = lexpr builder e in
+                  (* Obtain index of s in the struct type of expression e *)
+                  let (sname, _ ) = expr_type e in let i = memb_index sname s in
+                  L.build_gep e' [|L.const_int i32_t 0; L.const_int i32_t i|] "tmp" builder
+              | _ -> raise (Failure "Trying to assign to an non l-value")
+
+
+            (* Construct code for an expression; return its value *)
+            and expr builder = function (* Takes args builder and Ast.expr *)
+                A.IntLit i -> L.const_int i32_t i
+              | A.CharLit c -> L.const_int i8_t (int_of_char c) (* 1 byte characters *)
+              | A.Noexpr -> L.const_int i32_t 0  (* No expression is 0 *)
+              | A.StringLit s -> string_create s builder
+              | A.FloatLit f -> L.const_float double_t f
+              | A.Id s -> L.build_load (lookup s builder) s builder (* Load the variable into register and return register *)
+              | A.Binop (e1, op, e2) ->
+                  let e1' = expr builder e1 
+                  and e2' = expr builder e2 
+                  and float_type = L.type_of(L.const_float double_t 1.1)
+                in
+                  let type_of_e1' = L.type_of(e1') and type_of_e2' = L.type_of(e2')
+                in if type_of_e1' <> type_of_e2'
+                      then let ret= convert_type e1' e2' builder
+                    in let x = fst ret and y = snd ret
+                      in match_type float_type op x y "temp" builder
+                else
+                  match_type type_of_e1' op e1' e2' "tmp" builder
+
+              | A.Index(e1,e2) as arr-> L.build_load (lexpr builder arr) "tmp" builder
+
+              | A.Member(e, s) as mem -> L.build_load (lexpr builder mem) "tmp" builder
+
+              | A.Asnop (el, op, er) ->
+                   let el' = lexpr builder el in
+                   (match op with
+                       A.Asn -> let e' = expr builder er in
+                                 ignore (L.build_store e' el' builder); e'
+                       (* The code here must change if supporting non-identifiers *)
+                     | A.CmpAsn bop -> let e' = expr builder (A.Binop(el, bop, er)) in
+                                 ignore (L.build_store e' el' builder); e'
+                   )
+
+              | A.Unop(op, e) ->
+                  let e' = expr builder e in
+                    let leftyp1=(L.type_of (L.const_int i32_t 1)) and leftyp2 = (L.type_of (L.const_float double_t 1.1))
+                     and leftyp3=(L.type_of e') in
+                  (match op with
+                    A.Neg     -> (if leftyp1 = leftyp3 then (L.build_neg) else (L.build_fneg))
+                  | A.Not     -> L.build_not
+                  | _  -> raise (Failure "Unsupported unary op")(* Ignore other unary ops *)
+                    ) e' "tmp" builder
+
+
+                (* This ok only for few built_in functions *)
+              | A.Call (A.Id "printi", [e]) -> L.build_call printf_func [|int_format_str ; (expr builder e) |] "printf" builder
+              | A.Call (A.Id "printc", [e]) -> L.build_call printf_func [|char_format_str ; (expr builder e) |] "printf" builder
+              | A.Call (A.Id "prints", [e]) -> L.build_call printf_func [|string_format_str ; (expr builder e) |] "printf" builder
+              | A.Call (A.Id "printf", [e]) -> L.build_call printf_func [|float_format_str ; (expr builder e) |] "printf" builder
+              | A.Call (A.Id "seconds", e) -> let secptr = ignore(L.build_call  get_tday_func [|time_value ; L.const_null i8ptr_t |] "" builder);
+                                    L.build_gep time_value [|L.const_int i32_t 0; L.const_int i32_t 0 |] "sec" builder in
+                                    let usecptr = L.build_gep time_value [|L.const_int i32_t 0; L.const_int i32_t 1 |] "usec" builder in
+                                    let sec = L.build_sitofp (L.build_load secptr "tmp" builder) double_t "tmp" builder
+                                    and usec = L.build_sitofp (L.build_load usecptr "tmp" builder) double_t "tmp" builder
+                                    in
+                                    let usecisec = L.build_fmul usec (L.const_float double_t 1.0e-6) "tmp" builder in 
+                                            L.build_fadd sec usecisec "tmp" builder
+              | A.Call (A.Id "glut_init",e) -> do_glut_init dummy_arg_1 (L.const_bitcast dummy_arg_2 i8ptrptr_t) glut_argv_0  builder
+                (* A call without a dot expression refers to three possiblities. In order of precedence: *)
+                (* constructor call, method call (within struct scope), function call *)
+              | A.Call (A.Id f, act) ->
+                 (* The llvm type array of the calling functions parameters
+                    Can be use to retreive the "this" argument *)
+                 (try let fdef = StringMap.find f glut_decls in 
+                  let actuals = List.rev (List.map (expr builder) (List.rev act)) in
+                  do_glut_func fdef (Array.of_list actuals) builder
+                with Not_found -> (
+                
+                 let myparams  = L.params (fst (lookup_function fdecl.A.fname) ) in
+                 let (fdef, fdecl) = lookup_function f in
+                 (* Helper function for pass by value handling *)
+                 let arg_passer builder (_,_,pass) = function
+                    (* Identifier, index, and member expressions may be passed by reference.
+                       Other types are required to be passed by value. *)
+                    A.Id(_) | A.Index(_,_) | A.Member(_,_) as e -> (match pass with
+                              A.Ref -> lexpr builder e (* This gets the pointer to the variable *)
+                            | A.Value -> expr builder e )
+                  | e  -> expr builder e
+                 in
+                 (* This makes right to left evaluation order. What order should we use? *)
+                 let actuals = List.rev (List.map2 (arg_passer builder) (List.rev fdecl.A.params) (List.rev act)) in
+                 let result = (match fdecl.A.rettyp with A.Void -> "" (* don't name result for void llvm issue*)
+                                                    | _ -> f^"_result") in
+                 (* How the function is called depends on the type *)
+                 ( match fdecl.A.typ with
+                    A.Func -> L.build_call fdef (Array.of_list actuals) result builder
+                    (* For methods pass value  of the callers "this" argument *)
+                  | A.Method -> L.build_call fdef (Array.of_list (myparams.(0) :: actuals)) result builder
+                    (* Constructors are called like methods but evaluate to their own type
+                      not their return value as they don't have explicit return values *)
+                  | A.Constructor -> let (_,_,lstype) =  StringMap.find f struct_decls
+                              (* Create local temporary to hold newly created struct *)
+                              in let loc = L.build_alloca  lstype "tmp" builder in
+                              (* Pass the newly created struct as the "this" arugment of constructor call *)
+                             ignore( L.build_call fdef (Array.of_list (loc :: actuals)) result builder);
+                              (* Return the initialized local temporary *)
+                             L.build_load  loc "tmp" builder
+                  )
+               ))
+              (* Explicit method calls with dot operator *)
+              | A.Call (A.Member(e,s), act) ->
+                 let (sname, _ ) = expr_type e in
+                 let (fdef, fdecl) = lookup_method sname s in
+                 (* Helper function for pass by value handling *)
+                 (* Same us the above code *)
+                 let arg_passer builder (_,_,pass) = function
+                    A.Id(_) | A.Index(_,_) | A.Member(_,_) as e -> (match pass with
+                              A.Ref -> lexpr builder e (* This gets the pointer to the variable *)
+                            | A.Value -> expr builder e )
+                  | e  -> expr builder e
+                in
+                 (* This makes right to left evaluation order. What order should we use? *)
+                 let actuals = List.rev (List.map2 (arg_passer builder) (List.rev fdecl.A.params) (List.rev act)) in
+                 (* Append the left side of dot operator to arguments so it is used as a "this" argument *)
+                 let actuals = (lexpr builder e )::actuals in
+                 let result = (match fdecl.A.rettyp with A.Void -> "" (* don't name result for void llvm issue*)
+                                                    | _ -> s^"_result") in
+                 L.build_call fdef (Array.of_list actuals) result builder
+              |  e -> raise (Failure ("Unsupported expression: "^(A.string_of_expr e)))(* Ignore other expressions *)
+            in
+
+            (* Build the code for the given statement; return the builder for
+             the statement's successor *)
+            let rec stmt builder = function
+                  A.Block (vl, sl) -> List.fold_left stmt builder sl (* Ignore the decls for now *)
+                | A.Expr e -> ignore (expr builder e); builder  (* Simply evaluate expression *)
+
+                | A.Return e -> ignore (match fdecl.A.rettyp with  (* Different cases for void and non-void *)
+                    A.Void -> L.build_ret_void builder
+                    | _ -> L.build_ret (expr builder e) builder); builder
+                | A.If (predicate, then_stmt, else_stmt) ->
+                    let bool_val = expr builder predicate in
+                    let merge_bb = L.append_block context "merge" the_function in (* Merge block *)
+                    let then_bb = L.append_block context "then" the_function in
+                    (* Get the builder for the then block, emit then_stmt and then add branch statement to
+                        merge block *)
+                    add_terminal (stmt (L.builder_at_end context then_bb) then_stmt)
+                        (L.build_br merge_bb);
+
+                    let else_bb = L.append_block context "else" the_function in
+                    add_terminal (stmt (L.builder_at_end context else_bb) else_stmt)
+                        (L.build_br merge_bb);
+                    (* add_terminal used to avoid insert two terminals to basic blocks *)
+
+                    (* builder is in block that contains if stmt *)
+                    ignore (L.build_cond_br bool_val then_bb else_bb builder);
+                    L.builder_at_end context merge_bb (* Return builder at end of merge block *)
+
+                | A.While (predicate, body) ->
+                    let pred_bb = L.append_block context "while" the_function in
+                    ignore (L.build_br pred_bb builder); (* builder is in block that contains while stm *)
+
+                    let body_bb = L.append_block context "while_body" the_function in
+                    add_terminal (stmt (L.builder_at_end context body_bb) body)
+                    (L.build_br pred_bb);
+
+                    let pred_builder = L.builder_at_end context pred_bb in
+                    let bool_val = expr pred_builder predicate in
+
+                    let merge_bb = L.append_block context "merge" the_function in
+                    ignore (L.build_cond_br bool_val body_bb merge_bb pred_builder);
+                    L.builder_at_end context merge_bb
+
+                (*  make equivalent while *)
+                | A.For (e1, e2, e3, body) -> stmt builder
+                    ( A.Block ( [], [  A.Expr e1; A.While (e2, A.Block ([], [body; A.Expr e3]) ) ] ) )
+                | t -> raise (Failure ("Unsupported statement type"^A.string_of_stmt t))(* Ignore other statement type *)
+            in
+            (* Build the code for each statement in the block 
+              and return the builder *)
+            List.fold_left stmt builder stmt_list
+        in 
+        (* End of build_block_body *)
+        (* Construct the scopes list before calling build_block_body *)
+        let scopes_list = match fdecl.A.typ with
+                    (* Functions can't access members so no struct scope *)
+                    A.Func -> [(formal_vars, LocalScope); (global_vars, GlobalScope) ]
+                    (* Don't need  struct scope map as we have one and the type doesn't match as well.
+                       So we are using an empty map *)
+                  | _      -> [(formal_vars, LocalScope); (StringMap.empty, StructScope) ; (global_vars, GlobalScope)]
+        in 
+
+        let builder = build_block_body (fdecl.A.locals, fdecl.A.body) builder scopes_list in
         (* Add a return if the last block falls off the end *)
         add_terminal builder (match fdecl.A.rettyp with
             A.Void -> L.build_ret_void
