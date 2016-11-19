@@ -1,0 +1,28 @@
+/* Test basic struct declaration */
+
+struct intpair {
+    int x;
+    int y;
+}
+
+struct charpair {
+    char x, y;
+}
+
+int main ()
+{
+    struct intpair  a;
+    struct charpair b;
+
+    a.x = 77;
+    a.y = 18;
+
+    b.x = 'A';
+    b.y = 'q';
+
+    printi(a.x);
+    printi(a.y);
+
+    printc(b.x);
+    printc(b.y);
+}
