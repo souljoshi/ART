@@ -19,6 +19,7 @@ int no_change(int x)
 int main ()
 {
     int a, b, c;
+    a = 0;
     b = 3;
     c = 4;
 
