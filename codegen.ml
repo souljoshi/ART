@@ -157,31 +157,24 @@ let translate prog =
     let glut_decls = 
       let glut_decl m artname fdef  = StringMap.add artname fdef m in
       List.fold_left2 glut_decl StringMap.empty 
-      ["glcolor";"glbegin";"glvertex";"glend";"glclear";"glswap";"glut_leave_mainloop";"glut_repost";"sin";"cos";"drawpoint"]
-      [glcolor_func ;glbegin_func ;glvertex_func;glend_func;glclear_func;glswap_func ;glutlvmain_func;glutrepost_func; sin_func;cos_func; L.const_int i32_t 0]
+      ["setcolor";"vertex";"sin";"cos";"drawpoint"]
+      [glcolor_func;glvertex_func; sin_func;cos_func; L.const_int i32_t 0]
     in
     (* No type checking done *)
     let do_glut_func fdef act builder = 
            if glcolor_func    == fdef then   L.build_call glcolor_func     [|act.(0) ; act.(1); act.(2)|] "" builder   
-      else if glbegin_func    == fdef then   L.build_call glbegin_func     [|act.(0) |] "" builder   
       else if glvertex_func   == fdef then   L.build_call glvertex_func    [|act.(0) ; act.(1) |] "" builder  
-      else if glend_func      == fdef then   L.build_call glend_func       [|  |] "" builder     
-      (*else if glclear_func    == fdef then   L.build_call glclear_func     [|L.const_int i32_t 0x4000|] "" builder*) 
       else if sin_func         == fdef then   L.build_call sin_func        [|act.(0)|] "" builder 
       else if cos_func         == fdef then   L.build_call cos_func        [|act.(0)|] "" builder 
-      (*else if glswap_func      == fdef then   L.build_call glswap_func       [||] "" builder   *)
       else if glutlvmain_func == fdef then   L.build_call glutlvmain_func  [||] "" builder
-      else if glutrepost_func == fdef then   L.build_call glutrepost_func  [||] "" builder
       (* Draw Point *)
       else  (ignore( L.build_call glbegin_func     [|L.const_int i32_t 0 |] "" builder);
             ignore(L.build_call glvertex_func    [|act.(0) ; act.(1) |] "" builder );
             L.build_call glend_func [|  |] "" builder )
 
     in
-    let do_glut_init argc argv title draw_func builder = 
-        (*let (idle_func,_) = try StringMap.find "idle" function_decls with Not_found -> raise (Failure("idle not defined"))
-        in*)
-         let const = L.const_int i32_t
+    let do_glut_init argc argv title draw_func idle_func builder = 
+        let const = L.const_int i32_t
         (* Call all the boilerplate functions *)
         in ignore(L.build_call glutinit_func      [|argc; argv|]            "" builder);
            ignore(L.build_call glutinitdmode_func [|const 2|]               "" builder);
@@ -189,7 +182,7 @@ let translate prog =
            ignore(L.build_call glutinitwsiz_func  [|const 800 ; const 600|] "" builder);
            ignore(L.build_call glutcreatewin_func [|title|]                 "" builder);
            ignore(L.build_call glutdisplay_func   [| draw_func |]           "" builder);
-           (*ignore(L.build_call glutidle_func      [| idle_func |]           "" builder);*)
+           ignore(L.build_call glutidle_func      [| idle_func |]           "" builder);
            ignore(L.build_call glutsetopt_func    [|const 0x01F9; const 1|] "" builder);
                   L.build_call glutmainloop_func  [| |]   "" builder
 
@@ -366,8 +359,36 @@ let translate prog =
               Some f -> f
             | None -> get_draw_func)
         in
+        let get_idle_func loop_func =
+           let idle_stop_condition builder = ()
+           in
+           let idle_func = L.define_function "idle." void_void_t the_module in
+           let builder = L.builder_at_end context (L.entry_block idle_func) in
+           let current_time = L.build_alloca double_t "currtime" builder in
+           let currtval = do_seconds_call builder in
+            ignore (L.build_store currtval current_time  builder);
+           let lastt = L.build_load g_last_time "lastt" builder in
+           let delay = L.build_load g_delay "delay" builder in
+           let lag = L.build_fsub currtval lastt "rdelay" builder in
+           let bool_val = L.build_fcmp L.Fcmp.Oge lag delay "ifcond" builder 
+           in
+           let merge_bb = L.append_block context "merge" idle_func in (* Merge block *)
+           let merge_builder = L.builder_at_end context merge_bb in
+           let then_bb = L.append_block context "then" idle_func in
+           let then_builder = L.builder_at_end context then_bb in
+           let stepinc = L.build_fptoui (L.build_fdiv lag delay "finc" then_builder) i32_t "stepinc" then_builder in
+           let newsteps = L.build_add (L.build_load g_steps "steps" then_builder) stepinc "newsteps" then_builder in
+           ignore (L.build_call loop_func [| |] "" then_builder);
+           ignore (L.build_store currtval g_last_time then_builder);
+           ignore (idle_stop_condition builder);
+           ignore (L.build_call glutrepost_func  [||] "" then_builder);
+           ignore (L.build_br merge_bb then_builder);
 
+           (* builder is in block that contains if stmt *)
+           ignore (L.build_cond_br bool_val then_bb merge_bb builder);
+           ignore (L.build_ret_void merge_builder); idle_func
 
+        in
         (* closure related functions *)
         (* get list of name references to variables that are not block local 
            i.e variables referenced that are neithe in local_decls or in scopes *)
@@ -847,9 +868,9 @@ let translate prog =
                     let e1' = expr builder e1 in let e2' = expr builder e2 in
                     ignore(L.build_store e1' g_delay builder);
                     ignore(L.build_store (L.const_int i32_t 0) g_steps builder);
-                    let delayflt = L.build_sdiv e2' e1' "stepsflt" builder in
+                    let delayflt = L.build_fdiv e2' e1' "stepsflt" builder in
                     ignore(L.build_store (L.build_fptoui delayflt i32_t "stepsflt" builder) g_maxiter builder);
-                    ignore(do_glut_init dummy_arg_1 (L.const_bitcast dummy_arg_2 i8ptrptr_t) glut_argv_0 (get_unique_draw_func()) builder);
+                    ignore(do_glut_init dummy_arg_1 (L.const_bitcast dummy_arg_2 i8ptrptr_t) glut_argv_0 (get_unique_draw_func())  (get_idle_func fdef)builder);
                     ignore(L.build_free table builder); builder
                 | t -> raise (Failure ("Unsupported statement type "^A.string_of_stmt t))(* Ignore other statement type *)
             in
