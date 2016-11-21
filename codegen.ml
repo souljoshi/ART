@@ -267,19 +267,26 @@ let translate prog =
         (* Get an instruction builder that will emit instructions in the current function *)
         let builder = L.builder_at_end context (L.entry_block the_function) in
 
-        (* For unique globals, use a name that begins with '#' *)
+        (* For unique globals, use a name that ends with '.' *)
+        (* NOTE: there can only be one variable name "foo." that is a unique global *)
         let unique_global n init = match (L.lookup_global n the_module) with
               Some g -> g
             | None -> L.define_global n init the_module
+        in
+        (* For unique global stringptrs, use a name that ends with '.' *)
+        (* NOTE: there can only be one variable name "foo." that is a unique global stringptr *)
+        let unique_global_stringptr str n = match (L.lookup_global n the_module) with
+              Some g -> L.const_bitcast g i8ptr_t
+            | None -> L.build_global_stringptr str n builder
         in
         let clostbl = unique_global "clostbl." (L.const_null i8ptrptr_t)
         in
 
         (* Format strings for printf call *)
-        let int_format_str = L.build_global_stringptr "%d\n" "fmt" builder in
-        let char_format_str = L.build_global_stringptr "%c" "fmt" builder in
-        let string_format_str = L.build_global_stringptr "%s" "fmt" builder in
-        let float_format_str = L.build_global_stringptr "%f" "fmt" builder in
+        let int_format_str = unique_global_stringptr "%d\n" "ifmt."  in
+        let char_format_str = unique_global_stringptr "%c" "cfmt."   in
+        let string_format_str = unique_global_stringptr "%s" "sfmt." in
+        let float_format_str = unique_global_stringptr "%f" "ffmt."  in
 
 (* GLUT RELATED *)
         let time_value  = L.define_global "tv" (L.const_null timeval_struct_t) the_module in
@@ -287,7 +294,7 @@ let translate prog =
         let dummy_arg_1 = L.define_global "argc" (L.const_int i32_t 1) the_module in
 
         (* The first element of argv *)
-        let glut_argv_0  = L.const_bitcast (L.build_global_stringptr "glut.art" "glutstr" builder) i8ptr_t
+        let glut_argv_0  = L.const_bitcast (unique_global_stringptr "glut.art" "glutstr.") i8ptr_t
         in
         (* Second elment of argv *)
         let glut_argv_1 = (L.const_null i8ptr_t ) in
