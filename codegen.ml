@@ -304,7 +304,15 @@ let translate prog =
       in
 
 (* END OF GLUT RELATED *)
-
+(* Add shape array *)
+        let shape_struct =
+          let named_struct = L.named_struct_type context "shape_struct."
+          in  L.struct_set_body named_struct [| i8ptr_t ; L.pointer_type void_void_t  |] false ; named_struct
+        in
+        let shape_list = unique_global "shape_list." (L.const_array shape_struct ( Array.make 100 (L.const_null shape_struct)))
+        in
+        let shape_list_ind = unique_global "shape_list_ind." (L.const_int i32_t 0)
+        in
         (* closure related functions *)
         (* get list of name references to variables that are not block local 
            i.e variables referenced that are neithe in local_decls or in scopes *)
@@ -640,6 +648,20 @@ let translate prog =
                                     in
                                     let usecisec = L.build_fmul usec (L.const_float double_t 1.0e-6) "tmp" builder in 
                                             L.build_fadd sec usecisec "tmp" builder
+              | A.Call (A.Id "addshape", el) -> 
+                    let add_one_shape ex = 
+                      let fdef' = L.const_bitcast (fst(lookup_method (fst(expr_type ex)) "draw")) (L.pointer_type void_void_t) in
+                      let i = L.build_load shape_list_ind "sindex" builder in
+                      let ex' = L.build_bitcast (lexpr builder ex) i8ptr_t "shp" builder in
+                      (* store the shape *)
+                      ignore( L.build_store ex' (L.build_gep shape_list [| L.const_int i32_t 0; i; L.const_int i32_t 0|] "slp" builder) builder);
+                      (* store the function *)
+                      ignore( L.build_store fdef' (L.build_gep shape_list [| L.const_int i32_t 0; i; L.const_int i32_t 1|] "slfp" builder) builder);
+                      (* increment i *)
+                      ignore( L.build_store (L.build_add i (L.const_int i32_t 1) "tmp" builder) shape_list_ind builder); ()
+                    in ignore(List.iter add_one_shape el); L.undef void_t
+
+
               | A.Call (A.Id "closure", e) -> 
                     let ftype = L.function_type void_t [| |] in
                     let fdef = L.define_function "closure" ftype the_module in
@@ -778,6 +800,7 @@ let translate prog =
                     ( A.Block ( [], [  A.Expr e1; A.While (e2, A.Block ([], [body; A.Expr e3]) ) ] ) )
                 | A.ForDec (vdecls, e2, e3, body) -> stmt builder ( A.Block(vdecls, [A.For(A.Noexpr , e2, e3, body)]) )
                 | t -> raise (Failure ("Unsupported statement type "^A.string_of_stmt t))(* Ignore other statement type *)
+                | A.Timeloop(_, e1, _, e2, s) -> builder
             in
             (* Build the code for each statement in the block 
               and return the builder *)
