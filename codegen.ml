@@ -15,6 +15,7 @@ let translate prog =
     let context = L.global_context () in 
     let the_module = L.create_module context "ART"
     and i32_t = L.i32_type context
+    and i64_t = L.i64_type context
     and i8_t   = L.i8_type   context
     and void_t = L.void_type context
     and double_t = L.double_type context
@@ -66,15 +67,70 @@ let translate prog =
     let global_vars =
         let global_var m (t,n,i) = (* map (type,name,initer) *)
         (* Ignoring initer for now and just setting to zero *)
-          let init = L.const_int (ltype_of_typ t) 0
+          let init = L.const_null(ltype_of_typ t)
           (* Define the llvm global and add to the map *)
           in StringMap.add n (L.define_global n init the_module, t) m in
         List.fold_left global_var StringMap.empty globals in
 
+    let timeval_struct_t = let g = L.named_struct_type context "timeval"
+        in  ignore(L.struct_set_body g [| i64_t ; i64_t |] false ); g
+    in
     (* Declare printf() *)
     (* Allowing a print builtin function for debuggin purposes *)
-    let printf_t = L.var_arg_function_type i32_t [| L.pointer_type i8_t |] in
-    let printf_func = L.declare_function "printf" printf_t the_module in
+    let printf_t = L.var_arg_function_type i32_t [| L.pointer_type i8_t |]
+
+
+
+    (* GLUT FUNCTION ARG TYPES *)
+    and  glut_init_t = L.function_type void_t[|L.pointer_type i32_t;L.pointer_type(L.pointer_type i8_t)|]
+    and  glut_crwin_t = L.function_type i32_t [| L.pointer_type i8_t |]
+    and  get_tday_t = L.function_type i32_t [| L.pointer_type timeval_struct_t ; L.pointer_type i8_t|]
+    and  void_void_t = L.function_type void_t[|  |]
+    and  void_int_t  = L.function_type  void_t [| i32_t |]
+    and  void_int_int_t  = L.function_type  void_t [| i32_t ; i32_t|]
+    and  void_2d_t  = L.function_type  void_t [| double_t ; double_t|]
+    and  void_3d_t  = L.function_type  void_t [| double_t ; double_t; double_t|]
+    and  double_double_t = L.function_type double_t [|double_t|]
+    in
+    let  void_callback_t  = L.function_type void_t[| L.pointer_type void_void_t |]
+    and  timer_callback_t = L.function_type void_t[| i32_t; L.pointer_type void_int_t; i32_t |]
+  in
+
+    (* END OF GLUT ARG TYPES *)
+    let printf_func = L.declare_function "printf" printf_t the_module 
+    and get_tday_func = L.declare_function "gettimeofday" get_tday_t the_module
+
+    (* GLUT FUNCTION DELCARATIONS *)
+    and glutinit_func      = L.declare_function "glutInit" glut_init_t the_module
+    and glutinitdmode_func = L.declare_function "glutInitDisplayMode" void_int_t the_module
+    and glutinitwpos_func  = L.declare_function "glutInitWindowPosition" void_int_int_t the_module
+    and glutinitwsiz_func  = L.declare_function "glutInitWindowSize" void_int_int_t the_module
+    and glutcreatewin_func = L.declare_function "glutCreateWindow" glut_crwin_t the_module
+    and glutdisplay_func   = L.declare_function "glutDisplayFunc" void_callback_t  the_module
+    and glutidle_func      = L.declare_function "glutIdleFunc" void_callback_t  the_module
+    and glutsetopt_func    = L.declare_function "glutSetOption" void_int_int_t  the_module
+    and glutmainloop_func  = L.declare_function "glutMainLoop" void_void_t  the_module
+    and gluttimer_func  = L.declare_function  "glutTimerFunc"   timer_callback_t the_module  
+
+
+    (* NON BOILER PLATE FUNCIONS *)
+    and glcolor_func    = L.declare_function "glColor3d"         void_3d_t  the_module
+    and glbegin_func    = L.declare_function "glBegin"           void_int_t  the_module
+    and glvertex_func   = L.declare_function "glVertex2d"        void_2d_t   the_module
+    and glend_func      = L.declare_function "glEnd"             void_void_t the_module
+    and glclear_func    = L.declare_function "glClear"           void_int_t the_module 
+    and glswap_func      = L.declare_function "glutSwapBuffers"   void_void_t the_module 
+    and glutlvmain_func = L.declare_function "glutLeaveMainLoop" void_void_t the_module  
+    and glutrepost_func = L.declare_function "glutPostRedisplay" void_void_t the_module
+
+    (* technically not glut *)
+    and sin_func = L.declare_function "sin" double_double_t the_module
+    and cos_func = L.declare_function "cos" double_double_t the_module
+    
+
+    (* END OF GLUT FUNCTION DECLARATIONS *)
+
+    in
 
     (* Defining each of the declared functions *)
     (* Function decls is a map from function names to tuples of llvm function representation
@@ -94,6 +150,49 @@ let translate prog =
           StringMap.add name (L.define_function name ftype the_module, fdecl) m in
         List.fold_left function_decl StringMap.empty functions in
 
+    (* ADD THE GLUT FUNCTIONS HERE WITH DECLARATION *)
+    let glut_decls = 
+      let glut_decl m artname fdef  = StringMap.add artname fdef m in
+      List.fold_left2 glut_decl StringMap.empty 
+      ["glcolor";"glbegin";"glvertex";"glend";"glclear";"glswap";"glut_leave_mainloop";"glut_repost";"sin";"cos";"drawpoint"]
+      [glcolor_func ;glbegin_func ;glvertex_func;glend_func;glclear_func;glswap_func ;glutlvmain_func;glutrepost_func; sin_func;cos_func; L.const_int i32_t 0]
+    in
+    (* No type checking done *)
+    let do_glut_func fdef act builder = 
+           if glcolor_func    == fdef then   L.build_call glcolor_func     [|act.(0) ; act.(1); act.(2)|] "" builder   
+      else if glbegin_func    == fdef then   L.build_call glbegin_func     [|L.const_int i32_t 0 |] "" builder   
+      else if glvertex_func   == fdef then   L.build_call glvertex_func    [|act.(0) ; act.(1) |] "" builder  
+      else if glend_func      == fdef then   L.build_call glend_func       [|  |] "" builder     
+      else if glclear_func    == fdef then   L.build_call glclear_func     [|L.const_int i32_t 0x4000|] "" builder 
+      else if sin_func         == fdef then   L.build_call sin_func        [|act.(0)|] "" builder 
+      else if cos_func         == fdef then   L.build_call cos_func        [|act.(0)|] "" builder 
+      else if glswap_func      == fdef then   L.build_call glswap_func       [||] "" builder    
+      else if glutlvmain_func == fdef then   L.build_call glutlvmain_func  [||] "" builder
+      else if glutrepost_func == fdef then   L.build_call glutrepost_func  [||] "" builder
+      (* Draw Point *)
+      else  (ignore( L.build_call glbegin_func     [|L.const_int i32_t 0 |] "" builder);
+            ignore(L.build_call glvertex_func    [|act.(0) ; act.(1) |] "" builder );
+            L.build_call glend_func [|  |] "" builder )
+
+    in
+    let do_glut_init argc argv title builder = 
+        let (draw_func,_) = try StringMap.find "draw" function_decls with Not_found -> raise (Failure("draw not defined"))
+        in 
+        let (idle_func,_) = try StringMap.find "idle" function_decls with Not_found -> raise (Failure("idle not defined"))
+        in
+         let const = L.const_int i32_t
+        (* Call all the boilerplate functions *)
+        in ignore(L.build_call glutinit_func      [|argc; argv|]            "" builder);
+           ignore(L.build_call glutinitdmode_func [|const 2|]               "" builder);
+           ignore(L.build_call glutinitwpos_func  [|const 100 ; const 200|] "" builder);
+           ignore(L.build_call glutinitwsiz_func  [|const 800 ; const 600|] "" builder);
+           ignore(L.build_call glutcreatewin_func [|title|]                 "" builder);
+           ignore(L.build_call glutdisplay_func   [| draw_func |]           "" builder);
+           ignore(L.build_call glutidle_func      [| idle_func |]           "" builder);
+           ignore(L.build_call glutsetopt_func    [|const 0x01F9; const 1|] "" builder);
+                  L.build_call glutmainloop_func  [| |]   "" builder
+
+       in 
     (* Map from struct names to tuples (member variable map, methods map, lltype) *)
     let struct_decls =
       (* struct_decl takes a map and an ast sdecl and returns a map which contains sdecl added *)
@@ -166,10 +265,29 @@ let translate prog =
         let builder = L.builder_at_end context (L.entry_block the_function) in
 
         (* Format strings for printf call *)
+        let i8ptr_t = L.pointer_type i8_t in
+        let i8ptrptr_t = L.pointer_type i8ptr_t in 
         let int_format_str = L.build_global_stringptr "%d\n" "fmt" builder in
         let char_format_str = L.build_global_stringptr "%c" "fmt" builder in
         let string_format_str = L.build_global_stringptr "%s\n" "fmt" builder in
        let float_format_str = L.build_global_stringptr "%f" "fmt" builder in
+
+(* GLUT RELATED *)
+        let time_value  = L.define_global "tv" (L.const_null timeval_struct_t) the_module in
+        (* Need to define an actual argc. dummy_arg_1 is now the address of argc *)
+        let dummy_arg_1 = L.define_global "argc" (L.const_int i32_t 1) the_module in
+
+        (* The first element of argv *)
+        let glut_argv_0  = L.const_bitcast (L.build_global_stringptr "glut.art" "glutstr" builder) i8ptr_t
+        in
+        (* Second elment of argv *)
+        let glut_argv_1 = (L.const_null i8ptr_t ) in
+
+        (* The argv object itself *)
+        let dummy_arg_2 =  L.define_global "glutargv" ( L.const_array i8ptr_t [|glut_argv_0; glut_argv_1|]) the_module
+      in
+
+(* END OF GLUT RELATED *)
 
         (* Construct the function's "locals": formal arguments and locally
            declared variables.  Allocate each on the stack, initialize their
@@ -311,12 +429,13 @@ let translate prog =
                 | A.And     -> L.build_and
                 | A.Or      -> L.build_or
                 | A.Mod     -> raise (Failure "Cannot mod a float")
-                | A.Equal   -> L.build_icmp L.Icmp.Eq
-                | A.Neq     -> L.build_icmp L.Icmp.Ne
-                | A.Less    -> L.build_icmp L.Icmp.Slt
-                | A.Leq     -> L.build_icmp L.Icmp.Sle
-                | A.Greater -> L.build_icmp L.Icmp.Sgt
-                | A.Geq     -> L.build_icmp L.Icmp.Sge
+                (* Need to think about these ops *)
+                | A.Equal   -> L.build_fcmp L.Fcmp.Oeq
+                | A.Neq     -> L.build_fcmp L.Fcmp.One
+                | A.Less    -> L.build_fcmp L.Fcmp.Olt
+                | A.Leq     -> L.build_fcmp L.Fcmp.Ole
+                | A.Greater -> L.build_fcmp L.Fcmp.Ogt
+                | A.Geq     -> L.build_fcmp L.Fcmp.Oge
                 
             else match op with
                 A.Add -> L.build_add
@@ -397,12 +516,26 @@ let translate prog =
           | A.Call (A.Id "printi", [e]) -> L.build_call printf_func [|int_format_str ; (expr builder e) |] "printf" builder
           | A.Call (A.Id "printc", [e]) -> L.build_call printf_func [|char_format_str ; (expr builder e) |] "printf" builder
           | A.Call (A.Id "prints", [e]) -> L.build_call printf_func [|string_format_str ; (expr builder e) |] "printf" builder
-            | A.Call (A.Id "printf", [e]) -> L.build_call printf_func [|float_format_str ; (expr builder e) |] "printf" builder
+          | A.Call (A.Id "printf", [e]) -> L.build_call printf_func [|float_format_str ; (expr builder e) |] "printf" builder
+          | A.Call (A.Id "seconds", e) -> let secptr = ignore(L.build_call  get_tday_func [|time_value ; L.const_null i8ptr_t |] "" builder);
+                                L.build_gep time_value [|L.const_int i32_t 0; L.const_int i32_t 0 |] "sec" builder in
+                                let usecptr = L.build_gep time_value [|L.const_int i32_t 0; L.const_int i32_t 1 |] "usec" builder in
+                                let sec = L.build_sitofp (L.build_load secptr "tmp" builder) double_t "tmp" builder
+                                and usec = L.build_sitofp (L.build_load usecptr "tmp" builder) double_t "tmp" builder
+                                in
+                                let usecisec = L.build_fmul usec (L.const_float double_t 1.0e-6) "tmp" builder in 
+                                        L.build_fadd sec usecisec "tmp" builder
+          | A.Call (A.Id "glut_init",e) -> do_glut_init dummy_arg_1 (L.const_bitcast dummy_arg_2 i8ptrptr_t) glut_argv_0  builder
             (* A call without a dot expression refers to three possiblities. In order of precedence: *)
             (* constructor call, method call (within struct scope), function call *)
           | A.Call (A.Id f, act) ->
              (* The llvm type array of the calling functions parameters
                 Can be use to retreive the "this" argument *)
+             (try let fdef = StringMap.find f glut_decls in 
+              let actuals = List.rev (List.map (expr builder) (List.rev act)) in
+              do_glut_func fdef (Array.of_list actuals) builder
+            with Not_found -> (
+            
              let myparams  = L.params (fst (lookup_function fdecl.A.fname) ) in
              let (fdef, fdecl) = lookup_function f in
              (* Helper function for pass by value handling *)
@@ -433,6 +566,7 @@ let translate prog =
                           (* Return the initialized local temporary *)
                          L.build_load  loc "tmp" builder
               )
+           ))
           (* Explicit method calls with dot operator *)
           | A.Call (A.Member(e,s), act) ->
              let (sname, _ ) = expr_type e in
@@ -506,7 +640,7 @@ let translate prog =
             (*  make equivalent while *)
             | A.For (e1, e2, e3, body) -> stmt builder
                 ( A.Block ( [], [  A.Expr e1; A.While (e2, A.Block ([], [body; A.Expr e3]) ) ] ) )
-            | _  -> raise (Failure "Unsupported statement type")(* Ignore other statement type *)
+            | t -> raise (Failure ("Unsupported statement type"^A.string_of_stmt t))(* Ignore other statement type *)
         in
         (* Build the code for each statement in the function *)
         let builder = stmt builder (A.Block(fdecl.A.locals, fdecl.A.body)) in
