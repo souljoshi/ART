@@ -1,0 +1,12 @@
+int main()
+{
+	int a;
+	double b;
+	int c;
+	a=5;
+	b=6.5;
+	c=a+b;
+	
+
+
+}

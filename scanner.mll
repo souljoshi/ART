@@ -3,7 +3,7 @@
 { open Parser
   (* Converts escape sequences into characters *)
   let string_func s =
-      Scanf.sscanf("\"" ^ s ^ "\"") "%s%!" (fun  y ->y )
+      Scanf.sscanf("\"" ^ s ^ "\"") "%S%!" (fun  y ->y )
 
   let char_esc = function
       "\\n"  -> Char.chr(0XA)
