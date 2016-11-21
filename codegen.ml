@@ -4,6 +4,7 @@ module L = Llvm
 module A = Ast
 
 module StringMap = Map.Make(String)
+module StringSet = Set.Make( struct let compare = Pervasives.compare type t = string end )
 
 (* scope types *)
 type scope = GlobalScope | LocalScope | StructScope
@@ -97,6 +98,8 @@ let translate prog =
     in
     let  void_callback_t  = L.function_type void_t[| L.pointer_type void_void_t |]
     and  timer_callback_t = L.function_type void_t[| i32_t; L.pointer_type void_int_t; i32_t |]
+    and  malloc_t  = L.function_type (L.pointer_type i8_t) [| i32_t |]
+    and  free_t    = L.function_type void_t [| L.pointer_type i8_t |]
   in
 
     (* END OF GLUT ARG TYPES *)
@@ -129,6 +132,9 @@ let translate prog =
     (* technically not glut *)
     and sin_func = L.declare_function "sin" double_double_t the_module
     and cos_func = L.declare_function "cos" double_double_t the_module
+    (* malloc and free *)
+    and malloc_func = L.declare_function "malloc" malloc_t the_module
+    and free_func   = L.declare_function  "free" malloc_t the_module
     
 
     (* END OF GLUT FUNCTION DECLARATIONS *)
@@ -139,7 +145,7 @@ let translate prog =
     (* Function decls is a map from function names to tuples of llvm function representation
       and Ast declarations *)
     let function_decls =
-        let function_decl m fdecl =
+        let function_decl m fdecl = if fdecl.A.fname = "closure" then m else
           let name = fdecl.A.fname
           and formal_types = (* Types of parameters in llvm type repr *)
             Array.of_list (List.map (fun (t,_,pass) ->
@@ -257,12 +263,14 @@ let translate prog =
     in
 
    (* Fill in the body of the given function *)
-    let build_function_body fdecl =
+   (* This is general as it takes lets user specify function_decls map *)
+    let _build_function_body fdecl function_decls =
         (* Get the corresponding llvm function value *)
         let (the_function, _) = (match fdecl.A.typ with
                   A.Func -> StringMap.find fdecl.A.fname function_decls
                   | _ -> lookup_method fdecl.A.owner fdecl.A.fname
               ) in
+
         (* Get an instruction builder that will emit instructions in the current function *)
         let builder = L.builder_at_end context (L.entry_block the_function) in
 
@@ -291,6 +299,53 @@ let translate prog =
 
 (* END OF GLUT RELATED *)
 
+        (* closure related functions *)
+        (* get list of name references to variables that are not block local 
+           i.e variables referenced that are neithe in local_decls or in scopes *)
+        let rec non_block_locals local_decls stmt_list scopes =
+          let scopes =
+            let locals = List.fold_left (fun m (t, n,_) -> StringMap.add n (L.const_int i32_t 0,t) m ) StringMap.empty local_decls
+            in (locals, LocalScope)::scopes
+          in
+          let rec scope_iter n scopes =
+            let hd = List.hd scopes in 
+                (match hd with
+                    (globs, GlobalScope) -> fst(StringMap.find n globs)
+                  | (locls, LocalScope)  -> ( try fst(StringMap.find n locls)
+                                              with Not_found -> scope_iter n (List.tl scopes) )
+                  | (_, StructScope) -> raise (Failure ("No struct scope in closure"))
+                )
+          in
+          let rec non_local_expr = function
+              A.Id s -> (try ignore(scope_iter s scopes); StringSet.empty with Not_found -> StringSet.singleton s)
+            | A.Vecexpr(e1,e2) -> StringSet.union (non_local_expr e1)  (non_local_expr e2)
+            | A.Binop(e1,_,e2) -> StringSet.union (non_local_expr e1)  (non_local_expr e2)
+            | A.Asnop(e1,_,e2) -> StringSet.union (non_local_expr e1)  (non_local_expr e2)
+            | A.Unop(_,e)      -> non_local_expr e
+            | A.Posop(_,e)     -> non_local_expr e
+            | A.Trop(_,e1,e2,e3) -> StringSet.union (non_local_expr e1) (StringSet.union (non_local_expr e2)  (non_local_expr e3))
+            | A.Call(e1,el)  -> StringSet.union (match e1 with A.Id s-> StringSet.empty | _ -> non_local_expr e1) 
+                                 ( List.fold_left (fun set e-> StringSet.union set (non_local_expr e)) StringSet.empty el)
+            | A.Index(e1, e2)-> StringSet.union (non_local_expr e1)  (non_local_expr e2)
+            | A.Member(e, _) -> non_local_expr e
+            | _  -> StringSet.empty
+          in
+          let rec non_local = function
+              A.Block(decls, stmts) -> non_block_locals decls stmts scopes
+            | A.Expr(e)   -> non_local_expr e
+            | A.Return(e) -> non_local_expr e
+            | A.If(e,s1,s2) -> StringSet.union (non_local_expr e) (StringSet.union (non_local s1)  (non_local s2))
+            | A.For(e1,e2,e3,s) -> StringSet.union (StringSet.union (non_local_expr e1) (non_local_expr e2)) 
+                                    (StringSet.union (non_local_expr e3)  (non_local s))
+            | A.ForDec(decls,e2,e3,s)-> non_local ( A.Block(decls, [A.For(A.Noexpr, e2, e3, s)]))
+            | A.While(e,s) -> StringSet.union (non_local_expr e) (non_local s)
+            | _ -> StringSet.empty
+            (*| A.Timeloop of string * expr * string * expr * stmt
+            | A.Frameloop of string * expr * string * expr * stmt *) (* No nested timelops *)
+          in
+          List.fold_left (fun set s-> StringSet.union set (non_local s)) StringSet.empty stmt_list
+              
+        in
         (* Returns (fdef, fdecl) for a function call in method/function *)
         (* Handles case of constructor call, a method call without dot operator and
            normal function call *)
@@ -564,6 +619,15 @@ let translate prog =
                                     in
                                     let usecisec = L.build_fmul usec (L.const_float double_t 1.0e-6) "tmp" builder in 
                                             L.build_fadd sec usecisec "tmp" builder
+              | A.Call (A.Id "closure", e) -> (*)
+                    let ftype = L.function_type void_t [| |] in
+                    let fdef = L.define_function "closure" ftype the_module in *)
+                    let closdecl = List.hd (List.filter ( fun f ->(f.A.fname = "closure") ) functions) in
+                    (*let fdecls = StringMap.add "closure" (fdef, closdecl) function_decls*)(* L.const_int i32_t 0*)
+                    let outnames = StringSet.elements ( non_block_locals closdecl.A.locals 
+                                  closdecl.A.body [(global_vars, GlobalScope)] ) (* assuming no params *)
+                    in  ignore(prerr_endline("[" ^ String.concat ", " outnames ^"]")); L.const_int i32_t 0
+
               | A.Call (A.Id "glut_init",e) -> do_glut_init dummy_arg_1 (L.const_bitcast dummy_arg_2 i8ptrptr_t) glut_argv_0  builder
                 (* A call without a dot expression refers to three possiblities. In order of precedence: *)
                 (* constructor call, method call (within struct scope), function call *)
@@ -696,8 +760,11 @@ let translate prog =
             A.Void -> L.build_ret_void
           | t -> L.build_ret (L.const_int (ltype_of_typ t) 0))
     in
+    (* old build_function_body *)
+    let build_function_body fdecl = _build_function_body fdecl function_decls
+    in
 
-    List.iter build_function_body functions;
+    List.iter build_function_body ( List.filter ( fun f -> not (f.A.fname = "closure") ) functions);
     (* Build methods and constructors for each struct *)
     List.iter (fun sdecl -> List.iter build_function_body (sdecl.A.ctor::sdecl.A.methods)) structs;
     the_module
