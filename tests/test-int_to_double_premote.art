@@ -1,0 +1,21 @@
+int main()
+{
+	int a;
+	double b,c;
+	a=5;
+	b=6.5;
+	c=a+b;
+	printf(c);
+	prints("\n");
+	c=a-b;
+	printf(c);
+	prints("\n");
+	c=a*b;
+	printf(c);
+	prints("\n");
+	c=a/b;
+	printf(c);
+
+
+
+}

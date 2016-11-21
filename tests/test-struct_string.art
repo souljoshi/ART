@@ -1,0 +1,16 @@
+struct name
+{
+	string n;
+}
+name::name(string nj)
+{
+	n=nj;
+}
+int main()
+{	
+	string s;
+	struct name k;
+	k=name("hey");
+	s = "hello";
+	prints(k.n);
+}

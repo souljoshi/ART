@@ -16,7 +16,11 @@ let translate prog =
     let the_module = L.create_module context "ART"
     and i32_t = L.i32_type context
     and i8_t   = L.i8_type   context
-    and void_t = L.void_type context in
+    and void_t = L.void_type context
+    and double_t = L.double_type context
+     in
+   let string_t = L.pointer_type i8_t
+   in
 
     (* General verson of lltype_of_typ that takes a struct map *)
     (* The struct map helps to get member types for structs in terms of previously *)
@@ -25,12 +29,14 @@ let translate prog =
         A.Int -> i32_t
       | A.Char -> i8_t
       | A.Void -> void_t
+      | A.Float -> double_t
+      | A.String -> string_t
       | A.Array(t,e) -> (match e with 
             |A.IntLit(i) -> L.array_type (_ltype_of_typ m t) i
             | _ -> raise(Failure "Arrays declaration requires int literals for now"))
       | A.UserType(s,_) -> StringMap.find s m
         (* Currently supporting only void, int and struct types *)
-      | _   -> raise (Failure "Only valid types are int/char/void")
+      | _   -> raise (Failure "Only valid types are int/char/void/string/double")
 
     in
 
@@ -162,6 +168,8 @@ let translate prog =
         (* Format strings for printf call *)
         let int_format_str = L.build_global_stringptr "%d\n" "fmt" builder in
         let char_format_str = L.build_global_stringptr "%c" "fmt" builder in
+        let string_format_str = L.build_global_stringptr "%s\n" "fmt" builder in
+       let float_format_str = L.build_global_stringptr "%f" "fmt" builder in
 
         (* Construct the function's "locals": formal arguments and locally
            declared variables.  Allocate each on the stack, initialize their
@@ -239,6 +247,12 @@ let translate prog =
             ) with Not_found -> snd(StringMap.find n global_vars)
         in
 
+        let string_create s builder =
+          let str = L.build_global_stringptr s "temp" builder
+        in
+        L.build_in_bounds_gep str [|L.const_int i32_t 0|] "temps" builder
+      in
+
         (* Like string_of_typ but prints "circle" instead of "shape circle" *)
         let string_of_typ2 = function
             A.UserType(s, _) -> s
@@ -246,10 +260,13 @@ let translate prog =
 
         in
 
+          
+
         (* Returns a tuple (type name, ast type) for an expression *)
         (* In final code [with semantic analysis] the ast type should be part of expr *)
         let rec expr_type  = function
           A.IntLit i -> ("int", A.Int)
+        | A.FloatLit f -> ("double", A.Float)
         | A.Id s -> let t =  lookup_type s in (string_of_typ2 t, t)
         | A.Index(a, e) -> (match snd(expr_type a) with (* First get type of the expr being indexed *)
                             (* The type of the index expression is the subtype 't' of the array *)
@@ -262,9 +279,61 @@ let translate prog =
                       (* Look for string after the dot in the varmap *)
                       in let t = fst(StringMap.find s varmap)
                       in (string_of_typ2 t, t)
+        | A.StringLit s -> ("string",A.String)
         |_ -> raise (Failure ("Unsupported Expression for expr_type"))
 
         in
+
+
+        let convert_type e1 e2 builder =
+            let float_type = L.type_of (L.const_float double_t 1.1) and int_type = L.type_of(L.const_int i32_t 1) and type_of_e1=L.type_of(e1) and type_of_e2=L.type_of(e2)
+              in let e1' =
+                      (if type_of_e1=int_type
+                          then L.build_sitofp e1 float_type "temp" builder
+                        else e1)
+              and e2'=(if type_of_e2=int_type
+                        then L.build_sitofp e2 float_type "temp" builder 
+                       else e2 )
+            in (e1',e2')
+
+          in
+
+
+            
+        let match_type typ op =
+              let float_type = (L.type_of (L.const_float double_t 1.1))
+            in if typ=float_type
+              then match op with
+                A.Add -> L.build_fadd
+                | A.Sub     -> L.build_fsub
+                | A.Mult    -> L.build_fmul
+                | A.Div     -> L.build_fdiv
+                | A.And     -> L.build_and
+                | A.Or      -> L.build_or
+                | A.Mod     -> raise (Failure "Cannot mod a float")
+                | A.Equal   -> L.build_icmp L.Icmp.Eq
+                | A.Neq     -> L.build_icmp L.Icmp.Ne
+                | A.Less    -> L.build_icmp L.Icmp.Slt
+                | A.Leq     -> L.build_icmp L.Icmp.Sle
+                | A.Greater -> L.build_icmp L.Icmp.Sgt
+                | A.Geq     -> L.build_icmp L.Icmp.Sge
+                
+            else match op with
+                A.Add -> L.build_add
+                | A.Sub     -> L.build_sub
+                | A.Mult    -> L.build_mul
+                | A.Div     -> L.build_sdiv
+                | A.And     -> L.build_and
+                | A.Or      -> L.build_or
+                | A.Mod     -> L.build_srem
+                | A.Equal   -> L.build_icmp L.Icmp.Eq
+                | A.Neq     -> L.build_icmp L.Icmp.Ne
+                | A.Less    -> L.build_icmp L.Icmp.Slt
+                | A.Leq     -> L.build_icmp L.Icmp.Sle
+                | A.Greater -> L.build_icmp L.Icmp.Sgt
+                | A.Geq     -> L.build_icmp L.Icmp.Sge
+              
+          in
 
         (* Construct code for an lvalue; return a pointer to access object *)
         let rec lexpr builder = function
@@ -283,26 +352,21 @@ let translate prog =
             A.IntLit i -> L.const_int i32_t i
           | A.CharLit c -> L.const_int i8_t (int_of_char c) (* 1 byte characters *)
           | A.Noexpr -> L.const_int i32_t 0  (* No expression is 0 *)
+          | A.StringLit s -> string_create s builder
+          | A.FloatLit f -> L.const_float double_t f
           | A.Id s -> L.build_load (lookup s builder) s builder (* Load the variable into register and return register *)
           | A.Binop (e1, op, e2) ->
-              let e1' = expr builder e1
-              and e2' = expr builder e2 in
-              (match op with
-                  A.Add     -> L.build_add
-                | A.Sub     -> L.build_sub
-                | A.Mult    -> L.build_mul
-                | A.Div     -> L.build_sdiv
-                | A.Mod     -> L.build_srem
-                | A.And     -> L.build_and
-                | A.Or      -> L.build_or
-
-                | A.Equal   -> L.build_icmp L.Icmp.Eq
-                | A.Neq     -> L.build_icmp L.Icmp.Ne
-                | A.Less    -> L.build_icmp L.Icmp.Slt
-                | A.Leq     -> L.build_icmp L.Icmp.Sle
-                | A.Greater -> L.build_icmp L.Icmp.Sgt
-                | A.Geq     -> L.build_icmp L.Icmp.Sge
-              ) e1' e2' "tmp" builder
+              let e1' = expr builder e1 
+              and e2' = expr builder e2 
+              and float_type = L.type_of(L.const_float double_t 1.1)
+            in
+              let type_of_e1' = L.type_of(e1') and type_of_e2' = L.type_of(e2')
+            in if type_of_e1' <> type_of_e2'
+                  then let ret= convert_type e1' e2' builder
+                in let x = fst ret and y = snd ret
+                  in match_type float_type op x y "temp" builder
+            else
+              match_type type_of_e1' op e1' e2' "tmp" builder
 
           | A.Index(e1,e2) as arr-> L.build_load (lexpr builder arr) "tmp" builder
 
@@ -320,8 +384,10 @@ let translate prog =
 
           | A.Unop(op, e) ->
               let e' = expr builder e in
+                let leftyp1=(L.type_of (L.const_int i32_t 1)) and leftyp2 = (L.type_of (L.const_float double_t 1.1))
+                 and leftyp3=(L.type_of e') in
               (match op with
-                A.Neg     -> L.build_neg
+                A.Neg     -> (if leftyp1 = leftyp3 then (L.build_neg) else (L.build_fneg))
               | A.Not     -> L.build_not
               | _  -> raise (Failure "Unsupported unary op")(* Ignore other unary ops *)
                 ) e' "tmp" builder
@@ -330,6 +396,8 @@ let translate prog =
             (* This ok only for few built_in functions *)
           | A.Call (A.Id "printi", [e]) -> L.build_call printf_func [|int_format_str ; (expr builder e) |] "printf" builder
           | A.Call (A.Id "printc", [e]) -> L.build_call printf_func [|char_format_str ; (expr builder e) |] "printf" builder
+          | A.Call (A.Id "prints", [e]) -> L.build_call printf_func [|string_format_str ; (expr builder e) |] "printf" builder
+            | A.Call (A.Id "printf", [e]) -> L.build_call printf_func [|float_format_str ; (expr builder e) |] "printf" builder
             (* A call without a dot expression refers to three possiblities. In order of precedence: *)
             (* constructor call, method call (within struct scope), function call *)
           | A.Call (A.Id f, act) ->
