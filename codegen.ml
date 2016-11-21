@@ -166,10 +166,10 @@ let translate prog =
       else if glbegin_func    == fdef then   L.build_call glbegin_func     [|act.(0) |] "" builder   
       else if glvertex_func   == fdef then   L.build_call glvertex_func    [|act.(0) ; act.(1) |] "" builder  
       else if glend_func      == fdef then   L.build_call glend_func       [|  |] "" builder     
-      else if glclear_func    == fdef then   L.build_call glclear_func     [|L.const_int i32_t 0x4000|] "" builder 
+      (*else if glclear_func    == fdef then   L.build_call glclear_func     [|L.const_int i32_t 0x4000|] "" builder*) 
       else if sin_func         == fdef then   L.build_call sin_func        [|act.(0)|] "" builder 
       else if cos_func         == fdef then   L.build_call cos_func        [|act.(0)|] "" builder 
-      else if glswap_func      == fdef then   L.build_call glswap_func       [||] "" builder    
+      (*else if glswap_func      == fdef then   L.build_call glswap_func       [||] "" builder   *)
       else if glutlvmain_func == fdef then   L.build_call glutlvmain_func  [||] "" builder
       else if glutrepost_func == fdef then   L.build_call glutrepost_func  [||] "" builder
       (* Draw Point *)
@@ -178,11 +178,9 @@ let translate prog =
             L.build_call glend_func [|  |] "" builder )
 
     in
-    let do_glut_init argc argv title builder = 
-        let (draw_func,_) = try StringMap.find "draw" function_decls with Not_found -> raise (Failure("draw not defined"))
-        in 
-        let (idle_func,_) = try StringMap.find "idle" function_decls with Not_found -> raise (Failure("idle not defined"))
-        in
+    let do_glut_init argc argv title draw_func builder = 
+        (*let (idle_func,_) = try StringMap.find "idle" function_decls with Not_found -> raise (Failure("idle not defined"))
+        in*)
          let const = L.const_int i32_t
         (* Call all the boilerplate functions *)
         in ignore(L.build_call glutinit_func      [|argc; argv|]            "" builder);
@@ -191,7 +189,7 @@ let translate prog =
            ignore(L.build_call glutinitwsiz_func  [|const 800 ; const 600|] "" builder);
            ignore(L.build_call glutcreatewin_func [|title|]                 "" builder);
            ignore(L.build_call glutdisplay_func   [| draw_func |]           "" builder);
-           ignore(L.build_call glutidle_func      [| idle_func |]           "" builder);
+           (*ignore(L.build_call glutidle_func      [| idle_func |]           "" builder);*)
            ignore(L.build_call glutsetopt_func    [|const 0x01F9; const 1|] "" builder);
                   L.build_call glutmainloop_func  [| |]   "" builder
 
@@ -303,6 +301,10 @@ let translate prog =
         (* The argv object itself *)
         let dummy_arg_2 =  L.define_global "glutargv" ( L.const_array i8ptr_t [|glut_argv_0; glut_argv_1|]) the_module
       in
+        let g_last_time = unique_global "g_last_time." (L.const_null double_t) in
+        let g_delay = unique_global "g_delay." (L.const_null double_t) in
+        let g_steps = unique_global "g_steps." (L.const_int i32_t 0) in
+        let g_maxiter = unique_global "g_maxiter." (L.const_int i32_t 0) in
 
 (* END OF GLUT RELATED *)
 (* Add shape array *)
@@ -313,6 +315,16 @@ let translate prog =
         let shape_list = unique_global "shape_list." (L.const_array shape_struct ( Array.make 100 (L.const_null shape_struct)))
         in
         let shape_list_ind = unique_global "shape_list_ind." (L.const_int i32_t 0)
+        in
+        let do_seconds_call builder =
+          let secptr = ignore(L.build_call  get_tday_func [|time_value ; L.const_null i8ptr_t |] "" builder);
+          L.build_gep time_value [|L.const_int i32_t 0; L.const_int i32_t 0 |] "sec" builder in
+          let usecptr = L.build_gep time_value [|L.const_int i32_t 0; L.const_int i32_t 1 |] "usec" builder in
+          let sec = L.build_sitofp (L.build_load secptr "tmp" builder) double_t "tmp" builder
+          and usec = L.build_sitofp (L.build_load usecptr "tmp" builder) double_t "tmp" builder
+          in
+          let usecisec = L.build_fmul usec (L.const_float double_t 1.0e-6) "tmp" builder in 
+                  L.build_fadd sec usecisec "seconds" builder
         in
         let get_unique_draw_func () =
             let get_draw_func = 
@@ -683,14 +695,6 @@ let translate prog =
               | A.Call (A.Id "printc", [e]) -> L.build_call printf_func [|char_format_str ; (expr builder e) |] "printf" builder
               | A.Call (A.Id "prints", [e]) -> L.build_call printf_func [|string_format_str ; (expr builder e) |] "printf" builder
               | A.Call (A.Id "printf", [e]) -> L.build_call printf_func [|float_format_str ; (expr builder e) |] "printf" builder
-              | A.Call (A.Id "seconds", e) -> let secptr = ignore(L.build_call  get_tday_func [|time_value ; L.const_null i8ptr_t |] "" builder);
-                                    L.build_gep time_value [|L.const_int i32_t 0; L.const_int i32_t 0 |] "sec" builder in
-                                    let usecptr = L.build_gep time_value [|L.const_int i32_t 0; L.const_int i32_t 1 |] "usec" builder in
-                                    let sec = L.build_sitofp (L.build_load secptr "tmp" builder) double_t "tmp" builder
-                                    and usec = L.build_sitofp (L.build_load usecptr "tmp" builder) double_t "tmp" builder
-                                    in
-                                    let usecisec = L.build_fmul usec (L.const_float double_t 1.0e-6) "tmp" builder in 
-                                            L.build_fadd sec usecisec "tmp" builder
               | A.Call (A.Id "addshape", el) -> 
                     let add_one_shape ex = 
                       let fdef' = L.const_bitcast (fst(lookup_method (fst(expr_type ex)) "draw")) (L.pointer_type void_i8p_t) in
@@ -703,7 +707,6 @@ let translate prog =
                       (* increment i *)
                       ignore( L.build_store (L.build_add i (L.const_int i32_t 1) "tmp" builder) shape_list_ind builder); ()
                     in ignore(List.iter add_one_shape el); L.undef void_t
-              | A.Call (A.Id "glut_init",e) -> do_glut_init dummy_arg_1 (L.const_bitcast dummy_arg_2 i8ptrptr_t) glut_argv_0  builder
                 (* A call without a dot expression refers to three possiblities. In order of precedence: *)
                 (* constructor call, method call (within struct scope), function call *)
               | A.Call (A.Id f, act) ->
@@ -838,8 +841,15 @@ let translate prog =
                         (StringMap.add n (L.const_int i32_t i, lookup_type n) m , i+1)
                       in List.fold_left add_to_closure (StringMap.empty, 0) outnames
                     in
-                    ignore( _build_function_body loopdecl fdecls [(closure_map, ClosureScope)]; 
-                              L.build_call (get_unique_draw_func()) [| |] "" builder );
+                    ignore( _build_function_body loopdecl fdecls [(closure_map, ClosureScope)]);
+                    (* Setup the timer and stepper values *)
+                    ignore(L.build_store (do_seconds_call builder) g_last_time builder);
+                    let e1' = expr builder e1 in let e2' = expr builder e2 in
+                    ignore(L.build_store e1' g_delay builder);
+                    ignore(L.build_store (L.const_int i32_t 0) g_steps builder);
+                    let delayflt = L.build_sdiv e2' e1' "stepsflt" builder in
+                    ignore(L.build_store (L.build_fptoui delayflt i32_t "stepsflt" builder) g_maxiter builder);
+                    ignore(do_glut_init dummy_arg_1 (L.const_bitcast dummy_arg_2 i8ptrptr_t) glut_argv_0 (get_unique_draw_func()) builder);
                     ignore(L.build_free table builder); builder
                 | t -> raise (Failure ("Unsupported statement type "^A.string_of_stmt t))(* Ignore other statement type *)
             in
