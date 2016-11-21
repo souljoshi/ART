@@ -99,9 +99,6 @@ let translate prog =
     and  double_double_t = L.function_type double_t [|double_t|]
     in
     let  void_callback_t  = L.function_type void_t[| L.pointer_type void_void_t |]
-    and  timer_callback_t = L.function_type void_t[| i32_t; L.pointer_type void_int_t; i32_t |]
-    and  malloc_t  = L.function_type (L.pointer_type i8_t) [| i32_t |]
-    and  free_t    = L.function_type void_t [| L.pointer_type i8_t |]
   in
 
     (* END OF GLUT ARG TYPES *)
@@ -117,8 +114,7 @@ let translate prog =
     and glutdisplay_func   = L.declare_function "glutDisplayFunc" void_callback_t  the_module
     and glutidle_func      = L.declare_function "glutIdleFunc" void_callback_t  the_module
     and glutsetopt_func    = L.declare_function "glutSetOption" void_int_int_t  the_module
-    and glutmainloop_func  = L.declare_function "glutMainLoop" void_void_t  the_module
-    and gluttimer_func  = L.declare_function  "glutTimerFunc"   timer_callback_t the_module  
+    and glutmainloop_func  = L.declare_function "glutMainLoop" void_void_t  the_module 
 
 
     (* NON BOILER PLATE FUNCIONS *)
@@ -134,9 +130,6 @@ let translate prog =
     (* technically not glut *)
     and sin_func = L.declare_function "sin" double_double_t the_module
     and cos_func = L.declare_function "cos" double_double_t the_module
-    (* malloc and free *)
-    and malloc_func = L.declare_function "malloc" malloc_t the_module
-    and free_func   = L.declare_function  "free" malloc_t the_module
     
     in
     (* END OF GLUT FUNCTION DECLARATIONS *)
@@ -274,12 +267,12 @@ let translate prog =
         (* Get an instruction builder that will emit instructions in the current function *)
         let builder = L.builder_at_end context (L.entry_block the_function) in
 
+        (* For unique globals, use a name that begins with '#' *)
         let unique_global n init = match (L.lookup_global n the_module) with
               Some g -> g
             | None -> L.define_global n init the_module
         in
-        (* Closure table address Variable *)
-        let clostbl = unique_global "clostbl" (L.const_null i8ptrptr_t)
+        let clostbl = unique_global "clostbl." (L.const_null i8ptrptr_t)
         in
 
         (* Format strings for printf call *)
@@ -461,16 +454,10 @@ let translate prog =
                       L.build_gep e' [|L.const_int i32_t 0; L.const_int i32_t ind |] "tmp" builder
                     ) with Not_found -> _lookup n builder (List.tl scopes) )
                   | (locls, ClosureScope) -> try 
-                                    ( let (i, t) =
-                                  ignore(L.build_call printf_func [|L.build_global_stringptr "%s: " "fmt" builder ; string_create "clostbluncast" builder|] "printf" builder);
-                        ignore(L.build_call printf_func [|int_format_str ; clostbl|] "printf" builder);StringMap.find n locls 
-                                      in
-                                      let clostbl = L.build_bitcast clostbl (L.pointer_type(L.array_type i8ptr_t (succ i))) "clostbl" builder in
+                                    ( let (i, t) = StringMap.find n locls in
+                                      let clostbl = L.build_bitcast (L.build_load clostbl "clostblptr" builder) (L.pointer_type(L.array_type i8ptr_t (succ i))) "clostblarr" builder in
                                       let ppt = L.build_load (L.build_gep clostbl [| L.const_int i32_t 0; i|] "valppt" builder) "valppt" builder in                  
-                                      let pt =  L.build_bitcast ppt  (L.pointer_type (ltype_of_typ t)) "valpt" builder in
-                                      let inpt = L.build_ptrtoint pt (L.pointer_type (ltype_of_typ t)) "valptint" builder in 
-                                      ignore(L.build_call printf_func [|L.build_global_stringptr "%s: " "fmt" builder ; string_create "clostblcast" builder|] "printf" builder);
-                        ignore(L.build_call printf_func [|int_format_str ; clostbl|] "printf" builder);pt
+                                      L.build_bitcast ppt  (L.pointer_type (ltype_of_typ t)) "valpt" builder
                                     ) with Not_found -> _lookup n builder (List.tl scopes) 
                 )
             in
@@ -654,28 +641,22 @@ let translate prog =
                     let outnames = StringSet.elements ( non_block_locals closdecl.A.locals 
                                   closdecl.A.body [(global_vars, GlobalScope)] ) (* assuming no params *)
                     in  
-                    let table = ignore(prerr_endline("[" ^ String.concat ", " outnames ^"]")); 
+                    let table = (*ignore(prerr_endline("[" ^ String.concat ", " outnames ^"]"));*)
                                 L.build_array_malloc i8ptr_t (L.const_int i32_t (List.length outnames)) "ctable" builder
+                    in
+                    let tablearr = L.build_bitcast table (L.pointer_type(L.array_type i8ptr_t (List.length outnames))) "ctablearr" builder in
+                    let clostblptr =  L.build_bitcast table i8ptrptr_t "toclostbl" builder
+
                     in (* Closure build and teardown is expensive *)
-                    let (closure_map, _) =
+                    let (closure_map, _) = ignore(L.build_store clostblptr clostbl builder); 
                       let add_to_closure (m,i) n = 
-                        (*let pospointer = L.build_bitcast (L.build_gep table [| L.const_int i32_t i |] "posp" builder ) i8ptrptr_t "pospb" builder in*)
                         let valpointer = L.build_bitcast (lookup n builder) i8ptr_t "valp" builder in
-                        let clostbl = L.build_bitcast clostbl (L.pointer_type(L.array_type i8ptr_t (List.length outnames))) "clostbl" builder in
-                        let pospointer = L.build_gep clostbl [| L.const_int i32_t 0; L.const_int i32_t i|] "valp" builder 
+                        let pospointer = L.build_gep tablearr [| L.const_int i32_t 0; L.const_int i32_t i|] "valp" builder 
                         in ignore(L.build_store valpointer pospointer builder);
-                        ignore(L.build_call printf_func [|L.build_global_stringptr "%s%d: " "fmt" builder ; string_create "Assigningtotable" builder;L.const_int i32_t i |] "printf" builder);
-                        ignore(L.build_call printf_func [|int_format_str ; valpointer |] "printf" builder);
                         (StringMap.add n (L.const_int i32_t i, lookup_type n) m , i+1)
-                      in  ignore(L.build_call printf_func [|L.build_global_stringptr "%s: " "fmt" builder ; string_create "tableaddress" builder|] "printf" builder);
-                        ignore(L.build_call printf_func [|int_format_str ; table|] "printf" builder); List.fold_left add_to_closure (StringMap.empty, 0) outnames
+                      in List.fold_left add_to_closure (StringMap.empty, 0) outnames
                     in
-                    let clostblptr = L.build_bitcast table i8ptrptr_t "toclostbl" builder
-                    in
-                    let ret = ignore(L.build_store clostblptr clostbl builder);
-              ignore(L.build_call printf_func [|L.build_global_stringptr "%s: " "fmt" builder ; string_create "clostblptr" builder|] "printf" builder);
-                        ignore(L.build_call printf_func [|int_format_str ; clostblptr|] "printf" builder);
-                              _build_function_body closdecl fdecls [(closure_map, ClosureScope)]; 
+                    let ret = _build_function_body closdecl fdecls [(closure_map, ClosureScope)]; 
                               L.build_call fdef [| |] "" builder
                     in ignore(L.build_free table builder); ret
 
