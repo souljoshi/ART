@@ -138,7 +138,7 @@ let translate prog =
     (* Function decls is a map from function names to tuples of llvm function representation
       and Ast declarations *)
     let function_decls =
-        let function_decl m fdecl = if fdecl.A.fname = "closure" then m else
+        let function_decl m fdecl =
           let name = fdecl.A.fname
           and formal_types = (* Types of parameters in llvm type repr *)
             Array.of_list (List.map (fun (t,_,pass) ->
@@ -660,35 +660,6 @@ let translate prog =
                       (* increment i *)
                       ignore( L.build_store (L.build_add i (L.const_int i32_t 1) "tmp" builder) shape_list_ind builder); ()
                     in ignore(List.iter add_one_shape el); L.undef void_t
-
-
-              | A.Call (A.Id "closure", e) -> 
-                    let ftype = L.function_type void_t [| |] in
-                    let fdef = L.define_function "closure" ftype the_module in
-                    let closdecl = List.hd (List.filter ( fun f ->(f.A.fname = "closure") ) functions) in
-                    let fdecls = StringMap.add "closure" (fdef, closdecl) function_decls in
-                    let outnames = StringSet.elements ( non_block_locals closdecl.A.locals 
-                                  closdecl.A.body [(global_vars, GlobalScope)] ) (* assuming no params *)
-                    in  
-                    let table = (*ignore(prerr_endline("[" ^ String.concat ", " outnames ^"]"));*)
-                                L.build_array_malloc i8ptr_t (L.const_int i32_t (List.length outnames)) "ctable" builder
-                    in
-                    let tablearr = L.build_bitcast table (L.pointer_type(L.array_type i8ptr_t (List.length outnames))) "ctablearr" builder in
-                    let clostblptr =  L.build_bitcast table i8ptrptr_t "toclostbl" builder
-
-                    in (* Closure build and teardown is expensive *)
-                    let (closure_map, _) = ignore(L.build_store clostblptr clostbl builder); 
-                      let add_to_closure (m,i) n = 
-                        let valpointer = L.build_bitcast (lookup n builder) i8ptr_t "valp" builder in
-                        let pospointer = L.build_gep tablearr [| L.const_int i32_t 0; L.const_int i32_t i|] "valp" builder 
-                        in ignore(L.build_store valpointer pospointer builder);
-                        (StringMap.add n (L.const_int i32_t i, lookup_type n) m , i+1)
-                      in List.fold_left add_to_closure (StringMap.empty, 0) outnames
-                    in
-                    let ret = _build_function_body closdecl fdecls [(closure_map, ClosureScope)]; 
-                              L.build_call fdef [| |] "" builder
-                    in ignore(L.build_free table builder); ret
-
               | A.Call (A.Id "glut_init",e) -> do_glut_init dummy_arg_1 (L.const_bitcast dummy_arg_2 i8ptrptr_t) glut_argv_0  builder
                 (* A call without a dot expression refers to three possiblities. In order of precedence: *)
                 (* constructor call, method call (within struct scope), function call *)
@@ -799,8 +770,35 @@ let translate prog =
                 | A.For (e1, e2, e3, body) -> stmt builder
                     ( A.Block ( [], [  A.Expr e1; A.While (e2, A.Block ([], [body; A.Expr e3]) ) ] ) )
                 | A.ForDec (vdecls, e2, e3, body) -> stmt builder ( A.Block(vdecls, [A.For(A.Noexpr , e2, e3, body)]) )
+                | A.Timeloop(s1, e1, s2, e2, stmt) ->
+                    let ftype = L.function_type void_t [| |] in
+                    let fdef = L.define_function "timeloop." ftype the_module in
+                    let loopdecl = {A.rettyp = A.Void ; A.fname = "timeloop." ; A.params = [];
+                                    A.locals = [(A.Float, s1,A.Exprinit(e1)) ; (A.Float, s2, A.Exprinit(e2))];
+                                    A.body = [stmt]; A.typ = A.Func ; A.owner=""} in
+                    let fdecls = StringMap.add "timeloop." (fdef, loopdecl) function_decls in
+                    let outnames = StringSet.elements ( non_block_locals loopdecl.A.locals 
+                                  loopdecl.A.body [(global_vars, GlobalScope)] )
+                    in  
+                    let table = (*ignore(prerr_endline("[" ^ String.concat ", " outnames ^"]"));*)
+                                L.build_array_malloc i8ptr_t (L.const_int i32_t (List.length outnames)) "ctable" builder
+                    in
+                    let tablearr = L.build_bitcast table (L.pointer_type(L.array_type i8ptr_t (List.length outnames))) "ctablearr" builder in
+                    let clostblptr =  L.build_bitcast table i8ptrptr_t "toclostbl" builder
+
+                    in (* Closure build and teardown is expensive *)
+                    let (closure_map, _) = ignore(L.build_store clostblptr clostbl builder); 
+                      let add_to_closure (m,i) n = 
+                        let valpointer = L.build_bitcast (lookup n builder) i8ptr_t "valp" builder in
+                        let pospointer = L.build_gep tablearr [| L.const_int i32_t 0; L.const_int i32_t i|] "valp" builder 
+                        in ignore(L.build_store valpointer pospointer builder);
+                        (StringMap.add n (L.const_int i32_t i, lookup_type n) m , i+1)
+                      in List.fold_left add_to_closure (StringMap.empty, 0) outnames
+                    in
+                    let ret = _build_function_body loopdecl fdecls [(closure_map, ClosureScope)]; 
+                              L.build_call fdef [| |] "" builder
+                    in ignore(L.build_free table builder); builder
                 | t -> raise (Failure ("Unsupported statement type "^A.string_of_stmt t))(* Ignore other statement type *)
-                | A.Timeloop(_, e1, _, e2, s) -> builder
             in
             (* Build the code for each statement in the block 
               and return the builder *)
@@ -826,7 +824,7 @@ let translate prog =
     let build_function_body fdecl = _build_function_body fdecl function_decls []
     in
 
-    List.iter build_function_body ( List.filter ( fun f -> not (f.A.fname = "closure") ) functions);
+    List.iter build_function_body functions;
     (* Build methods and constructors for each struct *)
     List.iter (fun sdecl -> List.iter build_function_body (sdecl.A.ctor::sdecl.A.methods)) structs;
     the_module
