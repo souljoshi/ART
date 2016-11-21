@@ -1,0 +1,7 @@
+int main()
+{
+    vec v1;
+    v1 = <10, 11>; // syntax error, only works with doubles for now
+
+    // v1 = <"abc", "123">; // syntax error
+}

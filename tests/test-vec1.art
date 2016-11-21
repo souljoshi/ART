@@ -1,0 +1,20 @@
+int main()
+{
+    vec v1;
+    vec v2;
+
+    v1 = <10.5, 12.5>;
+    v2 = <5.0, 10.0>;
+
+    printf(v1[0]);
+    printf(v1[1]);
+    printf(v2[0]);
+    printf(v2[1]);
+
+    v1 = v2;
+
+    printf(v1[0]);
+    printf(v1[1]);
+    printf(v2[0]);
+    printf(v2[1]);
+}
