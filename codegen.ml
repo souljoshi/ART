@@ -7,7 +7,7 @@ module StringMap = Map.Make(String)
 module StringSet = Set.Make( struct let compare = Pervasives.compare type t = string end )
 
 (* scope types *)
-type scope = GlobalScope | LocalScope | StructScope
+type scope = GlobalScope | LocalScope | StructScope | ClosureScope
 
 let translate prog = 
     (* Get the global variables and functions *)
@@ -23,9 +23,11 @@ let translate prog =
     and i8_t   = L.i8_type   context
     and void_t = L.void_type context
     and double_t = L.double_type context
-     in
-   let string_t = L.pointer_type i8_t
-   in
+    in
+    let string_t = L.pointer_type i8_t
+    and i8ptr_t = L.pointer_type i8_t
+    and i8ptrptr_t = L.pointer_type (L.pointer_type i8_t)
+    in
 
     (* General verson of lltype_of_typ that takes a struct map *)
     (* The struct map helps to get member types for structs in terms of previously *)
@@ -136,10 +138,8 @@ let translate prog =
     and malloc_func = L.declare_function "malloc" malloc_t the_module
     and free_func   = L.declare_function  "free" malloc_t the_module
     
-
-    (* END OF GLUT FUNCTION DECLARATIONS *)
-
     in
+    (* END OF GLUT FUNCTION DECLARATIONS *)
 
     (* Defining each of the declared functions *)
     (* Function decls is a map from function names to tuples of llvm function representation
@@ -264,7 +264,7 @@ let translate prog =
 
    (* Fill in the body of the given function *)
    (* This is general as it takes lets user specify function_decls map *)
-    let _build_function_body fdecl function_decls =
+    let rec _build_function_body fdecl function_decls closure_scopes =
         (* Get the corresponding llvm function value *)
         let (the_function, _) = (match fdecl.A.typ with
                   A.Func -> StringMap.find fdecl.A.fname function_decls
@@ -274,9 +274,15 @@ let translate prog =
         (* Get an instruction builder that will emit instructions in the current function *)
         let builder = L.builder_at_end context (L.entry_block the_function) in
 
+        let unique_global n init = match (L.lookup_global n the_module) with
+              Some g -> g
+            | None -> L.define_global n init the_module
+        in
+        (* Closure table address Variable *)
+        let clostbl = unique_global "clostbl" (L.const_null i8ptrptr_t)
+        in
+
         (* Format strings for printf call *)
-        let i8ptr_t = L.pointer_type i8_t in
-        let i8ptrptr_t = L.pointer_type i8ptr_t in 
         let int_format_str = L.build_global_stringptr "%d\n" "fmt" builder in
         let char_format_str = L.build_global_stringptr "%c" "fmt" builder in
         let string_format_str = L.build_global_stringptr "%s" "fmt" builder in
@@ -314,6 +320,7 @@ let translate prog =
                   | (locls, LocalScope)  -> ( try fst(StringMap.find n locls)
                                               with Not_found -> scope_iter n (List.tl scopes) )
                   | (_, StructScope) -> raise (Failure ("No struct scope in closure"))
+                  | (_, ClosureScope)  -> raise (Failure ("No nested closure"))
                 )
           in
           let rec non_local_expr = function
@@ -429,20 +436,42 @@ let translate prog =
                 in stmt_list,(locals, LocalScope)::scopes
             in
 
+            let string_create s builder =
+              let str = L.build_global_stringptr s "temp" builder in
+              L.build_in_bounds_gep str [|L.const_int i32_t 0|] "temps" builder
+            in
             (* Return the value for a variable by going through the scope chain *)
             let rec _lookup n builder scopes =
+                let succ ci =(*successor of const_int i32_t in int*)
+                      let int_of_const ci = ( match (L.int64_of_const ci) with
+                              Some i -> Int64.to_int(i)
+                            | None -> 0 )
+                     in (int_of_const ci) + 1
+                in
                 let hd = List.hd scopes in
                 (match hd with
                     (globs, GlobalScope) -> fst(StringMap.find n globs)
                   | (locls, LocalScope)  -> ( try fst(StringMap.find n locls)
                                               with Not_found -> _lookup n builder (List.tl scopes) )
-                  | (_, StructScope) -> try (
+                  | (_, StructScope) -> ( try (
                     let ind = try memb_index fdecl.A.owner n with Failure s -> raise Not_found in
                       (* If member, get its pointer by dereferencing the first argument
                         corresponding to the "this" pointer *)
                       let e' = L.param (fst (lookup_function fdecl.A.fname) ) 0  in
                       L.build_gep e' [|L.const_int i32_t 0; L.const_int i32_t ind |] "tmp" builder
-                    ) with Not_found -> _lookup n builder (List.tl scopes)
+                    ) with Not_found -> _lookup n builder (List.tl scopes) )
+                  | (locls, ClosureScope) -> try 
+                                    ( let (i, t) =
+                                  ignore(L.build_call printf_func [|L.build_global_stringptr "%s: " "fmt" builder ; string_create "clostbluncast" builder|] "printf" builder);
+                        ignore(L.build_call printf_func [|int_format_str ; clostbl|] "printf" builder);StringMap.find n locls 
+                                      in
+                                      let clostbl = L.build_bitcast clostbl (L.pointer_type(L.array_type i8ptr_t (succ i))) "clostbl" builder in
+                                      let ppt = L.build_load (L.build_gep clostbl [| L.const_int i32_t 0; i|] "valppt" builder) "valppt" builder in                  
+                                      let pt =  L.build_bitcast ppt  (L.pointer_type (ltype_of_typ t)) "valpt" builder in
+                                      let inpt = L.build_ptrtoint pt (L.pointer_type (ltype_of_typ t)) "valptint" builder in 
+                                      ignore(L.build_call printf_func [|L.build_global_stringptr "%s: " "fmt" builder ; string_create "clostblcast" builder|] "printf" builder);
+                        ignore(L.build_call printf_func [|int_format_str ; clostbl|] "printf" builder);pt
+                                    ) with Not_found -> _lookup n builder (List.tl scopes) 
                 )
             in
 
@@ -453,6 +482,8 @@ let translate prog =
                     (globs, GlobalScope) -> snd(StringMap.find n globs)
                   | (locls, LocalScope)  -> ( try snd(StringMap.find n locls)
                                               with Not_found -> _lookup_type n (List.tl scopes) )
+                  | (locls, ClosureScope) -> ( try snd(StringMap.find n locls)
+                                              with Not_found -> _lookup_type n (List.tl scopes) )
                   | (_, StructScope) -> try memb_type fdecl.A.owner n
                                         with Failure s -> _lookup_type n (List.tl scopes)
                 )
@@ -460,10 +491,6 @@ let translate prog =
             let lookup n builder = _lookup n builder scopes 
             in
             let lookup_type n = _lookup_type n scopes 
-            in 
-            let string_create s builder =
-              let str = L.build_global_stringptr s "temp" builder in
-              L.build_in_bounds_gep str [|L.const_int i32_t 0|] "temps" builder
             in
 
             (* Like string_of_typ but prints "circle" instead of "shape circle" *)
@@ -619,14 +646,38 @@ let translate prog =
                                     in
                                     let usecisec = L.build_fmul usec (L.const_float double_t 1.0e-6) "tmp" builder in 
                                             L.build_fadd sec usecisec "tmp" builder
-              | A.Call (A.Id "closure", e) -> (*)
+              | A.Call (A.Id "closure", e) -> 
                     let ftype = L.function_type void_t [| |] in
-                    let fdef = L.define_function "closure" ftype the_module in *)
+                    let fdef = L.define_function "closure" ftype the_module in
                     let closdecl = List.hd (List.filter ( fun f ->(f.A.fname = "closure") ) functions) in
-                    (*let fdecls = StringMap.add "closure" (fdef, closdecl) function_decls*)(* L.const_int i32_t 0*)
+                    let fdecls = StringMap.add "closure" (fdef, closdecl) function_decls in
                     let outnames = StringSet.elements ( non_block_locals closdecl.A.locals 
                                   closdecl.A.body [(global_vars, GlobalScope)] ) (* assuming no params *)
-                    in  ignore(prerr_endline("[" ^ String.concat ", " outnames ^"]")); L.const_int i32_t 0
+                    in  
+                    let table = ignore(prerr_endline("[" ^ String.concat ", " outnames ^"]")); 
+                                L.build_array_malloc i8ptr_t (L.const_int i32_t (List.length outnames)) "ctable" builder
+                    in (* Closure build and teardown is expensive *)
+                    let (closure_map, _) =
+                      let add_to_closure (m,i) n = 
+                        (*let pospointer = L.build_bitcast (L.build_gep table [| L.const_int i32_t i |] "posp" builder ) i8ptrptr_t "pospb" builder in*)
+                        let valpointer = L.build_bitcast (lookup n builder) i8ptr_t "valp" builder in
+                        let clostbl = L.build_bitcast clostbl (L.pointer_type(L.array_type i8ptr_t (List.length outnames))) "clostbl" builder in
+                        let pospointer = L.build_gep clostbl [| L.const_int i32_t 0; L.const_int i32_t i|] "valp" builder 
+                        in ignore(L.build_store valpointer pospointer builder);
+                        ignore(L.build_call printf_func [|L.build_global_stringptr "%s%d: " "fmt" builder ; string_create "Assigningtotable" builder;L.const_int i32_t i |] "printf" builder);
+                        ignore(L.build_call printf_func [|int_format_str ; valpointer |] "printf" builder);
+                        (StringMap.add n (L.const_int i32_t i, lookup_type n) m , i+1)
+                      in  ignore(L.build_call printf_func [|L.build_global_stringptr "%s: " "fmt" builder ; string_create "tableaddress" builder|] "printf" builder);
+                        ignore(L.build_call printf_func [|int_format_str ; table|] "printf" builder); List.fold_left add_to_closure (StringMap.empty, 0) outnames
+                    in
+                    let clostblptr = L.build_bitcast table i8ptrptr_t "toclostbl" builder
+                    in
+                    let ret = ignore(L.build_store clostblptr clostbl builder);
+              ignore(L.build_call printf_func [|L.build_global_stringptr "%s: " "fmt" builder ; string_create "clostblptr" builder|] "printf" builder);
+                        ignore(L.build_call printf_func [|int_format_str ; clostblptr|] "printf" builder);
+                              _build_function_body closdecl fdecls [(closure_map, ClosureScope)]; 
+                              L.build_call fdef [| |] "" builder
+                    in ignore(L.build_free table builder); ret
 
               | A.Call (A.Id "glut_init",e) -> do_glut_init dummy_arg_1 (L.const_bitcast dummy_arg_2 i8ptrptr_t) glut_argv_0  builder
                 (* A call without a dot expression refers to three possiblities. In order of precedence: *)
@@ -748,10 +799,10 @@ let translate prog =
         (* Construct the scopes list before calling build_block_body *)
         let scopes_list = match fdecl.A.typ with
                     (* Functions can't access members so no struct scope *)
-                    A.Func -> [(formal_vars, LocalScope); (global_vars, GlobalScope) ]
+                    A.Func -> closure_scopes@[(formal_vars, LocalScope); (global_vars, GlobalScope) ]
                     (* Don't need  struct scope map as we have one and the type doesn't match as well.
                        So we are using an empty map *)
-                  | _      -> [(formal_vars, LocalScope); (StringMap.empty, StructScope) ; (global_vars, GlobalScope)]
+                  | _      -> closure_scopes@[(formal_vars, LocalScope); (StringMap.empty, StructScope) ; (global_vars, GlobalScope)]
         in 
 
         let builder = build_block_body (fdecl.A.locals, fdecl.A.body) builder scopes_list in
@@ -761,7 +812,7 @@ let translate prog =
           | t -> L.build_ret (L.const_int (ltype_of_typ t) 0))
     in
     (* old build_function_body *)
-    let build_function_body fdecl = _build_function_body fdecl function_decls
+    let build_function_body fdecl = _build_function_body fdecl function_decls []
     in
 
     List.iter build_function_body ( List.filter ( fun f -> not (f.A.fname = "closure") ) functions);
