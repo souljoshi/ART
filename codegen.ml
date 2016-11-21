@@ -165,8 +165,7 @@ let translate prog =
            if glcolor_func    == fdef then   L.build_call glcolor_func     [|act.(0) ; act.(1); act.(2)|] "" builder   
       else if glvertex_func   == fdef then   L.build_call glvertex_func    [|act.(0) ; act.(1) |] "" builder  
       else if sin_func         == fdef then   L.build_call sin_func        [|act.(0)|] "" builder 
-      else if cos_func         == fdef then   L.build_call cos_func        [|act.(0)|] "" builder 
-      else if glutlvmain_func == fdef then   L.build_call glutlvmain_func  [||] "" builder
+      else if cos_func         == fdef then   L.build_call cos_func        [|act.(0)|] "" builder
       (* Draw Point *)
       else  (ignore( L.build_call glbegin_func     [|L.const_int i32_t 0 |] "" builder);
             ignore(L.build_call glvertex_func    [|act.(0) ; act.(1) |] "" builder );
@@ -360,7 +359,21 @@ let translate prog =
             | None -> get_draw_func)
         in
         let get_idle_func loop_func =
-           let idle_stop_condition builder = ()
+           let idle_stop_condition steps idle_func target_bb builder =
+              let bool_val = L.build_icmp  L.Icmp.Sge steps (L.build_load g_maxiter "maxiter" builder) "idlestpcond" builder in
+              let merge_bb = L.append_block context "merge" idle_func in (* Merge block *)
+              let merge_builder = L.builder_at_end context merge_bb in
+              let then_bb = L.append_block context "then" idle_func in
+              let then_builder = L.builder_at_end context then_bb in
+              ignore (L.build_cond_br bool_val then_bb merge_bb builder);
+              ignore (L.build_call glutlvmain_func  [||] "" then_builder);
+              ignore (L.build_br merge_bb then_builder);       
+              ignore (L.build_call glutrepost_func  [||] "" merge_builder);
+              ignore (L.build_br target_bb merge_builder);
+              merge_bb
+
+
+
            in
            let idle_func = L.define_function "idle." void_void_t the_module in
            let builder = L.builder_at_end context (L.entry_block idle_func) in
@@ -378,11 +391,10 @@ let translate prog =
            let then_builder = L.builder_at_end context then_bb in
            let stepinc = L.build_fptoui (L.build_fdiv lag delay "finc" then_builder) i32_t "stepinc" then_builder in
            let newsteps = L.build_add (L.build_load g_steps "steps" then_builder) stepinc "newsteps" then_builder in
+           ignore(L.build_store newsteps g_steps then_builder);
            ignore (L.build_call loop_func [| |] "" then_builder);
            ignore (L.build_store currtval g_last_time then_builder);
-           ignore (idle_stop_condition builder);
-           ignore (L.build_call glutrepost_func  [||] "" then_builder);
-           ignore (L.build_br merge_bb then_builder);
+           ignore (idle_stop_condition newsteps idle_func merge_bb then_builder);
 
            (* builder is in block that contains if stmt *)
            ignore (L.build_cond_br bool_val then_bb merge_bb builder);
@@ -871,7 +883,9 @@ let translate prog =
                     let delayflt = L.build_fdiv e2' e1' "stepsflt" builder in
                     ignore(L.build_store (L.build_fptoui delayflt i32_t "stepsflt" builder) g_maxiter builder);
                     ignore(do_glut_init dummy_arg_1 (L.const_bitcast dummy_arg_2 i8ptrptr_t) glut_argv_0 (get_unique_draw_func())  (get_idle_func fdef)builder);
-                    ignore(L.build_free table builder); builder
+                    ignore(L.build_free table builder); 
+                    ignore(L.build_store (L.const_int i32_t 0) shape_list_ind builder);
+                    builder
                 | t -> raise (Failure ("Unsupported statement type "^A.string_of_stmt t))(* Ignore other statement type *)
             in
             (* Build the code for each statement in the block 
