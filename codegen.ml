@@ -92,6 +92,7 @@ let translate prog =
     and  glut_crwin_t = L.function_type i32_t [| L.pointer_type i8_t |]
     and  get_tday_t = L.function_type i32_t [| L.pointer_type timeval_struct_t ; L.pointer_type i8_t|]
     and  void_void_t = L.function_type void_t[|  |]
+    and  void_i8p_t = L.function_type void_t[| i8ptr_t |]
     and  void_int_t  = L.function_type  void_t [| i32_t |]
     and  void_int_int_t  = L.function_type  void_t [| i32_t ; i32_t|]
     and  void_2d_t  = L.function_type  void_t [| double_t ; double_t|]
@@ -307,12 +308,54 @@ let translate prog =
 (* Add shape array *)
         let shape_struct =
           let named_struct = L.named_struct_type context "shape_struct."
-          in  L.struct_set_body named_struct [| i8ptr_t ; L.pointer_type void_void_t  |] false ; named_struct
+          in  L.struct_set_body named_struct [| i8ptr_t ; L.pointer_type void_i8p_t |] false ; named_struct
         in
         let shape_list = unique_global "shape_list." (L.const_array shape_struct ( Array.make 100 (L.const_null shape_struct)))
         in
         let shape_list_ind = unique_global "shape_list_ind." (L.const_int i32_t 0)
         in
+        let get_unique_draw_func () =
+            let get_draw_func = 
+                let draw_func = L.define_function "draw." void_void_t the_module in
+                let builder = L.builder_at_end context (L.entry_block draw_func) in
+                let i = ignore (L.build_call glclear_func     [|L.const_int i32_t 0x4000|] "" builder); 
+                        L.build_alloca i32_t "drawi" builder in
+                ignore (L.build_store (L.const_int i32_t 0) i  builder);
+
+                let pred_bb = L.append_block context "while" draw_func in
+                ignore (L.build_br pred_bb builder); (* builder is in block that contains while stm *)
+
+                (* Body Block *)
+                let body_bb = L.append_block context "while_body" draw_func in
+                let body_builder = L.builder_at_end context body_bb in 
+                let ib = L.build_load i "ib" body_builder in
+                (* get the shape *)
+                let shape = L.build_load (L.build_gep shape_list [| L.const_int i32_t 0; ib ;L.const_int i32_t 0|] "slp" body_builder) "shp" body_builder in
+                (* get the function pointer*)
+                let drawshape = L.build_load (L.build_gep shape_list [| L.const_int i32_t 0; ib; L.const_int i32_t 1|] "slfp" body_builder) "drshp" body_builder in
+                ignore(L.build_call drawshape [| shape |] "" body_builder);
+                (* inrement i *)
+                ignore( L.build_store (L.build_add ib (L.const_int i32_t 1) "ib" body_builder) i body_builder);
+                ignore(L.build_br pred_bb body_builder);
+
+                let pred_builder = L.builder_at_end context pred_bb in
+                let bool_val = 
+                  let nmax = L.build_load shape_list_ind "sindex" pred_builder in
+                  let ip = L.build_load i "ip" pred_builder in
+                  L.build_icmp L.Icmp.Slt ip nmax "tp" pred_builder
+                in
+                let merge_bb = L.append_block context "merge" draw_func in
+                ignore (L.build_cond_br bool_val body_bb merge_bb pred_builder);
+                let merge_builder = L.builder_at_end context merge_bb in
+                ignore(L.build_call glswap_func       [||] "" merge_builder);
+                ignore (L.build_ret_void merge_builder); draw_func
+            in
+           (match (L.lookup_function "draw." the_module) with
+              Some f -> f
+            | None -> get_draw_func)
+        in
+
+
         (* closure related functions *)
         (* get list of name references to variables that are not block local 
            i.e variables referenced that are neithe in local_decls or in scopes *)
@@ -650,7 +693,7 @@ let translate prog =
                                             L.build_fadd sec usecisec "tmp" builder
               | A.Call (A.Id "addshape", el) -> 
                     let add_one_shape ex = 
-                      let fdef' = L.const_bitcast (fst(lookup_method (fst(expr_type ex)) "draw")) (L.pointer_type void_void_t) in
+                      let fdef' = L.const_bitcast (fst(lookup_method (fst(expr_type ex)) "draw")) (L.pointer_type void_i8p_t) in
                       let i = L.build_load shape_list_ind "sindex" builder in
                       let ex' = L.build_bitcast (lexpr builder ex) i8ptr_t "shp" builder in
                       (* store the shape *)
@@ -795,9 +838,9 @@ let translate prog =
                         (StringMap.add n (L.const_int i32_t i, lookup_type n) m , i+1)
                       in List.fold_left add_to_closure (StringMap.empty, 0) outnames
                     in
-                    let ret = _build_function_body loopdecl fdecls [(closure_map, ClosureScope)]; 
-                              L.build_call fdef [| |] "" builder
-                    in ignore(L.build_free table builder); builder
+                    ignore( _build_function_body loopdecl fdecls [(closure_map, ClosureScope)]; 
+                              L.build_call (get_unique_draw_func()) [| |] "" builder );
+                    ignore(L.build_free table builder); builder
                 | t -> raise (Failure ("Unsupported statement type "^A.string_of_stmt t))(* Ignore other statement type *)
             in
             (* Build the code for each statement in the block 
