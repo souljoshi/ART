@@ -1,0 +1,21 @@
+// This test is to see if arrays support doubles.
+
+// include doubles in the array
+void main()
+{	
+
+	double [5] x;
+	int i;
+	string s;
+	s = " ";
+
+	x[0] = 1.777777;
+	x[1] = 2.777777;
+	x[2] = 3.7;
+	x[3] = 4.777;
+	x[4] = 5.7777;
+	for (i = 0; i<5; i += 1){
+		printf(x[i]);
+		//prints(s);
+	}
+}
