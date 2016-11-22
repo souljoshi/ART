@@ -1,7 +1,7 @@
 // This test is to see if arrays support doubles.
 
 // include doubles in the array
-void main()
+int main()
 {	
 
 	double [5] x;
