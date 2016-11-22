@@ -285,7 +285,7 @@ let translate prog =
         let dummy_arg_1 = L.define_global "argc" (L.const_int i32_t 1) the_module in
 
         (* The first element of argv *)
-        let glut_argv_0  = L.const_bitcast (unique_global_stringptr "glut.art" "glutstr.") i8ptr_t
+        let glut_argv_0  = L.const_bitcast (unique_global_stringptr "ART" "glutstr.") i8ptr_t
         in
         (* Second elment of argv *)
         let glut_argv_1 = (L.const_null i8ptr_t ) in
