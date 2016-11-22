@@ -1,0 +1,21 @@
+int foo(int y)
+{
+    int x;
+    if (y < 10)
+    {
+        prints("if block\n");
+        x = 100;
+    }
+    else
+    {
+        prints("else block\n");
+        x = 50;
+    }
+    return x;
+}
+
+int main()
+{
+    printi(foo(500));
+    printi(foo(3));
+}

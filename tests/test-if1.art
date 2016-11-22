@@ -1,0 +1,15 @@
+int foo(int y)
+{
+    int x;
+    if (y < 10)
+        x = 100;
+    else
+        x = 50;
+    return x;
+}
+
+int main()
+{
+    printi(foo(500));
+    printi(foo(3));
+}

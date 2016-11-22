@@ -1,0 +1,13 @@
+int main()
+{
+    int x;
+    x = 0;
+
+    if (x == 0)
+    {
+        x = 10;
+        printi(x);
+        printi(y); // y not defined
+    }
+
+}

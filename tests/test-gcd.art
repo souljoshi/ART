@@ -1,0 +1,20 @@
+int gcd(int a, int b)
+{
+    while(a != b)
+    {
+        if (a > b)
+            a = a - b;
+        else
+            b = b -a;
+    }
+    return a;
+}
+
+int main()
+{
+    printi(gcd(7, 63));
+    printi(gcd(2, 18));
+    printi(gcd(3, 15));
+    printi(gcd(1, 1));
+    printi(gcd(100, 150));
+}
