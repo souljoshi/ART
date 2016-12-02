@@ -6,11 +6,29 @@ module StringMap = Map.Make(String)
 
 (* Semantic checking of a program. Returns possibly modified Ast if successful,
    throws an exception if something is wrong. *)
+let report_dup  exceptf list =
+        let rec helper = function 
+            n1 :: n2 ::_ when n1=n2 -> raise (Failure(exceptf n1) )
+            |_ :: t -> helper t
+            |[]->()
+
+        in helper(List.sort compare list)
+
 
 let check prog =
     (* Get the global variables and functions *)
     let globals = prog.v
     and functions = prog.f in
+
+    let function_decls =
+        List.map(fun fd -> fd.fname) functions
+    in
+
+    let _ = try List.find (fun s-> s ="main") function_decls 
+        with Not_found -> raise(Failure (" Need a main function"))
+in
+
+    report_dup(fun n-> "Duplicate Function Name " ^n)(List.map (fun fd -> fd.fname)functions);
 
     (* A map of all struct/shape types *)
     let structs = List.fold_left ( fun m st -> StringMap.add st.sname st m)
