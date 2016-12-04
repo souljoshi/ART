@@ -301,7 +301,7 @@ let translate prog =
             
         let match_type typ op =
               let float_type = (L.type_of (L.const_float double_t 1.1))
-              and vec_type = L.type_of(L.const_vector [|L.const_float double_t 1.1 ; L.const_float double_t 1.1 |]) 
+              (* and vec_type = L.type_of(L.const_vector [|L.const_float double_t 1.1 ; L.const_float double_t 1.1 |]) *)
             in if typ=float_type
               then match op with
                 A.Add -> L.build_fadd
@@ -383,20 +383,24 @@ let translate prog =
             else
               (* Vector Operations *)
               if type_of_e1' = vec_type
-              (* want to extract x_of_e1, y_of_e1, x_of_e2, y_of_e2,
-                 then do relevant vector operation, for example vector addition will be x_of_e1 + x_of_e2 and y_of_e1 + y_of_e2,
-                 then need to make a new vector with the result of the vector operation
+              (* want to extract x_of_e1', y_of_e1', x_of_e2', y_of_e2',
+                 then do relevant vector operation, for example vector addition will be:
+                 x_of_e' = x_of_e1' + x_of_e2',
+                 y_of_e' = y_of_e1' + y_of_e2'
+                 then need to make a new vector with the result of the vector operation:
+                 <x_of_e' , y_of_e'>
                *)
-              (*
-                then let fst_of_e1 = L.const_extractelement e1' (L.const_int i32_t 0)
-                  and snd_of_e1 = L.const_extractelement e1' (L.const_int i32_t 1)
-                  and fst_of_e2 = L.const_extractelement e2' (L.const_int i32_t 0)
-                  and snd_of_e2 = L.const_extractelement e2' (L.const_int i32_t 1)
-              in
-                L.const_vector [| (match_type float_type op fst_of_e1 fst_of_e2 "tmp1" builder) ; (match_type float_type op snd_of_e1 snd_of_e2 "tmp2" builder) |]
-                (*match_type float_type op fst_of_e1 fst_of_e2 "tmp1" builder*)
-                (*match_type float_type op snd_of_e1 snd_of_e2 "tmp2" builder*)
+
+                (*
+                then let x_of_e1' = L.const_extractelement e1' (L.const_int i32_t 0)
+                  and y_of_e1' = L.const_extractelement e1' (L.const_int i32_t 1)
+                  and x_of_e2' = L.const_extractelement e2' (L.const_int i32_t 0)
+                  and y_of_e2' = L.const_extractelement e2' (L.const_int i32_t 1)
+                in
+                  (* L.const_vector [| (match_type float_type op x_of_e1' x_of_e2' "tmp1" builder) ; (match_type float_type op y_of_e1' y_of_e2' "tmp2" builder) |] *)
+                  L.build_gep e1' [| (match_type float_type op x_of_e1' x_of_e2' "tmp1" builder) ; (match_type float_type op y_of_e1' y_of_e2' "tmp2" builder) |] "tmp" builder
                 *)
+
                 then match_type float_type op (L.const_float double_t 1.5) (L.const_float double_t 2.5) "tmp" builder (*placeholder*)
               else
                 match_type type_of_e1' op e1' e2' "tmp" builder
