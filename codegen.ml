@@ -301,38 +301,48 @@ let translate prog =
             
         let match_type typ op =
               let float_type = (L.type_of (L.const_float double_t 1.1))
-              (* and vec_type = L.type_of(L.const_vector [|L.const_float double_t 1.1 ; L.const_float double_t 1.1 |]) *)
-            in if typ=float_type
+              and vec_type = L.type_of(L.const_vector [|L.const_float double_t 1.1 ; L.const_float double_t 1.1 |])
+            in 
+            if typ=vec_type
               then match op with
                 A.Add -> L.build_fadd
                 | A.Sub     -> L.build_fsub
                 | A.Mult    -> L.build_fmul
-                | A.Div     -> L.build_fdiv
-                | A.And     -> L.build_and
-                | A.Or      -> L.build_or
-                | A.Mod     -> raise (Failure "Cannot mod a float")
-                | A.Equal   -> L.build_icmp L.Icmp.Eq
-                | A.Neq     -> L.build_icmp L.Icmp.Ne
-                | A.Less    -> L.build_icmp L.Icmp.Slt
-                | A.Leq     -> L.build_icmp L.Icmp.Sle
-                | A.Greater -> L.build_icmp L.Icmp.Sgt
-                | A.Geq     -> L.build_icmp L.Icmp.Sge
+                | A.Div     -> L.build_sdiv
+                | _         -> raise (Failure "Operation not supported for vectors")
 
-
-              else match op with
-                  A.Add -> L.build_add
-                  | A.Sub     -> L.build_sub
-                  | A.Mult    -> L.build_mul
-                  | A.Div     -> L.build_sdiv
+            else
+              if typ=float_type
+                then match op with
+                  A.Add -> L.build_fadd
+                  | A.Sub     -> L.build_fsub
+                  | A.Mult    -> L.build_fmul
+                  | A.Div     -> L.build_fdiv
                   | A.And     -> L.build_and
                   | A.Or      -> L.build_or
-                  | A.Mod     -> L.build_srem
+                  | A.Mod     -> raise (Failure "Cannot mod a float")
                   | A.Equal   -> L.build_icmp L.Icmp.Eq
                   | A.Neq     -> L.build_icmp L.Icmp.Ne
                   | A.Less    -> L.build_icmp L.Icmp.Slt
                   | A.Leq     -> L.build_icmp L.Icmp.Sle
                   | A.Greater -> L.build_icmp L.Icmp.Sgt
                   | A.Geq     -> L.build_icmp L.Icmp.Sge
+
+
+                else match op with
+                    A.Add -> L.build_add
+                    | A.Sub     -> L.build_sub
+                    | A.Mult    -> L.build_mul
+                    | A.Div     -> L.build_sdiv
+                    | A.And     -> L.build_and
+                    | A.Or      -> L.build_or
+                    | A.Mod     -> L.build_srem
+                    | A.Equal   -> L.build_icmp L.Icmp.Eq
+                    | A.Neq     -> L.build_icmp L.Icmp.Ne
+                    | A.Less    -> L.build_icmp L.Icmp.Slt
+                    | A.Leq     -> L.build_icmp L.Icmp.Sle
+                    | A.Greater -> L.build_icmp L.Icmp.Sgt
+                    | A.Geq     -> L.build_icmp L.Icmp.Sge
               
           in
 
@@ -400,8 +410,8 @@ let translate prog =
                     in
                       (* match_type float_type op x_of_e1' x_of_e2' "tmp" builder *)
                       
-                      let ret_x = match_type float_type op x_of_e1' x_of_e2' "tmp1" builder
-                      and ret_y = match_type float_type op y_of_e1' y_of_e2' "tmp2" builder
+                      let ret_x = match_type vec_type op x_of_e1' x_of_e2' "tmp1" builder
+                      and ret_y = match_type vec_type op y_of_e1' y_of_e2' "tmp2" builder
                     in
                       (* match_type float_type op ret_x ret_y "tmp" builder *)
                     
