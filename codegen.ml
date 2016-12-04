@@ -376,34 +376,44 @@ let translate prog =
               and vec_type = L.type_of(L.const_vector [|L.const_float double_t 1.1 ; L.const_float double_t 1.1 |])
             in
               let type_of_e1' = L.type_of(e1') and type_of_e2' = L.type_of(e2')
-            in if type_of_e1' <> type_of_e2'
-                  then let ret= convert_type e1' e2' builder
-                in let x = fst ret and y = snd ret
-                  in match_type float_type op x y "temp" builder
-            else
-              (* Vector Operations *)
-              if type_of_e1' = vec_type
-              (* want to extract x_of_e1', y_of_e1', x_of_e2', y_of_e2',
-                 then do relevant vector operation, for example vector addition will be:
-                 x_of_e' = x_of_e1' + x_of_e2',
-                 y_of_e' = y_of_e1' + y_of_e2'
-                 then need to make a new vector with the result of the vector operation:
-                 <x_of_e' , y_of_e'>
-               *)
+              in 
+                if type_of_e1' <> type_of_e2'
+                      then let ret= convert_type e1' e2' builder
+                  in let x = fst ret and y = snd ret
+                    in match_type float_type op x y "temp" builder
+                else
+                  (* Vector Operations *)
+                  if type_of_e1' = vec_type
+                  (* want to extract x_of_e1', y_of_e1', x_of_e2', y_of_e2',
+                     then do relevant vector operation, for example vector addition will be:
+                     x_of_e' = x_of_e1' + x_of_e2',
+                     y_of_e' = y_of_e1' + y_of_e2'
+                     then need to make a new vector with the result of the vector operation:
+                     <x_of_e' , y_of_e'>
+                   *)
 
-                (*
-                then let x_of_e1' = L.const_extractelement e1' (L.const_int i32_t 0)
-                  and y_of_e1' = L.const_extractelement e1' (L.const_int i32_t 1)
-                  and x_of_e2' = L.const_extractelement e2' (L.const_int i32_t 0)
-                  and y_of_e2' = L.const_extractelement e2' (L.const_int i32_t 1)
-                in
-                  (* L.const_vector [| (match_type float_type op x_of_e1' x_of_e2' "tmp1" builder) ; (match_type float_type op y_of_e1' y_of_e2' "tmp2" builder) |] *)
-                  L.build_gep e1' [| (match_type float_type op x_of_e1' x_of_e2' "tmp1" builder) ; (match_type float_type op y_of_e1' y_of_e2' "tmp2" builder) |] "tmp" builder
-                *)
+                    
+                    then let x_of_e1' = L.const_extractelement e1' (L.const_int i32_t 0)
+                      and y_of_e1' = L.const_extractelement e1' (L.const_int i32_t 1)
+                      and x_of_e2' = L.const_extractelement e2' (L.const_int i32_t 0)
+                      and y_of_e2' = L.const_extractelement e2' (L.const_int i32_t 1)
+                    in
+                      (*match_type float_type op x_of_e1' x_of_e2' "tmp" builder*)
+                      
+                      let ret_x = match_type float_type op x_of_e1' x_of_e2' "tmp1" builder
+                      and ret_y = match_type float_type op y_of_e1' y_of_e2' "tmp2" builder
+                    in
+                      match_type float_type op ret_x ret_y "tmp" builder
+                    
+                      (* L.const_vector [| (match_type float_type op x_of_e1' x_of_e2' "tmp1" builder) ; (match_type float_type op y_of_e1' y_of_e2' "tmp2" builder) |] *)
+                      (* L.build_gep e1' [| (match_type float_type op x_of_e1' x_of_e2' "tmp1" builder) ; (match_type float_type op y_of_e1' y_of_e2' "tmp2" builder) |] "tmp" builder *)
+                    
 
-                then match_type float_type op (L.const_float double_t 1.5) (L.const_float double_t 2.5) "tmp" builder (*placeholder*)
-              else
-                match_type type_of_e1' op e1' e2' "tmp" builder
+                    (* then L.build_gep (L.const_float double_t 1.5) [|L.const_float double_t 1.5; L.const_float double_t 2.5|] "tmp" builder *)
+                    (* then L.const_vector [|L.const_float double_t 1.5; L.const_float double_t 2.5|] *)
+                    (* then match_type float_type op (L.const_float double_t 1.5) (L.const_float double_t 2.5) "tmp" builder *) (*placeholder*)
+                  else
+                    match_type type_of_e1' op e1' e2' "tmp" builder
 
           | A.Index(e1,e2) as arr-> L.build_load (lexpr builder arr) "tmp" builder
 
