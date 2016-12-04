@@ -4,6 +4,11 @@ int main()
     vec v2;
     vec v3;
     vec v4;
+    vec v5;
+    vec v6;
+    vec v7;
+    vec v8;
+    vec v9;
     double f1;
     double f2;
     double f3;
@@ -16,9 +21,17 @@ int main()
 
     f3 = f1 + f2;
 
-    //v4 = v2 + v3; // this is giving error right now
-    //v4 = <66.5, 12.0> + v3;
+    //v4 = v2 + v3; // this is giving error right now, need to fix
+
+    //v4 = <66.5, 12.0> + v3; // this is giving error right now, need to fix
+
     v4 = <66.5, 12.0> + <1.0, 55.1>;
+    v5 = <66.5, 12.0> - <1.0, 55.1>;
+    v6 = <66.5, 12.0> * <1.0, 55.1>;
+    v7 = <66.5, 12.0> / <1.0, 55.1>;
+
+    //v8 = <66.5, 12.0> % <1.0, 55.1>; 
+    //will give error "Operation not supported for vectors" as expected
 
     v1[0] = 10.5;
     v1[1] = 4.2;
@@ -36,5 +49,11 @@ int main()
 
     printf(v4[0]);
     printf(v4[1]);
+    printf(v5[0]);
+    printf(v5[1]);
+    printf(v6[0]);
+    printf(v6[1]);
+    printf(v7[0]);
+    printf(v7[1]);
     printf(f3);
 }

@@ -308,7 +308,7 @@ let translate prog =
                 A.Add -> L.build_fadd
                 | A.Sub     -> L.build_fsub
                 | A.Mult    -> L.build_fmul
-                | A.Div     -> L.build_sdiv
+                | A.Div     -> L.build_fdiv
                 | _         -> raise (Failure "Operation not supported for vectors")
 
             else
