@@ -8,7 +8,7 @@ module StringMap = Map.Make(String)
    throws an exception if something is wrong. *)
 let report_dup  exceptf list =
         let rec helper = function 
-            n1 :: n2 ::_ when n1=n2 -> raise (Failure(exceptf n1) )
+            n1 :: n2 ::_ when n1=n2 && n1 <> "draw" -> raise (Failure(exceptf n1) )
             |_ :: t -> helper t
             |[]->()
 
@@ -20,6 +20,11 @@ let check prog =
     let globals = prog.v
     and functions = prog.f in
 
+    
+    report_dup(fun n-> "Duplicate Function Name " ^n)(List.map (fun fd -> fd.fname)functions);
+
+    report_dup(fun n-> "Duplicate Global Name " ^n)(List.map (fun (_,a,_) ->  a)globals);
+
     let function_decls =
         List.map(fun fd -> fd.fname) functions
     in
@@ -27,8 +32,13 @@ let check prog =
     let _ = try List.find (fun s-> s ="main") function_decls 
         with Not_found -> raise(Failure (" Need a main function"))
 in
+    let function_check func =
 
-    report_dup(fun n-> "Duplicate Function Name " ^n)(List.map (fun fd -> fd.fname)functions);
+    report_dup(fun n-> "Duplicate Parameter Name " ^n ^"in " ^ func.fname)(List.map (fun (_,a,_) ->  a)func.params);
+    report_dup(fun n-> "Duplicate local Name " ^n ^ " in " ^ func.fname)(List.map (fun (_,a,_) ->  a)func.locals);
+in
+  List.iter function_check functions;
+
 
     (* A map of all struct/shape types *)
     let structs = List.fold_left ( fun m st -> StringMap.add st.sname st m)
@@ -53,3 +63,7 @@ in
     in
     { s = List.map (fun st -> StringMap.find st.sname structs) prog.s;
       f = List.rev funcs ; v = globals }
+
+  
+
+  
