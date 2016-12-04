@@ -398,14 +398,20 @@ let translate prog =
                       and x_of_e2' = L.const_extractelement e2' (L.const_int i32_t 0)
                       and y_of_e2' = L.const_extractelement e2' (L.const_int i32_t 1)
                     in
-                      (*match_type float_type op x_of_e1' x_of_e2' "tmp" builder*)
+                      (* match_type float_type op x_of_e1' x_of_e2' "tmp" builder *)
                       
                       let ret_x = match_type float_type op x_of_e1' x_of_e2' "tmp1" builder
                       and ret_y = match_type float_type op y_of_e1' y_of_e2' "tmp2" builder
                     in
-                      match_type float_type op ret_x ret_y "tmp" builder
+                      (* match_type float_type op ret_x ret_y "tmp" builder *)
                     
-                      (* L.const_vector [| (match_type float_type op x_of_e1' x_of_e2' "tmp1" builder) ; (match_type float_type op y_of_e1' y_of_e2' "tmp2" builder) |] *)
+                      (* L.build_load (L.const_vector [| (ret_x) ; (ret_y) |]) "tmp" builder *)
+                      L.const_vector [| (ret_x) ; (ret_y) |]
+                    (*
+                    in
+                      L.build_load ret_vec_gep "tmp" builder
+                    *)
+                      (*L.build_gep ret_vec [| L.const_int i32_t 0 ; L.const_int i32_t 1 |] "tmp" builder*)
                       (* L.build_gep e1' [| (match_type float_type op x_of_e1' x_of_e2' "tmp1" builder) ; (match_type float_type op y_of_e1' y_of_e2' "tmp2" builder) |] "tmp" builder *)
                     
 
