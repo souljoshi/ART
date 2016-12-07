@@ -1,5 +1,3 @@
-(* Semantic checking for the ART compiler *)
-
 open Ast
 
 module StringMap = Map.Make(String)
@@ -21,7 +19,7 @@ let check prog =
     and functions = prog.f in
 
     
-    report_dup(fun n-> "Duplicate Function Name " ^n)(List.map (fun fd -> fd.fname)functions);
+    (*report_dup(fun n-> "Duplicate Function Name " ^n)(List.map (fun fd -> fd.fname)functions);*)
 
     report_dup(fun n-> "Duplicate Global Name " ^n)(List.map (fun (_,a,_) ->  a)globals);
 
@@ -34,10 +32,24 @@ let check prog =
 in
     let function_check func =
 
+let symbol_list = List.fold_left(fun m(t,n,_)->StringMap.add n t m)
+    StringMap.empty(globals)
+
+in
+    let rev_list =  List.fold_left(fun m(t,n,_)->StringMap.add n t m)
+        symbol_list(func.params)
+in
+    let final_list =  List.fold_left(fun m(t,n,_)->StringMap.add n t m)
+        rev_list(func.locals)
+
+in
+
     report_dup(fun n-> "Duplicate Parameter Name " ^n ^"in " ^ func.fname)(List.map (fun (_,a,_) ->  a)func.params);
     report_dup(fun n-> "Duplicate local Name " ^n ^ " in " ^ func.fname)(List.map (fun (_,a,_) ->  a)func.locals);
 in
   List.iter function_check functions;
+
+
 
 
     (* A map of all struct/shape types *)
@@ -63,6 +75,7 @@ in
     in
     { s = List.map (fun st -> StringMap.find st.sname structs) prog.s;
       f = List.rev funcs ; v = globals }
+
 
   
 
