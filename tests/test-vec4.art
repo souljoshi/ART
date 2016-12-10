@@ -11,16 +11,14 @@ int main()
     vec v9;
     vec v10;
     double f1;
-    double f2;
-    double f3;
+    int i1;
+
+    i1 = 2;
 
     v2 = <66.5, 12.0>;
     v3 = <1.0, 55.1>;
 
-    f1 = 10.5;
-    f2 = 5.5;
-
-    f3 = f1 + f2;
+    f1 = 2.0;
 
     //v4 = v2 + v3; // this is giving error right now, need to fix
 
@@ -35,7 +33,8 @@ int main()
     //will give error "Operation not supported for vectors" as expected
 
     v9 = <66.5, 12.0> * 2.0; // scalar mulitplication
-    v10 = 2.0 * <66.5, 12.0>;
+    v10 = 2 * <66.5, 12.0>;
+    //v10 = 2.0 + <66.5, 12.0>; // will give error "Unsupported binary operation" as expected
 
     v1[0] = 10.5;
     v1[1] = 4.2;
@@ -59,7 +58,6 @@ int main()
     printf(v6[1]);
     printf(v7[0]);
     printf(v7[1]);
-    printf(f3);
     printf(v9[0]);
     printf(v9[1]);
     printf(v10[0]);

@@ -390,42 +390,53 @@ let translate prog =
                 if type_of_e1' <> type_of_e2'
                 then 
                 (
-                  if type_of_e1' = vec_type || type_of_e2' = vec_type
+                  let ret= convert_type e1' e2' builder
+                    in let e1'' = fst ret and e2'' = snd ret
+                  in
+                    let type_of_e1'' = L.type_of(e1'') and type_of_e2'' = L.type_of(e2'')
+                  in
+                  if type_of_e1'' = vec_type || type_of_e2'' = vec_type
                   then
                   (
-                    if type_of_e2' = float_type
-                    then 
+                    if op = A.Mult
+                    then
                     (
-                      let x_of_e1' = L.const_extractelement e1' (L.const_int i32_t 0)
-                      and y_of_e1' = L.const_extractelement e1' (L.const_int i32_t 1)
-                      in
-                        let ret_x = match_type vec_type op x_of_e1' e2' "tmp1" builder
-                        and ret_y = match_type vec_type op y_of_e1' e2' "tmp2" builder
-                        in
-                          L.const_vector [| (ret_x) ; (ret_y) |]
-                    )
-                    else 
-                    (
-                      if type_of_e1' = float_type
-                      then
+                      if type_of_e2'' = float_type
+                      then 
                       (
-                        let x_of_e2' = L.const_extractelement e2' (L.const_int i32_t 0)
-                        and y_of_e2' = L.const_extractelement e2' (L.const_int i32_t 1)
+                        let x_of_e1'' = L.const_extractelement e1'' (L.const_int i32_t 0)
+                        and y_of_e1'' = L.const_extractelement e1'' (L.const_int i32_t 1)
                         in
-                          let ret_x = match_type vec_type op e1' x_of_e2' "tmp1" builder
-                          and ret_y = match_type vec_type op e1' y_of_e2' "tmp2" builder
+                          let ret_x = match_type vec_type op x_of_e1'' e2'' "tmp1" builder
+                          and ret_y = match_type vec_type op y_of_e1'' e2'' "tmp2" builder
                           in
                             L.const_vector [| (ret_x) ; (ret_y) |]
                       )
-                      else
-                        raise (Failure "Unsupported binary operation")
+                      else 
+                      (
+                        if type_of_e1'' = float_type
+                        then
+                        (
+                          let x_of_e2'' = L.const_extractelement e2'' (L.const_int i32_t 0)
+                          and y_of_e2'' = L.const_extractelement e2'' (L.const_int i32_t 1)
+                          in
+                            let ret_x = match_type vec_type op e1'' x_of_e2'' "tmp1" builder
+                            and ret_y = match_type vec_type op e1'' y_of_e2'' "tmp2" builder
+                            in
+                              L.const_vector [| (ret_x) ; (ret_y) |]
+                        )
+                        else
+                        (
+                          raise (Failure "Unsupported binary opeartion")
+                        )
+                      )
                     )
+                    else
+                      raise (Failure "Unsupported binary operation")
                   )
                   else
                   (
-                    let ret= convert_type e1' e2' builder
-                    in let x = fst ret and y = snd ret
-                      in match_type float_type op x y "temp" builder
+                    match_type float_type op e1'' e2'' "temp" builder
                   )
                 ) 
                 else
@@ -443,27 +454,11 @@ let translate prog =
                       and y_of_e1' = L.const_extractelement e1' (L.const_int i32_t 1)
                       and x_of_e2' = L.const_extractelement e2' (L.const_int i32_t 0)
                       and y_of_e2' = L.const_extractelement e2' (L.const_int i32_t 1)
-                    in
-                      (* match_type float_type op x_of_e1' x_of_e2' "tmp" builder *)
-                      
+                    in                      
                       let ret_x = match_type vec_type op x_of_e1' x_of_e2' "tmp1" builder
                       and ret_y = match_type vec_type op y_of_e1' y_of_e2' "tmp2" builder
-                    in
-                      (* match_type float_type op ret_x ret_y "tmp" builder *)
-                    
-                      (* L.build_load (L.const_vector [| (ret_x) ; (ret_y) |]) "tmp" builder *)
+                    in                    
                       L.const_vector [| (ret_x) ; (ret_y) |]
-                    (*
-                    in
-                      L.build_load ret_vec_gep "tmp" builder
-                      *)
-                      (*L.build_gep ret_vec [| L.const_int i32_t 0 ; L.const_int i32_t 1 |] "tmp" builder*)
-                      (* L.build_gep e1' [| (match_type float_type op x_of_e1' x_of_e2' "tmp1" builder) ; (match_type float_type op y_of_e1' y_of_e2' "tmp2" builder) |] "tmp" builder *)
-                    
-
-                    (* then L.build_gep (L.const_float double_t 1.5) [|L.const_float double_t 1.5; L.const_float double_t 2.5|] "tmp" builder *)
-                    (* then L.const_vector [|L.const_float double_t 1.5; L.const_float double_t 2.5|] *)
-                    (* then match_type float_type op (L.const_float double_t 1.5) (L.const_float double_t 2.5) "tmp" builder *) (*placeholder*)
                   else
                     match_type type_of_e1' op e1' e2' "tmp" builder
 
