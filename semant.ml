@@ -45,21 +45,27 @@ let struct_build prog =
 let check prog =
     (* Get the global variables and functions *)
     let globals = prog.v
-    and functions = prog.f in
-
+    and functions = prog.f
+    and structs = prog.s
+in
     
     report_dup(fun n-> "Duplicate Function Name " ^n)(List.map (fun fd -> fd.fname)functions);
 
     report_dup(fun n-> "Duplicate Global Name " ^n)(List.map (fun (_,a,_) ->  a)globals);
 
+    report_dup(fun n-> "Duplicate Struct Name " ^n)(List.map(fun st -> st.sname)structs); 
+
+
     let function_decls =
         List.map(fun fd -> fd.fname) functions
-    in
-
+    
+in
     let _ = try List.find (fun s-> s ="main") function_decls 
         with Not_found -> raise(Failure (" Need a main function"))
 in
-    let function_check func =
+
+let function_check func =
+
 
 let symbol_list = List.fold_left(fun m(t,n,_)->StringMap.add n t m)
     StringMap.empty(globals)
@@ -70,15 +76,12 @@ in
 in
     let final_list =  List.fold_left(fun m(t,n,_)->StringMap.add n t m)
         rev_list(func.locals)
-
 in
-
-    report_dup(fun n-> "Duplicate Parameter Name " ^n ^"in " ^ func.fname)(List.map (fun (_,a,_) ->  a)func.params);
+ report_dup(fun n-> "Duplicate Parameter Name " ^n ^"in " ^ func.fname)(List.map (fun (_,a,_) ->  a)func.params);
     report_dup(fun n-> "Duplicate local Name " ^n ^ " in " ^ func.fname)(List.map (fun (_,a,_) ->  a)func.locals);
+(*in
+let ret_type s=
+    StringMap.find s symbol_list
+*)
 in
-    List.iter function_check functions;
-
-
-  
-
-  
+    List.iter function_check functions
