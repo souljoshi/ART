@@ -29,12 +29,19 @@ int main()
     v6 = <66.5, 12.0> * <1.0, 55.1>;
     v7 = <66.5, 12.0> / <1.0, 55.1>;
 
-    //v8 = <66.5, 12.0> % <1.0, 55.1>; 
+    //v8 = <66.5, 12.0> + <1.0, 55.1>; 
     //will give error "Operation not supported for vectors" as expected
 
     v9 = <66.5, 12.0> * 2.0; // scalar mulitplication
-    v10 = 2 * <66.5, 12.0>;
+    //v10 = f1 * <66.5, 12.0>;
+    //v10 = 2 * <66.5, 12.0>;
     //v10 = 2.0 + <66.5, 12.0>; // will give error "Unsupported binary operation" as expected
+    //v10 = v4;
+    //v5 * v4;
+
+
+    //2.0 * <66.5, 12.0>;
+    v10 = f1 * <66.5, 12.0>;
 
     v1[0] = 10.5;
     v1[1] = 4.2;
@@ -58,6 +65,8 @@ int main()
     printf(v6[1]);
     printf(v7[0]);
     printf(v7[1]);
+    printf(v8[0]);
+    printf(v8[1]);
     printf(v9[0]);
     printf(v9[1]);
     printf(v10[0]);

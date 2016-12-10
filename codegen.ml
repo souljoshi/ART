@@ -404,26 +404,34 @@ let translate prog =
                       if type_of_e2'' = float_type
                       then 
                       (
+                        let x_of_e1'' = L.build_extractelement (e1'') (L.const_int i32_t 0) ("tmp3") (builder)
+                        and y_of_e1'' = L.build_extractelement e1'' (L.const_int i32_t 1) "tmp4" builder
+                        (*
                         let x_of_e1'' = L.const_extractelement e1'' (L.const_int i32_t 0)
                         and y_of_e1'' = L.const_extractelement e1'' (L.const_int i32_t 1)
+                        *)
+                    in
+                        let ret_x = match_type vec_type op x_of_e1'' e2'' "tmp1" builder
+                        and ret_y = match_type vec_type op y_of_e1'' e2'' "tmp2" builder
                         in
-                          let ret_x = match_type vec_type op x_of_e1'' e2'' "tmp1" builder
-                          and ret_y = match_type vec_type op y_of_e1'' e2'' "tmp2" builder
-                          in
-                            L.const_vector [| (ret_x) ; (ret_y) |]
+                        L.const_vector [| ret_x ; ret_y |]
                       )
                       else 
                       (
                         if type_of_e1'' = float_type
                         then
                         (
+                          let x_of_e2'' = L.build_extractelement e2'' (L.const_int i32_t 0) "tmp3" builder
+                          and y_of_e2'' = L.build_extractelement e2'' (L.const_int i32_t 1) "tmp4" builder
+                          (*
                           let x_of_e2'' = L.const_extractelement e2'' (L.const_int i32_t 0)
                           and y_of_e2'' = L.const_extractelement e2'' (L.const_int i32_t 1)
+                          *)
                           in
-                            let ret_x = match_type vec_type op e1'' x_of_e2'' "tmp1" builder
-                            and ret_y = match_type vec_type op e1'' y_of_e2'' "tmp2" builder
-                            in
-                              L.const_vector [| (ret_x) ; (ret_y) |]
+                          let ret_x = match_type vec_type op e1'' x_of_e2'' "tmp1" builder
+                          and ret_y = match_type vec_type op e1'' y_of_e2'' "tmp2" builder
+                          in
+                          L.const_vector [| ret_x ; ret_y |]
                         )
                         else
                         (
@@ -450,15 +458,22 @@ let translate prog =
                      <x_of_e' , y_of_e'>
                    *)
                     
-                    then let x_of_e1' = L.const_extractelement e1' (L.const_int i32_t 0)
+                    then 
+                      let x_of_e1' = L.build_extractelement e1' (L.const_int i32_t 0) "tmp3" builder
+                      and y_of_e1' = L.build_extractelement e1' (L.const_int i32_t 1) "tmp4" builder
+                      and x_of_e2' = L.build_extractelement e2' (L.const_int i32_t 0) "tmp5" builder
+                      and y_of_e2' = L.build_extractelement e2' (L.const_int i32_t 1) "tmp6" builder
+                    (*
+                    let x_of_e1' = L.const_extractelement e1' (L.const_int i32_t 0)
                       and y_of_e1' = L.const_extractelement e1' (L.const_int i32_t 1)
                       and x_of_e2' = L.const_extractelement e2' (L.const_int i32_t 0)
                       and y_of_e2' = L.const_extractelement e2' (L.const_int i32_t 1)
-                    in                      
+                    *)
+                         in                
                       let ret_x = match_type vec_type op x_of_e1' x_of_e2' "tmp1" builder
                       and ret_y = match_type vec_type op y_of_e1' y_of_e2' "tmp2" builder
-                    in                    
-                      L.const_vector [| (ret_x) ; (ret_y) |]
+                         in               
+                      L.const_vector [| ret_x ; ret_y |]
                   else
                     match_type type_of_e1' op e1' e2' "tmp" builder
 
