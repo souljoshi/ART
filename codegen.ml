@@ -388,9 +388,46 @@ let translate prog =
               let type_of_e1' = L.type_of(e1') and type_of_e2' = L.type_of(e2')
               in 
                 if type_of_e1' <> type_of_e2'
-                      then let ret= convert_type e1' e2' builder
-                  in let x = fst ret and y = snd ret
-                    in match_type float_type op x y "temp" builder
+                then 
+                (
+                  if type_of_e1' = vec_type || type_of_e2' = vec_type
+                  then
+                  (
+                    if type_of_e2' = float_type
+                    then 
+                    (
+                      let x_of_e1' = L.const_extractelement e1' (L.const_int i32_t 0)
+                      and y_of_e1' = L.const_extractelement e1' (L.const_int i32_t 1)
+                      in
+                        let ret_x = match_type vec_type op x_of_e1' e2' "tmp1" builder
+                        and ret_y = match_type vec_type op y_of_e1' e2' "tmp2" builder
+                        in
+                          L.const_vector [| (ret_x) ; (ret_y) |]
+                    )
+                    else 
+                    (
+                      if type_of_e1' = float_type
+                      then
+                      (
+                        let x_of_e2' = L.const_extractelement e2' (L.const_int i32_t 0)
+                        and y_of_e2' = L.const_extractelement e2' (L.const_int i32_t 1)
+                        in
+                          let ret_x = match_type vec_type op e1' x_of_e2' "tmp1" builder
+                          and ret_y = match_type vec_type op e1' y_of_e2' "tmp2" builder
+                          in
+                            L.const_vector [| (ret_x) ; (ret_y) |]
+                      )
+                      else
+                        raise (Failure "Unsupported binary operation")
+                    )
+                  )
+                  else
+                  (
+                    let ret= convert_type e1' e2' builder
+                    in let x = fst ret and y = snd ret
+                      in match_type float_type op x y "temp" builder
+                  )
+                ) 
                 else
                   (* Vector Operations *)
                   if type_of_e1' = vec_type
@@ -401,7 +438,6 @@ let translate prog =
                      then need to make a new vector with the result of the vector operation:
                      <x_of_e' , y_of_e'>
                    *)
-
                     
                     then let x_of_e1' = L.const_extractelement e1' (L.const_int i32_t 0)
                       and y_of_e1' = L.const_extractelement e1' (L.const_int i32_t 1)
@@ -420,7 +456,7 @@ let translate prog =
                     (*
                     in
                       L.build_load ret_vec_gep "tmp" builder
-                    *)
+                      *)
                       (*L.build_gep ret_vec [| L.const_int i32_t 0 ; L.const_int i32_t 1 |] "tmp" builder*)
                       (* L.build_gep e1' [| (match_type float_type op x_of_e1' x_of_e2' "tmp1" builder) ; (match_type float_type op y_of_e1' y_of_e2' "tmp2" builder) |] "tmp" builder *)
                     

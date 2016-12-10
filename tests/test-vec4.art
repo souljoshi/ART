@@ -9,6 +9,7 @@ int main()
     vec v7;
     vec v8;
     vec v9;
+    vec v10;
     double f1;
     double f2;
     double f3;
@@ -33,6 +34,9 @@ int main()
     //v8 = <66.5, 12.0> % <1.0, 55.1>; 
     //will give error "Operation not supported for vectors" as expected
 
+    v9 = <66.5, 12.0> * 2.0; // scalar mulitplication
+    v10 = 2.0 * <66.5, 12.0>;
+
     v1[0] = 10.5;
     v1[1] = 4.2;
 
@@ -56,4 +60,8 @@ int main()
     printf(v7[0]);
     printf(v7[1]);
     printf(f3);
+    printf(v9[0]);
+    printf(v9[1]);
+    printf(v10[0]);
+    printf(v10[1]);
 }
