@@ -421,9 +421,9 @@ let translate prog =
                       in*)
                       let vec_of_e2'' = L.const_vector [| L.const_float double_t 1.1 ; L.const_float double_t 1.1 |]
                       in
-                          let insert_element1 = L.const_insertelement vec_of_e2'' e2'' (L.const_int i32_t 0)
+                          let insert_element1 = L.build_insertelement vec_of_e2'' e2'' (L.const_int i32_t 0) "tmp1" builder
                         in
-                          let insert_element2 = L.const_insertelement insert_element1 e2'' (L.const_int i32_t 1)
+                          let insert_element2 = L.build_insertelement insert_element1 e2'' (L.const_int i32_t 1) "tmp2" builder
                         in
                         (*let vec_of_e2'' = L.const_vector [| const_e2'' ; const_e2'' |]
                         in*)
@@ -449,14 +449,18 @@ let translate prog =
                         *)
                         (*let const_e1'' = L.const_float double_t e1''
                       in*)
+                          
+                          (*let vec_of_e1'' = L.const_vector [| e1'' ; e1'' |]*)
+                          
                           let vec_of_e1'' = L.const_vector [| L.const_float double_t 1.1 ; L.const_float double_t 1.1 |]
                       in
-                          let insert_element1 = L.const_insertelement vec_of_e1'' e1'' (L.const_int i32_t 0)
+                          let insert_element1 = L.build_insertelement vec_of_e1'' e1'' (L.const_int i32_t 0) "tmp1" builder
                         in
-                          let insert_element2 = L.const_insertelement insert_element1 e1'' (L.const_int i32_t 1)
+                          let insert_element2 = L.build_insertelement insert_element1 e1'' (L.const_int i32_t 1) "tmp2" builder
                         in
                           (*let vec_of_e1'' = L.const_vector [| const_e1'' ; const_e1'' |]
                         in*)
+                        
                           match_type vec_type op insert_element2 e2'' "tmp" builder
                         )
                         else

@@ -34,16 +34,16 @@ int main()
     //will give error "Operation not supported for vectors" as expected
 
     v9 = <66.5, 12.0> * 2.0; // scalar mulitplication
-    v10 = v8 * <66.5, 12.0>;
-    //v10 = 2 * <66.5, 12.0>;
+    //v10 = v8 * <66.5, 12.0>;
+    v10 = v3 * f1;
     //v10 = 2.0 + <66.5, 12.0>; // will give error "Unsupported binary operation" as expected
     //v10 = v4;
     //v5 * v4;
 
 
-    v11 = v4 + v5;
-    //v11 = f1 * <66.5, 12.0>;
-    //v11 = f1 * <66.5, 12.0>;
+    //v11 = v4 + v5;
+    //v11 = <66.5, 12.0> * 5;
+    v11 = f1 * <66.5, 12.0>;
 
     v1[0] = 10.5;
     v1[1] = 4.2;
