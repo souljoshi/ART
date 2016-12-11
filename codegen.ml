@@ -404,6 +404,7 @@ let translate prog =
                       if type_of_e2'' = float_type
                       then 
                       (
+                        (*
                         let x_of_e1'' = L.build_extractelement (e1'') (L.const_int i32_t 0) ("tmp3") (builder)
                         and y_of_e1'' = L.build_extractelement e1'' (L.const_int i32_t 1) "tmp4" builder
                         (*
@@ -415,12 +416,25 @@ let translate prog =
                         and ret_y = match_type vec_type op y_of_e1'' e2'' "tmp2" builder
                         in
                         L.const_vector [| ret_x ; ret_y |]
+                        *)
+                        (*let const_e2'' = L.const_float double_t e2''
+                      in*)
+                      let vec_of_e2'' = L.const_vector [| L.const_float double_t 1.1 ; L.const_float double_t 1.1 |]
+                      in
+                          let insert_element1 = L.const_insertelement vec_of_e2'' e2'' (L.const_int i32_t 0)
+                        in
+                          let insert_element2 = L.const_insertelement insert_element1 e2'' (L.const_int i32_t 1)
+                        in
+                        (*let vec_of_e2'' = L.const_vector [| const_e2'' ; const_e2'' |]
+                        in*)
+                          match_type vec_type op e1'' insert_element2 "tmp" builder
                       )
                       else 
                       (
                         if type_of_e1'' = float_type
                         then
                         (
+                          (*
                           let x_of_e2'' = L.build_extractelement e2'' (L.const_int i32_t 0) "tmp3" builder
                           and y_of_e2'' = L.build_extractelement e2'' (L.const_int i32_t 1) "tmp4" builder
                           (*
@@ -432,6 +446,18 @@ let translate prog =
                           and ret_y = match_type vec_type op e1'' y_of_e2'' "tmp2" builder
                           in
                           L.const_vector [| ret_x ; ret_y |]
+                        *)
+                        (*let const_e1'' = L.const_float double_t e1''
+                      in*)
+                          let vec_of_e1'' = L.const_vector [| L.const_float double_t 1.1 ; L.const_float double_t 1.1 |]
+                      in
+                          let insert_element1 = L.const_insertelement vec_of_e1'' e1'' (L.const_int i32_t 0)
+                        in
+                          let insert_element2 = L.const_insertelement insert_element1 e1'' (L.const_int i32_t 1)
+                        in
+                          (*let vec_of_e1'' = L.const_vector [| const_e1'' ; const_e1'' |]
+                        in*)
+                          match_type vec_type op insert_element2 e2'' "tmp" builder
                         )
                         else
                         (
@@ -459,6 +485,7 @@ let translate prog =
                    *)
                     
                     then 
+                    (*
                       let x_of_e1' = L.build_extractelement e1' (L.const_int i32_t 0) "tmp3" builder
                       and y_of_e1' = L.build_extractelement e1' (L.const_int i32_t 1) "tmp4" builder
                       and x_of_e2' = L.build_extractelement e2' (L.const_int i32_t 0) "tmp5" builder
@@ -474,6 +501,8 @@ let translate prog =
                       and ret_y = match_type vec_type op y_of_e1' y_of_e2' "tmp2" builder
                          in               
                       L.const_vector [| ret_x ; ret_y |]
+                    *)
+                      match_type vec_type op e1' e2' "tmp" builder
                   else
                     match_type type_of_e1' op e1' e2' "tmp" builder
 
