@@ -309,7 +309,7 @@ let translate prog =
                 | A.Sub     -> L.build_fsub
                 | A.Mult    -> L.build_fmul
                 | A.Div     -> L.build_fdiv
-                | _         -> raise (Failure "Operation not supported for vectors")
+                | _         -> raise (Failure "Unsupported binary operation for vectors")
 
             else
               if typ=float_type
@@ -386,129 +386,65 @@ let translate prog =
               and vec_type = L.type_of(L.const_vector [|L.const_float double_t 1.1 ; L.const_float double_t 1.1 |])
             in
               let type_of_e1' = L.type_of(e1') and type_of_e2' = L.type_of(e2')
+            in 
+              if type_of_e1' <> type_of_e2'
+              then 
+              (
+                let ret = convert_type e1' e2' builder (* integer promotion *)
               in 
-                if type_of_e1' <> type_of_e2'
-                then 
+                let e1'' = fst ret 
+                and e2'' = snd ret
+              in
+                let type_of_e1'' = L.type_of(e1'') 
+                and type_of_e2'' = L.type_of(e2'')
+              in
+                if type_of_e1'' = vec_type || type_of_e2'' = vec_type
+                then
                 (
-                  let ret= convert_type e1' e2' builder
-                    in let e1'' = fst ret and e2'' = snd ret
-                  in
-                    let type_of_e1'' = L.type_of(e1'') and type_of_e2'' = L.type_of(e2'')
-                  in
-                  if type_of_e1'' = vec_type || type_of_e2'' = vec_type
+                  if op = A.Mult (* only scalar multiplication *)
                   then
                   (
-                    if op = A.Mult
-                    then
-                    (
-                      if type_of_e2'' = float_type
-                      then 
-                      (
-                        (*
-                        let x_of_e1'' = L.build_extractelement (e1'') (L.const_int i32_t 0) ("tmp3") (builder)
-                        and y_of_e1'' = L.build_extractelement e1'' (L.const_int i32_t 1) "tmp4" builder
-                        (*
-                        let x_of_e1'' = L.const_extractelement e1'' (L.const_int i32_t 0)
-                        and y_of_e1'' = L.const_extractelement e1'' (L.const_int i32_t 1)
-                        *)
-                    in
-                        let ret_x = match_type vec_type op x_of_e1'' e2'' "tmp1" builder
-                        and ret_y = match_type vec_type op y_of_e1'' e2'' "tmp2" builder
-                        in
-                        L.const_vector [| ret_x ; ret_y |]
-                        *)
-                        (*let const_e2'' = L.const_float double_t e2''
-                      in*)
-                      let vec_of_e2'' = L.const_vector [| L.const_float double_t 1.1 ; L.const_float double_t 1.1 |]
-                      in
-                          let insert_element1 = L.build_insertelement vec_of_e2'' e2'' (L.const_int i32_t 0) "tmp1" builder
-                        in
-                          let insert_element2 = L.build_insertelement insert_element1 e2'' (L.const_int i32_t 1) "tmp2" builder
-                        in
-                        (*let vec_of_e2'' = L.const_vector [| const_e2'' ; const_e2'' |]
-                        in*)
-                          match_type vec_type op e1'' insert_element2 "tmp" builder
-                      )
-                      else 
-                      (
-                        if type_of_e1'' = float_type
-                        then
-                        (
-                          (*
-                          let x_of_e2'' = L.build_extractelement e2'' (L.const_int i32_t 0) "tmp3" builder
-                          and y_of_e2'' = L.build_extractelement e2'' (L.const_int i32_t 1) "tmp4" builder
-                          (*
-                          let x_of_e2'' = L.const_extractelement e2'' (L.const_int i32_t 0)
-                          and y_of_e2'' = L.const_extractelement e2'' (L.const_int i32_t 1)
-                          *)
-                          in
-                          let ret_x = match_type vec_type op e1'' x_of_e2'' "tmp1" builder
-                          and ret_y = match_type vec_type op e1'' y_of_e2'' "tmp2" builder
-                          in
-                          L.const_vector [| ret_x ; ret_y |]
-                        *)
-                        (*let const_e1'' = L.const_float double_t e1''
-                      in*)
-                          
-                          (*let vec_of_e1'' = L.const_vector [| e1'' ; e1'' |]*)
-                          
-                          let vec_of_e1'' = L.const_vector [| L.const_float double_t 1.1 ; L.const_float double_t 1.1 |]
-                      in
-                          let insert_element1 = L.build_insertelement vec_of_e1'' e1'' (L.const_int i32_t 0) "tmp1" builder
-                        in
-                          let insert_element2 = L.build_insertelement insert_element1 e1'' (L.const_int i32_t 1) "tmp2" builder
-                        in
-                          (*let vec_of_e1'' = L.const_vector [| const_e1'' ; const_e1'' |]
-                        in*)
-                        
-                          match_type vec_type op insert_element2 e2'' "tmp" builder
-                        )
-                        else
-                        (
-                          raise (Failure "Unsupported binary opeartion")
-                        )
-                      )
-                    )
-                    else
-                      raise (Failure "Unsupported binary operation")
-                  )
-                  else
-                  (
-                    match_type float_type op e1'' e2'' "temp" builder
-                  )
-                ) 
-                else
-                  (* Vector Operations *)
-                  if type_of_e1' = vec_type
-                  (* want to extract x_of_e1', y_of_e1', x_of_e2', y_of_e2',
-                     then do relevant vector operation, for example vector addition will be:
-                     x_of_e' = x_of_e1' + x_of_e2',
-                     y_of_e' = y_of_e1' + y_of_e2'
-                     then need to make a new vector with the result of the vector operation:
-                     <x_of_e' , y_of_e'>
-                   *)
-                    
+                    if type_of_e2'' = float_type
                     then 
-                    (*
-                      let x_of_e1' = L.build_extractelement e1' (L.const_int i32_t 0) "tmp3" builder
-                      and y_of_e1' = L.build_extractelement e1' (L.const_int i32_t 1) "tmp4" builder
-                      and x_of_e2' = L.build_extractelement e2' (L.const_int i32_t 0) "tmp5" builder
-                      and y_of_e2' = L.build_extractelement e2' (L.const_int i32_t 1) "tmp6" builder
-                    (*
-                    let x_of_e1' = L.const_extractelement e1' (L.const_int i32_t 0)
-                      and y_of_e1' = L.const_extractelement e1' (L.const_int i32_t 1)
-                      and x_of_e2' = L.const_extractelement e2' (L.const_int i32_t 0)
-                      and y_of_e2' = L.const_extractelement e2' (L.const_int i32_t 1)
-                    *)
-                         in                
-                      let ret_x = match_type vec_type op x_of_e1' x_of_e2' "tmp1" builder
-                      and ret_y = match_type vec_type op y_of_e1' y_of_e2' "tmp2" builder
-                         in               
-                      L.const_vector [| ret_x ; ret_y |]
-                    *)
-                      match_type vec_type op e1' e2' "tmp" builder
+                    (
+                      let vec_of_e2'' = L.const_vector [| L.const_float double_t 1.1 ; L.const_float double_t 1.1 |]
+                    in
+                      let insert_element1 = L.build_insertelement vec_of_e2'' e2'' (L.const_int i32_t 0) "tmp1" builder
+                    in
+                      let insert_element2 = L.build_insertelement insert_element1 e2'' (L.const_int i32_t 1) "tmp2" builder
+                    in
+                      match_type vec_type op e1'' insert_element2 "tmp" builder
+                    )
+                    else 
+                    (
+                      if type_of_e1'' = float_type
+                      then
+                      ( 
+                        let vec_of_e1'' = L.const_vector [| L.const_float double_t 1.1 ; L.const_float double_t 1.1 |]
+                      in
+                        let insert_element1 = L.build_insertelement vec_of_e1'' e1'' (L.const_int i32_t 0) "tmp1" builder
+                      in
+                        let insert_element2 = L.build_insertelement insert_element1 e1'' (L.const_int i32_t 1) "tmp2" builder
+                      in
+                        match_type vec_type op insert_element2 e2'' "tmp" builder
+                      )
+                      else
+                        raise (Failure "Unsupported binary operation for vectors")
+                    )
+                  )
                   else
-                    match_type type_of_e1' op e1' e2' "tmp" builder
+                    raise (Failure "Unsupported binary operation for vectors")
+                )
+                else
+                  match_type float_type op e1'' e2'' "temp" builder
+              ) 
+              else
+                if type_of_e1' = vec_type (* Vector Operations other than scalar multiplication *)
+                then 
+                  match_type vec_type op e1' e2' "tmp" builder
+                else (* Non-vector operations *)
+                  match_type type_of_e1' op e1' e2' "tmp" builder
+
 
           | A.Index(e1,e2) as arr-> L.build_load (lexpr builder arr) "tmp" builder
 
