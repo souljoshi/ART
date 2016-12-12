@@ -1,5 +1,0 @@
-int main()
-{
-    v3 = <1.0 + 1.0, 55.1 + 2.0>; 
-    //vec expression gives syntax error for now.
-}

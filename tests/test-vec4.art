@@ -12,14 +12,19 @@ int main()
     vec v10;
     vec v11;
     double f1;
+    double f2;
     int i1;
 
     i1 = 2;
 
     v2 = <66.5, 12.0>;
-    v3 = <1.0, 55.1>;
+    
 
     f1 = 2.0;
+    f2 = 10.5;
+
+    //v3 = <f1, f2>;
+    v3 = <1.0+f1, 2.1+f2>;
 
     //v4 = v2 + v3; // this is giving error right now, need to fix
 
@@ -56,8 +61,8 @@ int main()
     //printf(v2[0]);
     //printf(v2[1]);
 
-    //printf(v3[0]);
-    //printf(v3[1]);
+    printf(v3[0]);
+    printf(v3[1]);
 
     printf(v4[0]);
     printf(v4[1]);

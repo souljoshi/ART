@@ -46,7 +46,7 @@
 %left TIMES DIVIDE MOD
 %right PRE /* prefix increment/decrement */
 %right NOT NEG POS
-%left INDEX CALL MEMB /* member */ POST /* postfix decrement/increment */
+%left INDEX CALL MEMB VECEXPR /* member */ POST /* postfix decrement/increment */
 
 %start program
 %type <Ast.prog> program
@@ -292,6 +292,9 @@ posexpr:
   | VECTORLIT             { VecLit($1) }
   | STRINGLIT             { StringLit($1)}
 
+  /* Vector expression */
+  | LT bexpr COMMA bexpr GT   %prec VECEXPR { Vecexpr($2, $4) }
+
   /* primary expression */
   | ID                    { Id($1) }
   | LPAREN expr RPAREN    { $2 }
@@ -299,6 +302,7 @@ posexpr:
   /* postfix expression */
   | posexpr LBRACK expr RBRACK    %prec INDEX   { Index($1, $3) }
   | posexpr LPAREN arg_list RPAREN %prec CALL    { Call($1, List.rev $3) } 
+    
   /* List.rev is used because in arg_list, expr_list is build from the back cause it is more efficient*/
   | posexpr DOT ID                %prec MEMB    { Member($1, $3) }
   | posexpr PLUSPLUS              %prec POST    { Posop(Postinc, $1) }

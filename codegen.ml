@@ -263,9 +263,9 @@ let translate prog =
         | A.Id s -> let t =  lookup_type s in (string_of_typ2 t, t)
         | A.VecLit(f1, f2) -> ("vec", A.Vec)
 
-        (*
+        
         | A.Vecexpr(e1, e2) -> ("vec", A.Vec)
-        *)
+        
 
         | A.Index(a, e) -> (match snd(expr_type a) with (* First get type of the expr being indexed *)
                             (* The type of the index expression is the subtype 't' of the array *)
@@ -367,17 +367,16 @@ let translate prog =
           | A.FloatLit f -> L.const_float double_t f
           | A.VecLit(f1, f2) -> L.const_vector [|(L.const_float double_t f1) ; (L.const_float double_t f2)|]
 
-          (*
           | A.Vecexpr(e1, e2) -> 
               let e1' = expr builder e1
-              and e2' = expr builder e1
+              and e2' = expr builder e2
             in
-              (*
-              L.const_vector [|L.const_float double_t 10.0 ; L.const_float double_t 20.0|]
-              *)
-              L.const_vector [| e1' ; e2' |]
-          *)
-
+              let tmp_vec = L.const_vector [| L.const_float double_t 1.1 ; L.const_float double_t 1.1 |]
+            in
+              let insert_element1 = L.build_insertelement tmp_vec e1' (L.const_int i32_t 0) "tmp1" builder
+            in
+              L.build_insertelement insert_element1 e2' (L.const_int i32_t 1) "tmp2" builder
+              
           | A.Id s -> L.build_load (lookup s builder) s builder (* Load the variable into register and return register *)
           | A.Binop (e1, op, e2) ->
               let e1' = expr builder e1 
