@@ -14,9 +14,45 @@ let report_dup  exceptf list =
 let check_ass lval rval err =
     if lval == rval then lval else raise err
 
+let rec string_of_expr (*e = "( "^ paren_of_expr e ^ " )"
+and 
+paren_of_expr *) = function
+    IntLit(l) -> string_of_int l
+  | CharLit(l) -> "'" ^ (string_of_chr l) ^ "'"
+  | FloatLit(l) -> string_of_float l
+  | StringLit(s) -> "" ^ s
+  | VecLit(a,b)  -> "< " ^ (string_of_float a) ^ " , " ^ (string_of_float b) ^ " >"
+  | Id(s) -> s
+  | Vecexpr(e1,e2) -> " < "^ string_of_expr e1 ^ " , " ^ string_of_expr e2 ^ " >"
+  | Binop(e1, o, e2) ->
+      string_of_expr e1 ^ " " ^ string_of_op o ^ " " ^ string_of_expr e2
+  | Asnop(e1, o, e2) ->
+      string_of_expr e1 ^ " " ^ string_of_asnop o ^ " " ^ string_of_expr e2
+  | Unop(o, e) -> string_of_uop o ^ string_of_expr e
+  | Posop(o, e) -> string_of_expr e ^ string_of_pop o
+  | Trop (o, e1, e2, e3) -> let t = strings_of_trop o in
+            string_of_expr e1 ^ fst t ^ string_of_expr e2 ^ snd t ^ string_of_expr e3
+  | Call(f, el) ->
+      string_of_expr f ^ "(" ^ String.concat ", " (List.map string_of_expr el) ^ ")"
+  | Index(e1, e2) -> string_of_expr e1 ^ "[" ^ string_of_expr e2 ^ "]"
+  | Member(e1, s) -> string_of_expr e1 ^ "." ^ s
+  | Noexpr -> ""
+
+
+let rec string_of_typ = function
+    Int -> "int"
+  | Char -> "char"
+  | Void -> "void"
+  | Float -> "double"
+  | Vec  -> "vec"
+  | String -> "string"
+  | UserType(n,ss) -> string_of_stosh ss ^ n
+  | Array(_, _) as a -> let (t,l) = list_of_arr a
+     in string_of_typ t ^ String.concat "" (List.map (fun e -> "[" ^ string_of_expr e ^ "]") l)
+
 let struct_build prog =
     let globals = prog.v
-    and functions = prog.f 
+    and functions = prog.f
 
     in  
     (* A map of all struct/shape types *)
@@ -61,7 +97,7 @@ let built_in_fun = StringMap.add "printi"
 (StringMap.add"printf" {rettyp=Void; fname="printf";params=[(Float, "x",Value)];locals=[];body=[];typ=Func;owner="None";}
 (StringMap.add "prints" {rettyp=Void; fname="printf";params=[(String, "x",Value)];locals=[];body=[];typ=Func;owner="None";}
 (*(StringMap.add "addshape"{rettyp=Void;fname="addshape";params=[(("x",ShapeType),"y",Value)];locals[];body[];typ=Func;owner="None";}*)
-(StringMap.singleton "printc" {rettyp=Void; fname="printf";params=[(Char, "x",Value)];locals=[];body=[];typ=Func;owner="None";}))))
+(StringMap.singleton "printc" {rettyp=Void; fname="printf";params=[(Char, "x",Value)];locals=[];body=[];typ=Func;owner="None";})))
 (*let function_decls =
     List.map(fun fd -> fd.fname) functions*)
 in 
@@ -144,7 +180,7 @@ let rec expr_b = function
     |CmpAsn b when e1'==e2' ->  e1'
     |CmpAsn b when e1'=Float && e2'=Int ->  Float
     |CmpAsn b when e1'=Int && e2'=Float ->  Float
-    | _ -> raise (Failure ("Invalid assigment "))
+    | _ -> raise (Failure ("Invalid assigment of " ^ string_of_expr e1))
     )
     |Call(e1, actuals) as call -> let e1' = (match e1 with 
         Id s -> s
@@ -160,6 +196,19 @@ in
                     (Failure ("Illegal actual argument found "))))
                 fd.params actuals;
             fd.rettyp
+    |Vecexpr (e1,e2) -> Void
+    |Posop (e1,e2)-> Void
+    |Trop(t,e1,e2,e3) -> Void
+    |Index(e1,e2) -> Void
+    |Member(e1,e2) -> let e1' = (match e1 with
+          Id s -> ret_type s
+          |_ -> raise (Failure("Still checing"))           
+         ) 
+in let e2' = ret_type e2
+         in 
+            e2'
+
+
     
             
 in 
@@ -180,6 +229,11 @@ in check_block e1
     |If(p,e1,e2) -> check_bool_expr p; stmt e1; stmt e2;
     |For(e1,e2,e3,state) -> ignore(expr_b e1); check_bool_expr e2; ignore(expr_b e3); stmt state
     |While(p,s) -> check_bool_expr p; stmt s 
+    |ForDec (vdec,e1,e2,st1) -> ()
+    |Timeloop(s1,e1,s2,e2,st1) ->()
+    |Frameloop (s1,e1,s2,e2,st1)-> ()
+    |Drawpoint (e1,e2)-> ()
+    |Addshape e-> ()
     |_-> raise(Failure ("Here"))   
 in stmt (Block (func.locals,func.body))
 in
