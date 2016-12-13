@@ -199,7 +199,15 @@ in
     |Vecexpr (e1,e2) -> Void
     |Posop (e1,e2)-> Void
     |Trop(t,e1,e2,e3) -> Void
-    |Index(e1,e2) -> Void
+    |Index(e1,e2) -> let e1' = expr_b e1 and e2' = expr_b e2
+                    in let te1' = (match e1' with
+                     Array(e1,e2)->e1
+                    | _-> raise(Failure("Not an array"))
+                        )
+                    in 
+                    if e2'!= Int
+                        then raise(Failure ("Must index with an integer "))
+                         else te1'  
     |Member(e1,e2) -> let e1' = (match e1 with
           Id s -> ret_type s
           |_ -> raise (Failure("Still checing"))           
