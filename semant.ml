@@ -298,4 +298,6 @@ in check_block e1
     |_-> raise(Failure ("Here"))   
 in stmt (Block (func.locals,func.body))
 in
-    List.iter function_check functions
+    List.iter function_check functions;
+    (*List.iter (fun sdecl -> List.iter function_check (sdecl.ctor::sdecl.methods)) structs*)
+    (* Need to somehow take care of "struct scope" once this is done it should mostly work)
