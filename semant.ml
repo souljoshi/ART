@@ -103,8 +103,8 @@ let built_in_fun = StringMap.add "printi"
 in 
 let function_decls = List.fold_left (fun m fd -> StringMap.add fd.fname fd m)
                         built_in_fun functions
-in
 
+in
 let function_decl s = try StringMap.find s function_decls
     with Not_found -> raise (Failure ("Unrecognized function " ^ s))
 in
@@ -135,9 +135,16 @@ let ret_type s=
     try StringMap.find s final_list
     with Not_found -> raise(Failure("Undeclared variable " ^s))
 in
+
 let struct_name_list = List.fold_left(fun m usr -> StringMap.add usr.sname usr m)
     StringMap.empty(structs)
     in 
+
+let get_member_funcs name = let st = try StringMap.find name struct_name_list
+    with  Not_found -> raise(Failure("Could not find "))
+    in List.fold_left(fun m s -> StringMap.add s.fname s m)
+        StringMap.empty st.methods
+in
  let get_list_var name = 
         let x= try StringMap.find name struct_name_list
                 with Not_found -> raise(Failure(" Could not find name"))
@@ -151,6 +158,13 @@ let check_struct_var name var =
 in  try StringMap.find var temp
     with Not_found -> raise(Failure ("Cannot find"))
 in
+
+let check_mem_func_name name func =
+    let temp = get_member_funcs name 
+in try StringMap.find func temp
+    with Not_found -> raise(Failure("error"))
+    in
+
 let rec expr_b = function
     IntLit _-> Int
     |CharLit _-> Char
@@ -199,11 +213,18 @@ let rec expr_b = function
     | _ -> raise (Failure ("Invalid assigment of " ^ string_of_expr e1))
     )
     |Call(e1, actuals) as call -> let e1' = (match e1 with 
-        Id s -> s
+        Id s -> function_decl s
+        |Member (e,s) -> let e'= expr_b e in let
+            e''= (match e' with
+            UserType(s,e1) -> s
+            | _-> raise(Failure("Not a UserType"))
+            )
+            in check_mem_func_name e'' s 
+
         |_-> raise(Failure("here"))
         )
 in
-        let fd = function_decl e1' in
+        let fd = e1' in
         if List.length actuals != List.length fd.params then
             raise (Failure ("Incorrect number of arguments "))
         else
