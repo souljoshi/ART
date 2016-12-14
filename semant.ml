@@ -12,7 +12,11 @@ let report_dup  exceptf list =
 
         in helper(List.sort compare list)
 let check_ass lval rval err =
-    if lval = rval then lval else raise err
+    if lval = rval then lval else 
+    (match lval with 
+        UserType(s,s1) when s="DUMMY" ->rval (*Since DrawPoint demands a string that it will use as a type I give it a String Dummy and will past semant*)
+        |_-> raise err
+    )
 
 let rec string_of_expr (*e = "( "^ paren_of_expr e ^ " )"
 and 
@@ -96,8 +100,10 @@ let built_in_fun = StringMap.add "printi"
 {rettyp=Void; fname="printi";params=[(Int, "x",Value)];locals=[];body=[];typ=Func;owner="None"}
 (StringMap.add"printf" {rettyp=Void; fname="printf";params=[(Float, "x",Value)];locals=[];body=[];typ=Func;owner="None";}
 (StringMap.add "prints" {rettyp=Void; fname="printf";params=[(String, "x",Value)];locals=[];body=[];typ=Func;owner="None";}
-(*(StringMap.add "addshape"{rettyp=Void;fname="addshape";params=[(("x",ShapeType),"y",Value)];locals[];body[];typ=Func;owner="None";}*)
-(StringMap.singleton "printc" {rettyp=Void; fname="printf";params=[(Char, "x",Value)];locals=[];body=[];typ=Func;owner="None";})))
+(StringMap.add "addshape"{rettyp=Void;fname="addshape";params=[(UserType("DUMMY",ShapeType),"x",Value)];locals=[];body=[];typ=Func;owner="None";}
+(StringMap.add "cos"{rettyp=Float;fname="cos";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None";}
+(StringMap.add "sin"{rettyp=Float;fname="sin";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None";}
+(StringMap.singleton "printc" {rettyp=Void; fname="printf";params=[(Char, "x",Value)];locals=[];body=[];typ=Func;owner="None";}))))))
 (*let function_decls =
     List.map(fun fd -> fd.fname) functions*)
 in 
@@ -181,6 +187,11 @@ let rec expr_b = function
     |Binop(e1,op,e2) as e -> let e1' = expr_b e1 and e2'=expr_b e2 in
     (match op with
         Add|Sub|Mult|Div|Mod when e1'=Int && e2'=Int -> Int
+        |Add|Sub|Mult|Div when e1'=Vec&&e2'=Vec -> Vec
+        |Mult when e1'=Vec&&e2'=Int -> Vec
+        |Mult when e1'=Vec&&e2'=Float -> Vec
+        |Mult when e1'=Int&&e2'=Vec -> Vec
+        |Mult when e1'=Float&&e2'=Int -> Vec
         |Add|Sub|Mult|Div when e1'=Float && e2'=Float -> Float
         |Add|Sub|Mult|Div when e1'=Int && e2'=Float -> Float 
         |Add|Sub|Mult|Div when e1'=Float && e2'=Int -> Float
@@ -211,6 +222,7 @@ let rec expr_b = function
     |Asnop(e1,asnp,e2)  -> let e1' = expr_b e1 and  e2'=expr_b e2 in 
     (match asnp with
     Asn when e1'=e2' ->  e1'
+    |Asn when e2'=Void -> e1' (*Extermely poor idea but need to figure out constructor problem that return void*)
     |Asn when e1'=Float && e2'=Int ->  Float
     |Asn when e1'=Int && e2'=Float ->  Float
     |CmpAsn b when e1'=e2' ->  e1'
@@ -238,10 +250,10 @@ in
         else
             List.iter2 (fun (ft, _,_) e -> let et = expr_b e in
                 ignore (check_ass ft et
-                    (Failure ("Illegal actual argument found " ))))
+                    (Failure ("Illegal actual argument found " ^ string_of_typ ft ^ " "^string_of_typ et))))
                 fd.params actuals;
             fd.rettyp
-    |Vecexpr (e1,e2) -> Void
+    |Vecexpr (e1,e2) -> Vec
     |Posop (e1,e2)-> Void
     |Trop(t,e1,e2,e3) -> Void
     |Index(e1,e2) -> let e1' = expr_b e1 and e2' = expr_b e2
