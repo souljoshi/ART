@@ -141,10 +141,16 @@ let struct_name_list = List.fold_left(fun m usr -> StringMap.add usr.sname usr m
     in 
 
 let get_member_funcs name = let st = try StringMap.find name struct_name_list
-    with  Not_found -> raise(Failure("Could not find "))
+    with  Not_found -> raise(Failure("Could not find memeber func"))
     in List.fold_left(fun m s -> StringMap.add s.fname s m)
         StringMap.empty st.methods
 in
+let get_member_constr name = let st = StringMap.find name struct_name_list
+    in st.ctor
+in
+
+
+
  let get_list_var name = 
         let x= try StringMap.find name struct_name_list
                 with Not_found -> raise(Failure(" Could not find name"))
@@ -210,10 +216,12 @@ let rec expr_b = function
     |CmpAsn b when e1'=e2' ->  e1'
     |CmpAsn b when e1'=Float && e2'=Int ->  Float
     |CmpAsn b when e1'=Int && e2'=Float ->  Float
-    | _ -> raise (Failure ("Invalid assigment of " ^ string_of_expr e1))
+    | _ -> raise (Failure ("Invalid assigment of " ^ string_of_typ e1' ^ " to "^string_of_typ e2'))
     )
     |Call(e1, actuals) as call -> let e1' = (match e1 with 
-        Id s -> function_decl s
+        Id s -> let s' = try get_member_constr s 
+                        with Not_found -> function_decl s
+        in s'
         |Member (e,s) -> let e'= expr_b e in let
             e''= (match e' with
             UserType(s,e1) -> s
