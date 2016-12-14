@@ -12,7 +12,7 @@ let report_dup  exceptf list =
 
         in helper(List.sort compare list)
 let check_ass lval rval err =
-    if lval == rval then lval else raise err
+    if lval = rval then lval else raise err
 
 let rec string_of_expr (*e = "( "^ paren_of_expr e ^ " )"
 and 
@@ -135,6 +135,22 @@ let ret_type s=
     try StringMap.find s final_list
     with Not_found -> raise(Failure("Undeclared variable " ^s))
 in
+let struct_name_list = List.fold_left(fun m usr -> StringMap.add usr.sname usr m)
+    StringMap.empty(structs)
+    in 
+ let get_list_var name = 
+        let x= try StringMap.find name struct_name_list
+                with Not_found -> raise(Failure(" Could not find name"))
+        in 
+        List.fold_left(fun m (t,n)-> StringMap.add n t m)
+        StringMap.empty(x.decls)
+in
+
+let check_struct_var name var = 
+    let temp  = get_list_var name 
+in  try StringMap.find var temp
+    with Not_found -> raise(Failure ("Cannot find"))
+in
 let rec expr_b = function
     IntLit _-> Int
     |CharLit _-> Char
@@ -174,10 +190,10 @@ let rec expr_b = function
     |Noexpr -> Void
     |Asnop(e1,asnp,e2)  -> let e1' = expr_b e1 and  e2'=expr_b e2 in 
     (match asnp with
-    Asn when e1'==e2' ->  e1'
+    Asn when e1'=e2' ->  e1'
     |Asn when e1'=Float && e2'=Int ->  Float
     |Asn when e1'=Int && e2'=Float ->  Float
-    |CmpAsn b when e1'==e2' ->  e1'
+    |CmpAsn b when e1'=e2' ->  e1'
     |CmpAsn b when e1'=Float && e2'=Int ->  Float
     |CmpAsn b when e1'=Int && e2'=Float ->  Float
     | _ -> raise (Failure ("Invalid assigment of " ^ string_of_expr e1))
@@ -193,7 +209,7 @@ in
         else
             List.iter2 (fun (ft, _,_) e -> let et = expr_b e in
                 ignore (check_ass ft et
-                    (Failure ("Illegal actual argument found "))))
+                    (Failure ("Illegal actual argument found " ))))
                 fd.params actuals;
             fd.rettyp
     |Vecexpr (e1,e2) -> Void
@@ -208,17 +224,13 @@ in
                     if e2'!= Int
                         then raise(Failure ("Must index with an integer "))
                          else te1'  
-    |Member(e1,e2) -> let e1' = (match e1 with
-          Id s -> ret_type s
-          |_ -> raise (Failure("Still checing"))           
-         ) 
-in let e2' = ret_type e2
-         in 
-            e2'
-
-
-    
-            
+    |Member(e1,e2) -> let e1' = expr_b e1
+in let te1'= (match e1' with
+        UserType(s,e1) -> s
+        |_ -> raise(Failure("Not a UserType"))
+        )
+    in
+    check_struct_var te1' e2            
 in 
 let check_bool_expr e = if expr_b e != Int (*Could take in any number need to force check 1 or 0*)
     then raise(Failure(" Bool error"))
