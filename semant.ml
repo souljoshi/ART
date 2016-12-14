@@ -103,7 +103,8 @@ let built_in_fun = StringMap.add "printi"
 (StringMap.add "addshape"{rettyp=Void;fname="addshape";params=[(UserType("DUMMY",ShapeType),"x",Value)];locals=[];body=[];typ=Func;owner="None";}
 (StringMap.add "cos"{rettyp=Float;fname="cos";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None";}
 (StringMap.add "sin"{rettyp=Float;fname="sin";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None";}
-(StringMap.singleton "printc" {rettyp=Void; fname="printf";params=[(Char, "x",Value)];locals=[];body=[];typ=Func;owner="None";}))))))
+(StringMap.add "setcolor"{rettyp=Void;fname="setcolor";params=[(Float,"x",Value);(Float,"x",Value);(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None";}
+(StringMap.singleton "printc" {rettyp=Void; fname="printf";params=[(Char, "x",Value)];locals=[];body=[];typ=Func;owner="None";})))))))
 (*let function_decls =
     List.map(fun fd -> fd.fname) functions*)
 in 
@@ -156,6 +157,19 @@ let get_member_constr name = let st = StringMap.find name struct_name_list
 in
 
 
+let get_struct_memember_var name = let st = try StringMap.find name struct_name_list
+    with  Not_found -> raise(Failure("Could not find memeber func"))
+    in List.fold_left(fun m (t,n) -> StringMap.add n t m)
+        StringMap.empty st.decls
+in
+
+let list_of_member_var name var =
+    let temp = get_struct_memember_var name
+in
+    StringMap.find var temp 
+
+in
+
 
  let get_list_var name = 
         let x= try StringMap.find name struct_name_list
@@ -177,13 +191,18 @@ in try StringMap.find func temp
     with Not_found -> raise(Failure("error"))
     in
 
+
 let rec expr_b = function
     IntLit _-> Int
     |CharLit _-> Char
     |StringLit _-> String
     |FloatLit _ -> Float
     |VecLit (_,_)-> Vec
-    |Id s -> ret_type s
+    |Id s -> if(func.typ=Method||func.typ=Constructor) (*ASSUMES THAT YOU ARE NOT USING SAME VAR NAME AS PARAMETERS*)
+            then try list_of_member_var func.owner s
+                with Not_found -> ret_type s 
+        else
+            ret_type s
     |Binop(e1,op,e2) as e -> let e1' = expr_b e1 and e2'=expr_b e2 in
     (match op with
         Add|Sub|Mult|Div|Mod when e1'=Int && e2'=Int -> Int
@@ -299,5 +318,5 @@ in check_block e1
 in stmt (Block (func.locals,func.body))
 in
     List.iter function_check functions;
-    (*List.iter (fun sdecl -> List.iter function_check (sdecl.ctor::sdecl.methods)) structs*)
-    (* Need to somehow take care of "struct scope" once this is done it should mostly work)
+    List.iter (fun sdecl -> List.iter function_check (sdecl.ctor::sdecl.methods)) structs
+    (* Need to somehow take care of "struct scope" once this is done it should mostly work*)
