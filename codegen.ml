@@ -166,10 +166,8 @@ let translate prog =
       else if glvertex_func   == fdef then   L.build_call glvertex_func    [|act.(0) ; act.(1) |] "" builder  
       else if sin_func         == fdef then   L.build_call sin_func        [|act.(0)|] "" builder 
       else if cos_func         == fdef then   L.build_call cos_func        [|act.(0)|] "" builder
-      (* Draw Point *)
-      else  (ignore( L.build_call glbegin_func     [|L.const_int i32_t 0 |] "" builder);
-            ignore(L.build_call glvertex_func    [|act.(0) ; act.(1) |] "" builder );
-            L.build_call glend_func [|  |] "" builder )
+      (* Draw Point - draws vertices *)
+      else L.build_call glvertex_func    [|act.(0) ; act.(1) |] "" builder
 
     in
     let do_glut_init argc argv title draw_func idle_func builder = 
@@ -258,6 +256,16 @@ let translate prog =
         (* Get an instruction builder that will emit instructions in the current function *)
         let builder = L.builder_at_end context (L.entry_block the_function) in
 
+        (* Checks if function is a draw shape method *)
+        let is_draw_shape fdecl = (fdecl.A.typ = A.Method) && (fdecl.A.fname = "draw") &&
+            ((let s = List.find (fun s -> s.A.sname = fdecl.A.owner) structs in s.A.ss) = A.ShapeType)
+        in
+        (* call a closing glend in a shape_draw before before emitting return *)
+        let build_custom_ret_void builder =
+          ( if is_draw_shape fdecl 
+              then ignore(L.build_call glend_func [|  |] "" builder) else ());
+          L.build_ret_void builder
+        in
         (* For unique globals, use a name that ends with '.' *)
         (* NOTE: there can only be one variable name "foo." that is a unique global *)
         let unique_global n init = match (L.lookup_global n the_module) with
@@ -809,7 +817,7 @@ let translate prog =
                 | A.Expr e -> ignore (expr builder e); builder  (* Simply evaluate expression *)
 
                 | A.Return e -> ignore (match fdecl.A.rettyp with  (* Different cases for void and non-void *)
-                    A.Void -> L.build_ret_void builder
+                    A.Void -> build_custom_ret_void builder
                     | _ -> L.build_ret (expr builder e) builder); builder
                 | A.If (predicate, then_stmt, else_stmt) ->
                     let bool_val = expr builder predicate in
@@ -901,10 +909,16 @@ let translate prog =
                   | _      -> closure_scopes@[(formal_vars, LocalScope); (StringMap.empty, StructScope) ; (global_vars, GlobalScope)]
         in 
 
-        let builder = build_block_body (fdecl.A.locals, fdecl.A.body) builder scopes_list in
+        let builder = 
+          (* Add glbegin to beginning of shape draw methods *)
+          ( if (is_draw_shape fdecl) 
+              then ignore(L.build_call glbegin_func     [|L.const_int i32_t 0 |] "" builder)
+              else ()
+          );
+          build_block_body (fdecl.A.locals, fdecl.A.body) builder scopes_list in
         (* Add a return if the last block falls off the end *)
         add_terminal builder (match fdecl.A.rettyp with
-            A.Void -> L.build_ret_void
+            A.Void -> build_custom_ret_void
           | t -> L.build_ret (L.const_int (ltype_of_typ t) 0))
     in
     (* old build_function_body *)
