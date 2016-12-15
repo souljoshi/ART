@@ -106,15 +106,11 @@ let function_check func =
     in
         report_dup(fun n-> "Duplicate Parameter Name " ^n ^"in " ^ func.fname)(List.map (fun (_,a,_) ->  a)func.params);    (*Checks is there exists duplicate parameter names and function local name*)
         report_dup(fun n-> "Duplicate local Name " ^n ^ " in " ^ func.fname)(List.map (fun (_,a,_) ->  a)func.locals);  
-    (* Gets type for variable name s *)
-    let ret_type s=
-        try StringMap.find s local_vars (*Searches symbol list to see if variable is defined and returns type*)
-        with Not_found -> raise(Failure("Undeclared variable " ^s))
-    in
+
     (* Map of struct name to struct *)
     let struct_name_list = List.fold_left(fun m usr -> StringMap.add usr.sname usr m) (*creates a struct names list*)
         StringMap.empty(structs)
-        in 
+    in 
     (* Given struct give map of method names to method *)
     let get_member_funcs name = let st = try StringMap.find name struct_name_list (*creates a struct member funciontlist*)
         with  Not_found -> raise(Failure("Could not find memeber func"))
@@ -128,7 +124,7 @@ let function_check func =
     
     (* Get map of memb_variables to their type *)
     let get_struct_member_var name = let st = try StringMap.find name struct_name_list
-        with  Not_found -> raise(Failure("Could not find memeber func"))
+        with  Not_found -> raise(Failure("Could not find member func"))
         in List.fold_left(fun m (t,n) -> StringMap.add n t m)
             StringMap.empty st.decls
     in
@@ -163,6 +159,41 @@ let function_check func =
     
 
     let rec check_block(local_decls, stmt_list) scopes =
+
+        (* Prepend the block local variables to the scopes list *)
+        (* Prepend any initializers to the statment list *)
+        let (stmt_list, scopes) = 
+            report_dup(fun n-> "Duplicate local Name " ^n ^ " in " ^ func.fname)(List.map (fun (_,a,_) ->  a)local_decls);
+            let add_local m (t,n) =  StringMap.add n t m in
+                 (* NOTE this translation should be moved to the semantic part of the code *)
+            let (stmt_list, local_decls) = List.fold_left
+                  (* Handle expression initers by adding them as assignment expression statments *)
+                  (fun (sl, ld) (t,n,i) -> 
+                        ( match i with Exprinit e -> Expr( Asnop(Id(n),Asn, e) )::sl , (t,n)::ld  
+                          | _  -> sl, (t,n)::ld (* Silently ingore NoInit and ListInit. HANDLE OTHER INTIIALIZERS*) 
+                        )
+                  ) (stmt_list, [])
+                (* Need to reverse since we are pushing to top of stmt_list. Luckily, the fold unreversed local_decls *)
+                (List.rev local_decls)
+            in
+            let locals =  List.fold_left add_local StringMap.empty local_decls
+            in  stmt_list,(locals, LocalScope)::scopes
+        in
+        (* Recursive ret_type *)
+        let rec _ret_type n scopes =
+            let hd = List.hd scopes in
+                try (match hd with
+                    (globs, GlobalScope) -> StringMap.find n globs
+                  | (locls, LocalScope)  -> ( try StringMap.find n locls
+                                              with Not_found -> _ret_type n (List.tl scopes) )
+                  | (_, StructScope) -> (
+                    try member_var_type func.owner n with Failure _ -> _ret_type n (List.tl scopes) )
+                )
+                with Not_found -> raise(Failure("Undeclared variable " ^n))
+        in
+        (* Gets type for variable name s [old ret_type]*)
+        let ret_type n = _ret_type n scopes 
+        in
         let rec expr_b = function
             IntLit _-> Int
             |CharLit _-> Char
@@ -300,12 +331,12 @@ let function_check func =
     (* Construct the scopes list before calling check_block *)
     let scopes_list = match func.typ with
                 (* Functions can't access members so no struct scope *)
-                Func -> [(formal_vars, LocalScope); (global_vars, GlobalScope) ]
+                Func -> [(local_vars, LocalScope); (global_vars, GlobalScope) ]
                 (* Don't need  struct scope map as we have one and the type doesn't match as well.
                    So we are using an empty map *)
-              | _      -> [(formal_vars, LocalScope); (StringMap.empty, StructScope) ; (global_vars, GlobalScope)]
+              | _      -> [(local_vars, LocalScope); (StringMap.empty, StructScope) ; (global_vars, GlobalScope)]
     in 
-    check_block (func.locals, func.body) scopes_list
+    check_block ([], func.body) scopes_list
 in
 List.iter function_check functions;
 List.iter (fun sdecl -> List.iter function_check (sdecl.ctor::sdecl.methods)) structs
