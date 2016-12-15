@@ -287,7 +287,14 @@ in
                 fd.params actuals;
             fd.rettyp
     |Vecexpr (e1,e2) -> Vec
-    |Posop (e1,e2)-> Void
+    |Posop (p,e2)-> let e2'=expr_b e2
+    in (match p with
+        Postinc when e2'=Float -> Float
+        |Postinc when e2'=Int -> Int
+        |Postdec when e2'=Float -> Float
+        |Postdec when e2'=Int -> Int
+        |_ -> raise(Failure("Cannot apply PostInc or PostDec " ^ " to" ^ string_of_expr e2))
+    )
     |Trop(t,e1,e2,e3) -> Void
     |Index(e1,e2) -> let e1' = expr_b e1 and e2' = expr_b e2
                     in let te1' = (match e1' with
