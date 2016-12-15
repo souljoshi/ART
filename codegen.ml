@@ -282,7 +282,7 @@ let translate prog =
         in
 
         (* Format strings for printf call *)
-        let int_format_str = unique_global_stringptr "%d\n" "ifmt."  in
+        let int_format_str = unique_global_stringptr "%d" "ifmt."  in
         let char_format_str = unique_global_stringptr "%c" "cfmt."   in
         let string_format_str = unique_global_stringptr "%s" "sfmt." in
         let float_format_str = unique_global_stringptr "%f" "ffmt."  in
@@ -813,7 +813,24 @@ let translate prog =
             (* Build the code for the given statement; return the builder for
              the statement's successor *)
             let rec stmt builder = function
-                  A.Block (vl, sl,ctxt) -> build_block_body (vl, sl) builder scopes
+                  A.Block (vl, sl,ctxt) ->
+                    (* Handle context start *)
+                    let glcontext = function A.PointContext -> 0 | A.LineContext -> 1 | A.TriangleContext -> 4 in
+                    let contexti = L.const_int i32_t (glcontext ctxt) in
+
+                    let builder =
+                    (* start a new context if necessary.*)
+                    (if ctxt = A.PointContext then () (* Point context is noop *)
+                      else (ignore(L.build_call glend_func [| |] "" builder);
+                            ignore(L.build_call glbegin_func [|contexti|] "" builder))
+                    );
+                    build_block_body (vl, sl) builder scopes
+                    in
+                    (if ctxt = A.PointContext then () (* Point context is noop *)
+                      else (ignore(L.build_call glend_func [| |] "" builder);
+                            ignore(L.build_call glbegin_func [|L.const_int i32_t 0|] "" builder))
+                    );
+                    builder
                 | A.Expr e -> ignore (expr builder e); builder  (* Simply evaluate expression *)
 
                 | A.Return e -> ignore (match fdecl.A.rettyp with  (* Different cases for void and non-void *)

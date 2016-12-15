@@ -200,10 +200,6 @@ let string_of_fbind (t,s, v) =
       Value -> string_of_typ t ^" "^ s
     | Ref   -> string_of_typ t ^"& "^ s
 
-let string_of_usrtype s = string_of_stosh s.ss ^ " "^s.sname^" {\n"
-        ^ String.concat ";\n" (List.map string_of_bind s.decls) ^  ";\n}\n"
-
-
 let rec  string_of_initer = function
     Exprinit(e) -> string_of_expr e
     (* Already Reversed *)
@@ -217,9 +213,12 @@ let string_of_vdecl (t, id,i ) =
 
 
 let rec string_of_stmt = function
-    Block(decls, stmts, _) ->
-      "{\n" ^  String.concat "" (List.map string_of_vdecl (decls)) 
-      ^ String.concat "" (List.map string_of_stmt stmts) ^ "}\n"
+    Block(decls, stmts, ctxt) ->
+      let enclosers = function PointContext -> ("{","}") | LineContext -> ("[","]")
+                          | TriangleContext -> ("<",">") in
+      let opener,closer = enclosers ctxt in
+      opener^"\n" ^  String.concat "" (List.map string_of_vdecl (decls)) 
+      ^ String.concat "" (List.map string_of_stmt stmts) ^ closer ^ "\n"
   | Expr(expr) -> string_of_expr expr ^ ";\n";
   | Return(expr) -> "return " ^ string_of_expr expr ^ ";\n";
   | Break      -> "break;\n"
@@ -263,6 +262,10 @@ let string_of_fdecl f =
     string_rettyp f  ^ " " ^ string_fname f ^ " ( " ^ 
     String.concat ", " (List.map string_of_fbind f.params) ^ " )\n" ^
     string_of_stmt (Block(f.locals, f.body,PointContext))
+
+let string_of_usrtype s = string_of_stosh s.ss ^ " "^s.sname^" {\n"
+        ^ String.concat ";\n" (List.map string_of_bind s.decls) ^  ";\n}\n"
+        ^ String.concat "\n" (List.map string_of_fdecl (s.ctor::s.methods))
 
 let string_of_program p =
     String.concat "" (List.map string_of_vdecl p.v)  ^
