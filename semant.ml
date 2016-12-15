@@ -308,12 +308,7 @@ let function_check func =
             then raise(Failure(" Not a boolean value"))
             else() in 
         let rec stmt = function
-            Block (_,e1)  -> ()(*let rec check_block = function
-            [Return _ as ret] -> stmt ret
-            |Return _ :: _ -> raise(Failure("Can't put more code after return"))
-            |Block(s,e1):: ss -> check_block (e1 @ ss ) 
-            |s :: ss -> stmt s; check_block ss  
-            |[] -> () in check_block e1*)
+             Block (vl,sl)  -> check_block (vl, sl) scopes
             |Expr e -> ignore(expr_b e)
             |Return e -> let e1' = expr_b e in if e1'= func.rettyp then () else
                 raise(Failure("Incorrect turn type on " ^ func.fname))
@@ -326,7 +321,13 @@ let function_check func =
             |Drawpoint (e1,e2)-> ()
             |Addshape e-> ()
             |_-> raise(Failure ("Here"))   
-        in List.iter stmt stmt_list (* End of check_block *)
+        in 
+        let check_ret () = match stmt_list with
+            [Return _ ] -> ()
+            |Return _ :: _ -> raise(Failure("Can't put more code after return"))
+            |_ -> ()
+        in
+        check_ret(); List.iter stmt stmt_list (* End of check_block *)
     in 
     (* Construct the scopes list before calling check_block *)
     let scopes_list = match func.typ with
