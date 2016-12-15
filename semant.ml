@@ -1,7 +1,7 @@
 open Ast
 
 module StringMap = Map.Make(String)
-
+type scope = GlobalScope | LocalScope 
 (* Semantic checking of a program. Returns possibly modified Ast if successful,
    throws an exception if something is wrong. *)
 let report_dup  exceptf list =
@@ -70,12 +70,22 @@ let struct_build prog =
             Func -> (m, true) (* true means keep function *)
           | Constructor -> let s = try StringMap.find f.owner m
                     with Not_found -> raise (Failure ("constructor of undefined struct: " ^ f.owner^"::"^f.fname))
-                in (StringMap.add s.sname
+                in let b= f=s.ctor
+            in  if b = false
+                then (StringMap.add s.sname
                     {ss = s.ss;sname = s.sname; decls = s.decls; ctor = f; methods = s.methods} m , false)
+                else
+                    raise(Failure("There already exists a constructor called " ^f.fname ^" in struct " ^s.sname))
           | Method -> let s = try StringMap.find f.owner m
                     with Not_found -> raise (Failure ("method of undefined struct: " ^ f.owner^"::"^f.fname))
-                in (StringMap.add s.sname
+                in let b= List.mem f s.methods
+            in
+                    if b = false
+                    then
+                    (StringMap.add s.sname
                     {ss = s.ss;sname = s.sname; decls = s.decls; ctor = s.ctor; methods = f::s.methods} m , false)
+                else
+                    raise(Failure("There already exists a function called " ^f.fname ^" in strufct " ^s.sname))
         in
         List.fold_left ( fun (m,l) f -> let (m, cond) = filter_func m f in
         if cond then (m, f::l) else (m, l) ) (structs, []) functions
@@ -139,6 +149,9 @@ let symbol_list = List.fold_left(fun m(t,n,_)->StringMap.add n t m)
                 in
                     report_dup(fun n-> "Duplicate Parameter Name " ^n ^"in " ^ func.fname)(List.map (fun (_,a,_) ->  a)func.params);
                     report_dup(fun n-> "Duplicate local Name " ^n ^ " in " ^ func.fname)(List.map (fun (_,a,_) ->  a)func.locals);
+
+let scopes_list = [(StringMap.empty,LocalScope);(final_list,LocalScope);(symbol_list,GlobalScope)]
+        in
 let ret_type s=
     try StringMap.find s final_list
     with Not_found -> raise(Failure("Undeclared variable " ^s))
@@ -300,8 +313,8 @@ let rec stmt = function
     Block (_,e1)  -> let rec check_block = function
     [Return _ as ret] -> stmt ret
     |Return _ :: _ -> raise(Failure("Can't put more code after return"))
-    |Block(_,e1):: ss -> check_block (e1 @ ss )
-    |s :: ss -> stmt s; check_block ss 
+    |Block(_,e1):: ss -> check_block (e1 @ ss ) 
+    |s :: ss -> stmt s; check_block ss  
     |[] -> ()
 in check_block e1
     |Expr e -> ignore(expr_b e)
