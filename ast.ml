@@ -55,8 +55,11 @@ type fbind = typ * string * pass
 (* variable declaration *)
 type vdecl = typ * string * initer
 
+(* Context types *)
+type context = PointContext | LineContext | TriangleContext
+
 type stmt =
-    Block of vdecl list * stmt list 
+    Block of vdecl list * stmt list * context
   | Expr of expr
   | Return of expr
   | Break
@@ -214,7 +217,7 @@ let string_of_vdecl (t, id,i ) =
 
 
 let rec string_of_stmt = function
-    Block(decls, stmts) ->
+    Block(decls, stmts, _) ->
       "{\n" ^  String.concat "" (List.map string_of_vdecl (decls)) 
       ^ String.concat "" (List.map string_of_stmt stmts) ^ "}\n"
   | Expr(expr) -> string_of_expr expr ^ ";\n";
@@ -222,7 +225,7 @@ let rec string_of_stmt = function
   | Break      -> "break;\n"
   | Continue   -> "continue;\n"
 
-  | If(e, s, Block([],[])) -> "if (" ^ string_of_expr e ^ ")\n" ^ string_of_stmt s
+  | If(e, s, Block([],[],_)) -> "if (" ^ string_of_expr e ^ ")\n" ^ string_of_stmt s
   | If(e, s1, s2) ->  "if (" ^ string_of_expr e ^ ")\n" ^
       string_of_stmt s1 ^ "else\n" ^ string_of_stmt s2
 
@@ -259,7 +262,7 @@ let string_fname f =
 let string_of_fdecl f = 
     string_rettyp f  ^ " " ^ string_fname f ^ " ( " ^ 
     String.concat ", " (List.map string_of_fbind f.params) ^ " )\n" ^
-    string_of_stmt (Block(f.locals, f.body))
+    string_of_stmt (Block(f.locals, f.body,PointContext))
 
 let string_of_program p =
     String.concat "" (List.map string_of_vdecl p.v)  ^

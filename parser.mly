@@ -201,7 +201,7 @@ stmt:
   /* Block */
   | stmt_block                               { $1 }   /* defined in stmt_block: */
 
-  | IF LPAREN expr RPAREN stmt %prec NOELSE { If($3, $5, Block([],[])) }
+  | IF LPAREN expr RPAREN stmt %prec NOELSE { If($3, $5, Block([],[],PointContext)) }
   | IF LPAREN expr RPAREN stmt ELSE stmt    { If($3, $5, $7) }
 
   | FOR LPAREN expr_opt SEMI expr_opt SEMI expr_opt RPAREN stmt
@@ -222,8 +222,14 @@ stmt:
 
 stmt_block:
   /* Block */
-    LBRACE stmt_list RBRACE                 { Block([], List.rev $2) }
-  | LBRACE declaration_list stmt_list RBRACE{ Block($2, List.rev $3)} /* Already Reversed */
+    LBRACE decl_list_stmt_list RBRACE     { Block(fst $2, snd $2, PointContext) }
+  | LBRACK decl_list_stmt_list RBRACK     { Block(fst $2, snd $2, LineContext) }
+  | LT decl_list_stmt_list GT             { Block(fst $2, snd $2, TriangleContext) }
+
+decl_list_stmt_list:
+    stmt_list                   {([], List.rev $1)} /* stmt_list needs to be reversed */
+  | declaration_list stmt_list  {($1, List.rev $2)} /* declaration doesn't need reversing */
+
 
 /* Optional Expression */
 expr_opt:
