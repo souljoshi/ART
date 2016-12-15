@@ -114,7 +114,8 @@ let built_in_fun = StringMap.add "printi"
 (StringMap.add "cos"{rettyp=Float;fname="cos";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None";}
 (StringMap.add "sin"{rettyp=Float;fname="sin";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None";}
 (StringMap.add "setcolor"{rettyp=Void;fname="setcolor";params=[(Float,"x",Value);(Float,"x",Value);(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None";}
-(StringMap.singleton "printc" {rettyp=Void; fname="printf";params=[(Char, "x",Value)];locals=[];body=[];typ=Func;owner="None";})))))))
+(StringMap.add "drawpoint"{rettyp=Void;fname="drawpoint";params=[(Float,"x",Value);(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None";}
+(StringMap.singleton "printc" {rettyp=Void; fname="printf";params=[(Char, "x",Value)];locals=[];body=[];typ=Func;owner="None";}))))))))
 (*let function_decls =
     List.map(fun fd -> fd.fname) functions*)
 in 
@@ -150,7 +151,7 @@ let symbol_list = List.fold_left(fun m(t,n,_)->StringMap.add n t m)
                     report_dup(fun n-> "Duplicate Parameter Name " ^n ^"in " ^ func.fname)(List.map (fun (_,a,_) ->  a)func.params);
                     report_dup(fun n-> "Duplicate local Name " ^n ^ " in " ^ func.fname)(List.map (fun (_,a,_) ->  a)func.locals);
 
-let scopes_list = [(StringMap.empty,LocalScope);(final_list,LocalScope);(symbol_list,GlobalScope)]
+let scopes_list = [(final_list,LocalScope);(symbol_list,GlobalScope)]
         in
 let ret_type s=
     try StringMap.find s final_list
@@ -205,7 +206,17 @@ in try StringMap.find func temp
     with Not_found -> raise(Failure(func ^ " is not a member function of " ^name))
     in
 
+let add_block_to_scope decls scope =
+        let x = List.fold_left(fun m (t,n,_)  -> StringMap.add n t m)
+                StringMap.empty (decls)
+            in (x,LocalScope)::scopes_list
+in
+let print_scope  scope = 
+    List.iter(fun s -> let smap = fst s
+    in StringMap.iter( fun s n-> print_endline s) smap
+    ) (List.rev scope)
 
+in
 let rec expr_b = function
     IntLit _-> Int
     |CharLit _-> Char
@@ -278,6 +289,9 @@ let rec expr_b = function
         )
 in
         let fd = e1' in
+        if fd.fname = "drawpoint" && func.fname<>"draw"
+        then raise(Failure("Cannot have draw point in none draw method"))
+    else
         if List.length actuals != List.length fd.params then
             raise (Failure ("Incorrect number of arguments "))
         else
@@ -316,11 +330,11 @@ in
 let check_bool_expr e = if expr_b e != Int (*Could take in any number need to force check 1 or 0*)
     then raise(Failure(" Not a boolean value"))
 else() in 
-let rec stmt = function 
+let rec stmt = function
     Block (_,e1)  -> let rec check_block = function
     [Return _ as ret] -> stmt ret
     |Return _ :: _ -> raise(Failure("Can't put more code after return"))
-    |Block(_,e1):: ss -> check_block (e1 @ ss ) 
+    |Block(s,e1):: ss ->  print_scope (add_block_to_scope s scopes_list ) ; check_block (e1 @ ss ) 
     |s :: ss -> stmt s; check_block ss  
     |[] -> ()
 in check_block e1
@@ -336,7 +350,7 @@ in check_block e1
     |Drawpoint (e1,e2)-> ()
     |Addshape e-> ()
     |_-> raise(Failure ("Here"))   
-in stmt (Block (func.locals,func.body))
+in stmt (Block (func.locals,func.body)) 
 in
     List.iter function_check functions;
     List.iter (fun sdecl -> List.iter function_check (sdecl.ctor::sdecl.methods)) structs
