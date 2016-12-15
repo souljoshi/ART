@@ -265,3 +265,6 @@ let string_of_program p =
     String.concat "" (List.map string_of_vdecl p.v)  ^
     String.concat "" (List.map string_of_usrtype p.s) ^
     String.concat "" (List.map string_of_fdecl p.f)  
+
+let default_ctr n = { rettyp = Void; fname = n; params = []; locals = [];
+                      body = [] ; typ = Constructor; owner = n }

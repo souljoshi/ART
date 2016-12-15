@@ -11,6 +11,7 @@ let report_dup  exceptf list =
             |[]->()
 
         in helper(List.sort compare list)
+(* lftype, rtype, errmsg *)
 let check_ass lval rval err =
     if lval = rval then lval else 
     (match lval with 
@@ -35,27 +36,24 @@ let struct_build prog =
             Func -> (m, true) (* true means keep function *)
           | Constructor -> let s = try StringMap.find f.owner m
                     with Not_found -> raise (Failure ("constructor of undefined struct: " ^ f.owner^"::"^f.fname))
-                in let b= f=s.ctor (*Check if the existing constructor matches one to one to the processing function if so than is reports as a duplicate*)
-                in   if b = false
-                        then (StringMap.add s.sname
+                in if (s.ctor.fname="") then (StringMap.add s.sname
                             {ss = s.ss;sname = s.sname; decls = s.decls; ctor = f; methods = s.methods} m , false)
                         else
                             raise(Failure("There already exists a constructor called " ^f.fname ^" in struct " ^s.sname))
           | Method -> let s = try StringMap.find f.owner m
                     with Not_found -> raise (Failure ("method of undefined struct: " ^ f.owner^"::"^f.fname))
-                in let b= List.mem f s.methods (*checks if the method already is a member of the s.methods is so than it is duplicate and we catch that*)
-            in
-                    if b = false
-                        then
-                            (StringMap.add s.sname
+                in try ignore( List.find (fun f2 -> f2.fname = f.fname) s.methods);
+                       raise(Failure("There already exists a method called " ^f.fname ^" in struct " ^s.sname))   
+                    with Not_found -> (StringMap.add s.sname
                                 {ss = s.ss;sname = s.sname; decls = s.decls; ctor = s.ctor; methods = f::s.methods} m , false)
-                        else
-                            raise(Failure("There already exists a function called " ^f.fname ^" in strufct " ^s.sname))
         in
         List.fold_left ( fun (m,l) f -> let (m, cond) = filter_func m f in
         if cond then (m, f::l) else (m, l) ) (structs, []) functions
     in
-    { s = List.map (fun st -> StringMap.find st.sname structs) prog.s;
+    { s = List.map (fun st -> let s = StringMap.find st.sname structs in
+            (* If no contructor is defined add default *)
+            {ss = s.ss;sname = s.sname; decls = s.decls; ctor = if (s.ctor.fname="") then default_ctr s.sname else s.ctor; methods =s.methods}
+        ) prog.s;
       f = List.rev funcs ; v = globals }
 
 let check prog =

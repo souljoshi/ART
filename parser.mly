@@ -11,9 +11,6 @@
      [] -> t
    | [i] -> Array(t, i)
    | i::l -> List.fold_left (fun at e -> Array(at,e)) (Array(t, i)) l
-
-  let default_ctr n = { rettyp = Void; fname = n; params = []; locals = [];
-                        body = [] ; typ = Constructor; owner = n }
 %}
 
 %token VOID INT CHAR DOUBLE VEC STRING
@@ -116,7 +113,7 @@ struct_or_shape_specifier:
 
 struct_or_shape_definition:
     struct_or_shape ID LBRACE struct_declaration_list RBRACE
-    { { ss = $1 ; sname = $2; decls = $4 ; ctor = default_ctr $2; methods = []} }
+    { { ss = $1 ; sname = $2; decls = $4 ; ctor = default_ctr ""; methods = []} }
 
 struct_declaration_list:
    struct_declaration                              {$1}
