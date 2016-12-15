@@ -1,7 +1,7 @@
 open Ast
 
 module StringMap = Map.Make(String)
-type scope = GlobalScope | LocalScope 
+type scope = GlobalScope | LocalScope  (*only really need the global and local scope for AST checking I THINK*)
 (* Semantic checking of a program. Returns possibly modified Ast if successful,
    throws an exception if something is wrong. *)
 let report_dup  exceptf list =
@@ -14,45 +14,10 @@ let report_dup  exceptf list =
 let check_ass lval rval err =
     if lval = rval then lval else 
     (match lval with 
-        UserType(s,s1) when s="DUMMY" ->rval (*Since DrawPoint demands a string that it will use as a type I give it a String Dummy and will past semant*)
-        |_-> raise err
+        UserType(s,s1) when s="DUMMY" ->rval (*Since addshape demands a string  for the name that it will use as a type I give it a String Dummy and will past semant*)
+        |_-> raise err                        (*Since this is a special case I supsend the one to one checking and just use rval*)
     )
 
-let rec string_of_expr (*e = "( "^ paren_of_expr e ^ " )"
-and 
-paren_of_expr *) = function
-    IntLit(l) -> string_of_int l
-  | CharLit(l) -> "'" ^ (string_of_chr l) ^ "'"
-  | FloatLit(l) -> string_of_float l
-  | StringLit(s) -> "" ^ s
-  | VecLit(a,b)  -> "< " ^ (string_of_float a) ^ " , " ^ (string_of_float b) ^ " >"
-  | Id(s) -> s
-  | Vecexpr(e1,e2) -> " < "^ string_of_expr e1 ^ " , " ^ string_of_expr e2 ^ " >"
-  | Binop(e1, o, e2) ->
-      string_of_expr e1 ^ " " ^ string_of_op o ^ " " ^ string_of_expr e2
-  | Asnop(e1, o, e2) ->
-      string_of_expr e1 ^ " " ^ string_of_asnop o ^ " " ^ string_of_expr e2
-  | Unop(o, e) -> string_of_uop o ^ string_of_expr e
-  | Posop(o, e) -> string_of_expr e ^ string_of_pop o
-  | Trop (o, e1, e2, e3) -> let t = strings_of_trop o in
-            string_of_expr e1 ^ fst t ^ string_of_expr e2 ^ snd t ^ string_of_expr e3
-  | Call(f, el) ->
-      string_of_expr f ^ "(" ^ String.concat ", " (List.map string_of_expr el) ^ ")"
-  | Index(e1, e2) -> string_of_expr e1 ^ "[" ^ string_of_expr e2 ^ "]"
-  | Member(e1, s) -> string_of_expr e1 ^ "." ^ s
-  | Noexpr -> ""
-
-
-let rec string_of_typ = function
-    Int -> "int"
-  | Char -> "char"
-  | Void -> "void"
-  | Float -> "double"
-  | Vec  -> "vec"
-  | String -> "string"
-  | UserType(n,ss) -> string_of_stosh ss ^ n
-  | Array(_, _) as a -> let (t,l) = list_of_arr a
-     in string_of_typ t ^ String.concat "" (List.map (fun e -> "[" ^ string_of_expr e ^ "]") l)
 
 let struct_build prog =
     let globals = prog.v
@@ -70,22 +35,22 @@ let struct_build prog =
             Func -> (m, true) (* true means keep function *)
           | Constructor -> let s = try StringMap.find f.owner m
                     with Not_found -> raise (Failure ("constructor of undefined struct: " ^ f.owner^"::"^f.fname))
-                in let b= f=s.ctor
-            in  if b = false
-                then (StringMap.add s.sname
-                    {ss = s.ss;sname = s.sname; decls = s.decls; ctor = f; methods = s.methods} m , false)
-                else
-                    raise(Failure("There already exists a constructor called " ^f.fname ^" in struct " ^s.sname))
+                in let b= f=s.ctor (*Check if the existing constructor matches one to one to the processing function if so than is reports as a duplicate*)
+                in   if b = false
+                        then (StringMap.add s.sname
+                            {ss = s.ss;sname = s.sname; decls = s.decls; ctor = f; methods = s.methods} m , false)
+                        else
+                            raise(Failure("There already exists a constructor called " ^f.fname ^" in struct " ^s.sname))
           | Method -> let s = try StringMap.find f.owner m
                     with Not_found -> raise (Failure ("method of undefined struct: " ^ f.owner^"::"^f.fname))
-                in let b= List.mem f s.methods
+                in let b= List.mem f s.methods (*checks if the method already is a member of the s.methods is so than it is duplicate and we catch that*)
             in
                     if b = false
-                    then
-                    (StringMap.add s.sname
-                    {ss = s.ss;sname = s.sname; decls = s.decls; ctor = s.ctor; methods = f::s.methods} m , false)
-                else
-                    raise(Failure("There already exists a function called " ^f.fname ^" in strufct " ^s.sname))
+                        then
+                            (StringMap.add s.sname
+                                {ss = s.ss;sname = s.sname; decls = s.decls; ctor = s.ctor; methods = f::s.methods} m , false)
+                        else
+                            raise(Failure("There already exists a function called " ^f.fname ^" in strufct " ^s.sname))
         in
         List.fold_left ( fun (m,l) f -> let (m, cond) = filter_func m f in
         if cond then (m, f::l) else (m, l) ) (structs, []) functions
@@ -100,7 +65,7 @@ let check prog =
     and structs = prog.s
 in
     
-        report_dup(fun n-> "Duplicate Function Name " ^n)(List.map (fun fd -> fd.fname)functions);
+        report_dup(fun n-> "Duplicate Function Name " ^n)(List.map (fun fd -> fd.fname)functions); (*Does pretty basic superfical checking if there exists duplicate function names, global or structs*)
 
         report_dup(fun n-> "Duplicate Global Name " ^n)(List.map (fun (_,a,_) ->  a)globals);
 
@@ -108,7 +73,7 @@ in
 
 let built_in_fun = StringMap.add "printi"
 {rettyp=Void; fname="printi";params=[(Int, "x",Value)];locals=[];body=[];typ=Func;owner="None"}
-(StringMap.add"printf" {rettyp=Void; fname="printf";params=[(Float, "x",Value)];locals=[];body=[];typ=Func;owner="None";}
+(StringMap.add"printf" {rettyp=Void; fname="printf";params=[(Float, "x",Value)];locals=[];body=[];typ=Func;owner="None";}       (*Builds a list of the predefined functions special note about add shape it demands a name to contstruct the type *)
 (StringMap.add "prints" {rettyp=Void; fname="printf";params=[(String, "x",Value)];locals=[];body=[];typ=Func;owner="None";}
 (StringMap.add "addshape"{rettyp=Void;fname="addshape";params=[(UserType("DUMMY",ShapeType),"x",Value)];locals=[];body=[];typ=Func;owner="None";}
 (StringMap.add "cos"{rettyp=Float;fname="cos";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None";}
@@ -123,14 +88,11 @@ let function_decls = List.fold_left (fun m fd -> StringMap.add fd.fname fd m)
                         built_in_fun functions
 
 in
-let function_decl s = try StringMap.find s function_decls
+let function_decl s = try StringMap.find s function_decls       (*Builds a string map of name of func to function recored*)
     with Not_found -> raise (Failure ("Unrecognized function " ^ s ^" did you forget to define it ?"))
 in
-(*
-    let _ = try List.find (fun s-> s ="main") function_decls 
-        with Not_found -> raise(Failure (" Need a main function"))
-    *)
-    let _ = function_decl "main"
+
+    let _ = function_decl "main" (*Makes sure that main is defined*)
              
 in
 
@@ -145,30 +107,31 @@ let symbol_list = List.fold_left(fun m(t,n,_)->StringMap.add n t m)
         let rev_list =  List.fold_left(fun m(t,n,_)->StringMap.add n t m)
         symbol_list(func.params)
             in
-                let final_list =  List.fold_left(fun m(t,n,_)->StringMap.add n t m)
+                let final_list =  List.fold_left(fun m(t,n,_)->StringMap.add n t m) (*Creates a non-scoped symbol list of globals,functions parameters and local functions varaibles*)
                 rev_list(func.locals)
                 in
-                    report_dup(fun n-> "Duplicate Parameter Name " ^n ^"in " ^ func.fname)(List.map (fun (_,a,_) ->  a)func.params);
+                    report_dup(fun n-> "Duplicate Parameter Name " ^n ^"in " ^ func.fname)(List.map (fun (_,a,_) ->  a)func.params);    (*Checks is there exists duplicate parameter names and function local name*)
                     report_dup(fun n-> "Duplicate local Name " ^n ^ " in " ^ func.fname)(List.map (fun (_,a,_) ->  a)func.locals);
 
-let scopes_list = [(final_list,LocalScope);(symbol_list,GlobalScope)]
+let scopes_list = [(final_list,LocalScope);(symbol_list,GlobalScope)] (*Builds a very basic scope list*)
         in
+
 let ret_type s=
-    try StringMap.find s final_list
+    try StringMap.find s final_list (*Searches symbol list to see if variable is defined and returns type*)
     with Not_found -> raise(Failure("Undeclared variable " ^s))
 in
 
-let struct_name_list = List.fold_left(fun m usr -> StringMap.add usr.sname usr m)
+let struct_name_list = List.fold_left(fun m usr -> StringMap.add usr.sname usr m) (*creates a struct names list*)
     StringMap.empty(structs)
     in 
 
-let get_member_funcs name = let st = try StringMap.find name struct_name_list
+let get_member_funcs name = let st = try StringMap.find name struct_name_list (*creates a struct member funciontlist*)
     with  Not_found -> raise(Failure("Could not find memeber func"))
     in List.fold_left(fun m s -> StringMap.add s.fname s m)
         StringMap.empty st.methods
-in
-let get_member_constr name = let st = StringMap.find name struct_name_list
-    in st.ctor
+in 
+    let get_member_constr name = let st = StringMap.find name struct_name_list (*creates a struct member funciontlist*)
+        in st.ctor
 in
 
 
@@ -190,20 +153,20 @@ in
         let x= try StringMap.find name struct_name_list
                 with Not_found -> raise(Failure(" Could not find struct " ^name ^ " did you forgot to create  it?" ))
         in 
-        List.fold_left(fun m (t,n)-> StringMap.add n t m)
-        StringMap.empty(x.decls)
+            List.fold_left(fun m (t,n)-> StringMap.add n t m)
+                StringMap.empty(x.decls)
 in
 
 let check_struct_var name var = 
-    let temp  = get_list_var name 
-in  try StringMap.find var temp
-    with Not_found -> raise(Failure ("Cannot find local variable " ^ var ^" in "^ name))
+        let temp  = get_list_var name 
+in          try StringMap.find var temp
+                with Not_found -> raise(Failure ("Cannot find local variable " ^ var ^" in "^ name))
 in
 
 let check_mem_func_name name func =
     let temp = get_member_funcs name 
 in try StringMap.find func temp
-    with Not_found -> raise(Failure(func ^ " is not a member function of " ^name))
+        with Not_found -> raise(Failure(func ^ " is not a member function of " ^name))
     in
 
 let add_block_to_scope decls scope =
@@ -246,7 +209,7 @@ let rec expr_b = function
         |Less|Leq|Greater|Geq when e1'=Int && e2'=Float -> Int
         |Less|Leq|Greater|Geq when e1'=Float && e2'=Int-> Int
         |And|Or when e1'=Int && e2'=Int -> Int
-        | _-> raise(Failure ("No unariy operator defined for "^ string_of_expr e1 ^ " "^string_of_expr e2))
+        | _-> raise(Failure ("No unariy operator defined for "^ Ast.string_of_expr e1 ^ " "^Ast.string_of_expr e2))
     )
     |Unop(op,e1) -> let e1' = expr_b e1 in
     (match op with
@@ -260,7 +223,7 @@ let rec expr_b = function
     |Preinc when e1'= Float -> Float
     |Predec when e1'= Int -> Int
     |Predec when e1'= Float -> Float 
-    | _ -> raise(Failure("No unariy operator defined for "^ string_of_expr e1 ))
+    | _ -> raise(Failure("No unariy operator defined for "^ Ast.string_of_expr e1 ))
     )
     |Noexpr -> Void
     |Asnop(e1,asnp,e2)  -> let e1' = expr_b e1 and  e2'=expr_b e2 in 
@@ -272,34 +235,34 @@ let rec expr_b = function
     |CmpAsn b when e1'=e2' ->  e1'
     |CmpAsn b when e1'=Float && e2'=Int ->  Float
     |CmpAsn b when e1'=Int && e2'=Float ->  Float
-    | _ -> raise (Failure ("Invalid assigment of " ^ string_of_typ e1' ^ " to "^string_of_typ e2'))
+    | _ -> raise (Failure ("Invalid assigment of " ^ Ast.string_of_typ e1' ^ " to "^Ast.string_of_typ e2'))
     )
     |Call(e1, actuals) as call -> let e1' = (match e1 with 
         Id s -> let s' = try get_member_constr s 
                         with Not_found -> function_decl s
         in s'
         |Member (e,s) -> let e'= expr_b e in let
-            e''= (match e' with
-            UserType(s,e1) -> s
-            | _-> raise(Failure("Not a UserType"))
-            )
-            in check_mem_func_name e'' s 
+                             e''= (match e' with
+                                    UserType(s,e1) -> s
+                                    | _-> raise(Failure("Not a UserType"))
+                                    )
+                             in check_mem_func_name e'' s 
 
         |_-> raise(Failure("here"))
         )
 in
         let fd = e1' in
-        if fd.fname = "drawpoint" && func.fname<>"draw"
-        then raise(Failure("Cannot have draw point in none draw method"))
-    else
-        if List.length actuals != List.length fd.params then
-            raise (Failure ("Incorrect number of arguments "))
-        else
-            List.iter2 (fun (ft, _,_) e -> let et = expr_b e in
-                ignore (check_ass ft et
-                    (Failure ("Illegal actual argument found " ^ string_of_typ ft ^ " "^string_of_typ et))))
-                fd.params actuals;
-            fd.rettyp
+            if fd.fname = "drawpoint" && func.fname<>"draw"
+                then raise(Failure("Cannot have draw point in none draw method"))
+            else
+                if List.length actuals != List.length fd.params then
+                        raise (Failure ("Incorrect number of arguments "))
+                else
+                         List.iter2 (fun (ft, _,_) e -> let et = expr_b e in
+                            ignore (check_ass ft et
+                            (Failure ("Illegal actual argument found " ^ Ast.string_of_typ ft ^ " "^Ast.string_of_typ et))))
+            fd.params actuals;
+        fd.rettyp
     |Vecexpr (e1,e2) -> Vec
     |Posop (p,e2)-> let e2'=expr_b e2
     in (match p with
@@ -307,7 +270,7 @@ in
         |Postinc when e2'=Int -> Int
         |Postdec when e2'=Float -> Float
         |Postdec when e2'=Int -> Int
-        |_ -> raise(Failure("Cannot apply PostInc or PostDec " ^ " to" ^ string_of_expr e2))
+        |_ -> raise(Failure("Cannot apply PostInc or PostDec " ^ " to" ^ Ast.string_of_expr e2))
     )
     |Trop(t,e1,e2,e3) -> Void
     |Index(e1,e2) -> let e1' = expr_b e1 and e2' = expr_b e2
