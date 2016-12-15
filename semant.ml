@@ -6,7 +6,7 @@ module StringMap = Map.Make(String)
    throws an exception if something is wrong. *)
 let report_dup  exceptf list =
         let rec helper = function 
-            n1 :: n2 ::_ when n1=n2 && n1 <> "draw" -> raise (Failure(exceptf n1) )
+            n1 :: n2 ::_ when n1=n2 -> raise (Failure(exceptf n1) )
             |_ :: t -> helper t
             |[]->()
 
@@ -113,13 +113,14 @@ let function_decls = List.fold_left (fun m fd -> StringMap.add fd.fname fd m)
 
 in
 let function_decl s = try StringMap.find s function_decls
-    with Not_found -> raise (Failure ("Unrecognized function " ^ s))
+    with Not_found -> raise (Failure ("Unrecognized function " ^ s ^" did you forget to define it ?"))
 in
 (*
     let _ = try List.find (fun s-> s ="main") function_decls 
         with Not_found -> raise(Failure (" Need a main function"))
     *)
     let _ = function_decl "main"
+             
 in
 
 
@@ -173,7 +174,7 @@ in
 
  let get_list_var name = 
         let x= try StringMap.find name struct_name_list
-                with Not_found -> raise(Failure(" Could not find name"))
+                with Not_found -> raise(Failure(" Could not find struct " ^name ^ " did you forgot to create  it?" ))
         in 
         List.fold_left(fun m (t,n)-> StringMap.add n t m)
         StringMap.empty(x.decls)
@@ -182,13 +183,13 @@ in
 let check_struct_var name var = 
     let temp  = get_list_var name 
 in  try StringMap.find var temp
-    with Not_found -> raise(Failure ("Cannot find"))
+    with Not_found -> raise(Failure ("Cannot find local variable " ^ var ^" in "^ name))
 in
 
 let check_mem_func_name name func =
     let temp = get_member_funcs name 
 in try StringMap.find func temp
-    with Not_found -> raise(Failure("error"))
+    with Not_found -> raise(Failure(func ^ " is not a member function of " ^name))
     in
 
 
@@ -221,7 +222,7 @@ let rec expr_b = function
         |Less|Leq|Greater|Geq when e1'=Int && e2'=Float -> Int
         |Less|Leq|Greater|Geq when e1'=Float && e2'=Int-> Int
         |And|Or when e1'=Int && e2'=Int -> Int
-        | _-> raise(Failure "Bad Stuff")
+        | _-> raise(Failure ("No unariy operator defined for "^ string_of_expr e1 ^ " "^string_of_expr e2))
     )
     |Unop(op,e1) -> let e1' = expr_b e1 in
     (match op with
@@ -235,7 +236,7 @@ let rec expr_b = function
     |Preinc when e1'= Float -> Float
     |Predec when e1'= Int -> Int
     |Predec when e1'= Float -> Float 
-    | _ -> raise(Failure("Bad Stuff 2"))
+    | _ -> raise(Failure("No unariy operator defined for "^ string_of_expr e1 ))
     )
     |Noexpr -> Void
     |Asnop(e1,asnp,e2)  -> let e1' = expr_b e1 and  e2'=expr_b e2 in 
@@ -293,7 +294,7 @@ in let te1'= (match e1' with
     check_struct_var te1' e2            
 in 
 let check_bool_expr e = if expr_b e != Int (*Could take in any number need to force check 1 or 0*)
-    then raise(Failure(" Bool error"))
+    then raise(Failure(" Not a boolean value"))
 else() in 
 let rec stmt = function 
     Block (_,e1)  -> let rec check_block = function
