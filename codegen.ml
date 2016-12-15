@@ -434,13 +434,13 @@ let translate prog =
             | _  -> StringSet.empty
           in
           let rec non_local = function
-              A.Block(decls, stmts) -> non_block_locals decls stmts scopes
+              A.Block(decls, stmts,_) -> non_block_locals decls stmts scopes
             | A.Expr(e)   -> non_local_expr e
             | A.Return(e) -> non_local_expr e
             | A.If(e,s1,s2) -> StringSet.union (non_local_expr e) (StringSet.union (non_local s1)  (non_local s2))
             | A.For(e1,e2,e3,s) -> StringSet.union (StringSet.union (non_local_expr e1) (non_local_expr e2)) 
                                     (StringSet.union (non_local_expr e3)  (non_local s))
-            | A.ForDec(decls,e2,e3,s)-> non_local ( A.Block(decls, [A.For(A.Noexpr, e2, e3, s)]))
+            | A.ForDec(decls,e2,e3,s)-> non_local ( A.Block(decls, [A.For(A.Noexpr, e2, e3, s)],A.PointContext))
             | A.While(e,s) -> StringSet.union (non_local_expr e) (non_local s)
             | _ -> StringSet.empty
             (*| A.Timeloop of string * expr * string * expr * stmt
@@ -805,7 +805,7 @@ let translate prog =
             (* Build the code for the given statement; return the builder for
              the statement's successor *)
             let rec stmt builder = function
-                  A.Block (vl, sl) -> build_block_body (vl, sl) builder scopes
+                  A.Block (vl, sl,ctxt) -> build_block_body (vl, sl) builder scopes
                 | A.Expr e -> ignore (expr builder e); builder  (* Simply evaluate expression *)
 
                 | A.Return e -> ignore (match fdecl.A.rettyp with  (* Different cases for void and non-void *)
@@ -846,8 +846,8 @@ let translate prog =
 
                 (*  make equivalent while *)
                 | A.For (e1, e2, e3, body) -> stmt builder
-                    ( A.Block ( [], [  A.Expr e1; A.While (e2, A.Block ([], [body; A.Expr e3]) ) ] ) )
-                | A.ForDec (vdecls, e2, e3, body) -> stmt builder ( A.Block(vdecls, [A.For(A.Noexpr , e2, e3, body)]) )
+                    ( A.Block ( [], [  A.Expr e1; A.While (e2, A.Block ([], [body; A.Expr e3],A.PointContext) ) ] , A.PointContext) )
+                | A.ForDec (vdecls, e2, e3, body) -> stmt builder ( A.Block(vdecls, [A.For(A.Noexpr , e2, e3, body)], A.PointContext) )
                 | A.Timeloop(s1, e1, s2, e2, stmt) ->
                     let ftype = L.function_type void_t [| |] in
                     let fdef = L.define_function "timeloop." ftype the_module in
