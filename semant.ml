@@ -206,6 +206,7 @@ in
             |FloatLit _ -> Float
             |VecLit (_,_)-> Vec
             |Id s -> ret_type s
+            |Promote _ -> Float
             |Binop(e1,op,e2) -> let e1' = expr_b e1 and e2'=expr_b e2 in
             (match op with
                 Add|Sub|Mult|Div|Mod when e1'=Int && e2'=Int -> Int

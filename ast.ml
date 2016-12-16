@@ -37,6 +37,7 @@ and baseexpr =
   | Call of expr * expr list (* expr list = list of arguments *)
   | Index of expr * expr (* more general than it needs to be, needs to be checked for symantec *)
   | Member of expr * string
+  | Promote of expr
   | Noexpr
 
 and expr = baseexpr * typ
@@ -166,6 +167,7 @@ paren_of_expr *) = function
       string_of_expr f ^ "(" ^ String.concat ", " (List.map string_of_expr el) ^ ")"
   | Index(e1, e2) -> string_of_expr e1 ^ "[" ^ string_of_expr e2 ^ "]"
   | Member(e1, s) -> string_of_expr e1 ^ "." ^ s
+  | Promote e -> "double_of("^(string_of_expr e)^")"
   | Noexpr -> ""
 and string_of_expr (e,_) = string_of_baseexpr e
 
