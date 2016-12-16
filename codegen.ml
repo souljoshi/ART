@@ -621,7 +621,7 @@ let translate prog =
                           in let t = fst(StringMap.find s varmap)
                           in (string_of_typ2 t, t)
             | A.StringLit s -> ("string",A.String)
-            |e -> ("Void",A.Void)(*raise (Failure ("Unsupported Expression for expr_type"^A.string_of_expr e))*)
+            |e -> raise (Failure ("Unsupported Expression for expr_type"^A.string_of_expr e))
 
             in
 
@@ -727,8 +727,9 @@ let translate prog =
             let rec lexpr builder = function
                 A.Id s -> lookup s builder
               | A.Index(e1,e2) -> let e2' = expr builder e2 in
-                  ( match snd(expr_type e1) with 
-                      A.Array(_,_) -> L.build_gep (lexpr builder e1) [|L.const_int i32_t 0; e2'|] "tmp" builder
+                  ( match e1 with 
+                      A.Id _ | A.Index(_,_) | A.Member(_,_) -> 
+                        L.build_gep (lexpr builder e1) [|L.const_int i32_t 0; e2'|] "tmp" builder
                     | _ -> let e1' = expr builder e1 in (* e1 should be indexible *)
                            let tmp = L.build_alloca (L.type_of e1') "indtmp" builder in
                            ignore (L.build_store e1' tmp builder);

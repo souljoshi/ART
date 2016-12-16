@@ -4,6 +4,6 @@ int main()
 	int i;
 	for (i=0; i<10; i+=1){
 		x[i] = i*100;
-		printi(x[i]);
+		printi(x[i]);printc('\n');
 	}
 }
