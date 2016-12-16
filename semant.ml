@@ -101,8 +101,8 @@ let function_check func =
     let formal_vars = List.fold_left(fun m(t,n,_)->StringMap.add n t m) StringMap.empty (func.params)
     in
     (* Top level local_vars *)
-    let local_vars =  List.fold_left(fun m(t,n,_)->StringMap.add n t m) (*Creates a non-scoped symbol of functions parameters and top level local varaibles*)
-    formal_vars (func.locals)
+    let local_vars =  List.fold_left(fun m(t,n,i)-> StringMap.add n t m)
+                            formal_vars (func.locals)
     in
         report_dup(fun n-> "Duplicate Parameter Name " ^n ^"in " ^ func.fname)(List.map (fun (_,a,_) ->  a)func.params);    (*Checks is there exists duplicate parameter names and function local name*)
         report_dup(fun n-> "Duplicate local Name " ^n ^ " in " ^ func.fname)
@@ -164,8 +164,8 @@ let function_check func =
             let (stmt_list, local_decls) = List.fold_left
                   (* Handle expression initers by adding them as assignment expression statments *)
                   (fun (sl, ld) (t,n,i) -> 
-                        ( match i with Exprinit e -> Expr( Asnop(Id(n),Asn, e) )::sl , (t,n)::ld  
-                          | _  -> sl, (t,n)::ld (* Silently ingore NoInit and ListInit. HANDLE OTHER INTIIALIZERS*) 
+                        ( match i with Exprinit e ->  Expr( Asnop(Id(n),Asn, e) )::sl , (t,n)::ld  
+                          | _  ->  sl, (t,n)::ld (* Silently ingore NoInit and ListInit. HANDLE OTHER INTIIALIZERS*) 
                         )
                   ) (stmt_list, [])
                 (* Need to reverse since we are pushing to top of stmt_list. Luckily, the fold unreversed local_decls *)
@@ -235,13 +235,13 @@ let function_check func =
             |Noexpr -> Void
             |Asnop(e1,asnp,e2)  -> let e1' = expr_b e1 and  e2'=expr_b e2 in 
                 (match asnp with
-                     Asn when e1'=e2' ->  e1'
+                     Asn when e1'=e2' -> e1'
                     |Asn when e2'=Void -> e1' (*Extermely poor idea but need to figure out constructor problem that return void*)
                     |Asn when e1'=Float && e2'=Int ->  Float
                     |CmpAsn b when e1'=(expr_b (Binop(e1, b, e2))) ->  e1'
                     (*|CmpAsn b when e1'=Float && e2'=Int ->  Float
                     |CmpAsn b when e1'=Int && e2'=Float ->  Float*)
-                    | _ -> raise (Failure ("Invalid assigment of " ^ Ast.string_of_typ e1' ^ " to "^Ast.string_of_typ e2'))
+                    | _ -> raise (Failure ("Invalid assigment of " ^ Ast.string_of_typ e2' ^ " to "^Ast.string_of_typ e1'))
                 )
             |Call(e1, actuals) -> let e1' = (match e1 with 
                 Id s -> (try lookup_function s 
@@ -272,11 +272,24 @@ let function_check func =
                 |Int -> Int
                 |_ -> raise(Failure("Cannot apply PostInc or PostDec " ^ " to " ^ Ast.string_of_expr e2))
             )
-            |Trop(t,e1,e2,e3) -> Void (* NEEDS TO BE CHECKED *)
+            |Trop(_,e1,e2,e3) -> let e1'=expr_b e1 and e2'= expr_b e2 and e3'=expr_b e3
+                                 in if(e1'!=Int)
+                                    then raise(Failure("Need a Condtional statement"))
+                                else(
+                                    if(e1'=e2')
+                                        then e1'
+                                    else if(e1'=Float&&e2'=Int)
+                                        then e1'
+                                    else if(e1'=Int&&e2'=Float)
+                                            then e2'
+                                    else 
+                                        raise(Failure("Cannot return incompatiable types"))
+                                    )
             |Index(e1,e2) -> let e1' = expr_b e1 and e2' = expr_b e2 (* ALLOW VECTOR INDEXING *)
                             in let te1' = (match e1' with
                              Array(t,_) -> t
-                            | _-> raise(Failure("Indexing a non-array"))
+                             |Vec -> Float
+                            | _-> raise(Failure("Indexing a non-array/vector"))
                                 )
                             in 
                             if e2'!= Int
@@ -302,7 +315,7 @@ let function_check func =
             |For(e1,e2,e3,state) -> ignore(expr_b e1); check_bool_expr e2; ignore(expr_b e3); stmt state
             |While(p,s) -> check_bool_expr p; stmt s 
             |ForDec (vdecls,e2,e3,body) -> stmt  ( Block(vdecls, [For(Noexpr , e2, e3, body)]) )
-            |Timeloop(s1,e1,s2,e2,st1) ->()
+            |Timeloop(s1,e1,s2,e2,st1) -> ()
             |Frameloop (s1,e1,s2,e2,st1)-> ()
             | Break | Continue -> () (* COMPLICATED: CHECK If in Loop *)
         in 
@@ -321,7 +334,7 @@ let function_check func =
                    So we are using an empty map *)
               | _      -> [(local_vars, LocalScope); (StringMap.empty, StructScope) ; (global_vars, GlobalScope)]
     in 
-    check_block ([], func.body) scopes_list
+    check_block (func.locals, func.body) scopes_list
 in
 List.iter function_check functions;
 List.iter (fun sdecl -> List.iter function_check (sdecl.ctor::sdecl.methods)) structs
