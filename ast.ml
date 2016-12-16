@@ -70,9 +70,6 @@ type stmt =
   | While of expr * stmt
   | Timeloop of string * expr * string * expr * stmt
   | Frameloop of string * expr * string * expr * stmt
-  (* Builtin Statements *)
-  | Drawpoint of expr * expr
-  | Addshape of expr list
 
 
 (* types of functions *)
@@ -242,13 +239,6 @@ let rec string_of_stmt = function
   | Frameloop(id1, e1, id2, e2, s) ->
       "frameloop ( "^ id1 ^" = " ^ string_of_expr e1 ^ " ;" ^
       id2 ^" = "^ string_of_expr e2 ^ " )\n" ^ string_of_stmt s
-
-  (* Builtin Statements *)
-  | Drawpoint(e1, e2) -> "#drawpoint(" ^ string_of_expr e1 ^ " , "^
-                          string_of_expr e2 ^");\n"
-  | Addshape([e]) -> "#add( " ^ string_of_expr e ^ " );\n"
-  | Addshape(el) ->
-    "#add{" ^ String.concat ", " (List.map string_of_expr el) ^ "};\n"
  
 let string_rettyp f = 
     match f.typ  with

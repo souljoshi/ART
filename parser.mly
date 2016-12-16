@@ -217,10 +217,6 @@ stmt:
   | FLOOP LPAREN ID ASSIGN expr SEMI ID ASSIGN expr RPAREN stmt
    { Frameloop($3, $5, $7, $9, $11) }
 
-  | DRAW LPAREN expr COMMA expr RPAREN SEMI            { Drawpoint($3, $5) }
-  | ADDSHAPE LPAREN expr RPAREN SEMI        { Addshape([$3]) }
-  | ADDSHAPE LBRACE expr_list RBRACE SEMI   { Addshape(List.rev $3) }
-
 stmt_block:
   /* Block */
     LBRACE decl_list_stmt_list RBRACE     { Block(fst $2, snd $2, PointContext) }
