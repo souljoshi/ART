@@ -26,7 +26,7 @@ let struct_build prog =
 
     in  
     (* A map of all struct/shape types *)
-    let structs = List.fold_left ( fun m st -> report_dup(fun n-> "Duplicate Member variable Name " ^n ^"in " ^ st.sname)(List.map (fun (t,n) ->  n)st.decls); StringMap.add st.sname st m)
+    let structs = List.fold_left ( fun m st -> report_dup(fun n-> "Duplicate member variable named " ^n ^" in struct " ^ st.sname)(List.map (fun (t,n) ->  n)st.decls); StringMap.add st.sname st m)
                 StringMap.empty prog.s in
     let (structs,funcs) = (* Refers to structs and non-member functions *)
         (* Puts methods and constructors with appropriate struct and returns tuple
@@ -82,16 +82,17 @@ let built_in_fun = StringMap.add "printi"
 (*let function_decls =
     List.map(fun fd -> fd.fname) functions*)
 in 
+List.iter(fun fd -> let x= StringMap.mem fd.fname built_in_fun in if x=true then raise(Failure("Cannot redefine built in function " ^fd.fname)) else ())functions;        
 let function_decls = List.fold_left (fun m fd -> StringMap.add fd.fname fd m)
                         built_in_fun functions
+
 
 in
 let function_decl s = try StringMap.find s function_decls       (*Builds a string map of name of func to function recored*)
     with Not_found -> raise (Failure ("Unrecognized function " ^ s ^" did you forget to define it ?"))
 in
 
-let _ = function_decl "main" (*Makes sure that main is defined*)
-             
+let _ = function_decl "main" (*Makes sure that main is defined*)        
 in
 
 let global_vars = List.fold_left(fun m(t,n,_)->StringMap.add n t m) StringMap.empty(globals)
@@ -104,8 +105,8 @@ let function_check func =
     let local_vars =  List.fold_left(fun m(t,n,i)-> StringMap.add n t m)
                             formal_vars (func.locals)
     in
-        report_dup(fun n-> "Duplicate Parameter Name " ^n ^"in " ^ func.fname)(List.map (fun (_,a,_) ->  a)func.params);    (*Checks is there exists duplicate parameter names and function local name*)
-        report_dup(fun n-> "Duplicate local Name " ^n ^ " in " ^ func.fname)
+        report_dup(fun n-> "Duplicate Parameter Named " ^n ^" in " ^ func.fname)(List.map (fun (_,a,_) ->  a)func.params);    (*Checks is there exists duplicate parameter names and function local name*)
+        report_dup(fun n-> "Duplicate local Named " ^n ^ " in " ^ func.fname)
             ((List.map (fun (_,a,_) ->  a)func.params)@(List.map (fun (_,a,_) ->  a)func.locals));  
 
     (* Map of struct name to struct *)
@@ -268,12 +269,12 @@ in
                 in
                 let fd = e1' in
                     if List.length actuals != List.length fd.params then
-                            raise (Failure ("Incorrect number of arguments "))
+                            if fd.fname="addshape"&&(List.length actuals)>0 then () else raise (Failure ("Incorrect number of arguments in "^func.fname))
                     else
                         (* MAY NEED TO REPLACE CHECK_ASS WITH ARG_ASS *)
                          List.iter2 (fun (ft, _,_) e -> let et = expr_b e in
                             ignore (check_ass ft et
-                            (Failure ("Illegal actual argument found " ^ Ast.string_of_typ ft ^ " "^Ast.string_of_typ et))))
+                            (Failure ("Illegal actual argument found " ^ Ast.string_of_typ ft ^ " "^Ast.string_of_typ et^ " in function "^func.fname))))
                     fd.params actuals;
                 fd.rettyp
             |Vecexpr (e1,e2) -> Vec
@@ -313,7 +314,8 @@ in
                     in
                     ( try member_var_type te1' s with Not_found -> raise(Failure(s^" is not a member of "^(string_of_typ e1') )))           
         in 
-        let check_bool_expr e = if expr_b e != Int (*Could take in any number need to force check 1 or 0*)
+    
+    let check_bool_expr e = if expr_b e != Int (*Could take in any number need to force check 1 or 0*)
             then raise(Failure((string_of_expr e)^" is not a boolean value."))
             else() in 
         let rec stmt = function
@@ -334,6 +336,20 @@ in
             |Return _ :: _ -> raise(Failure("Can't put more code after return"))
             |_ -> ()
         in
+         (*let rec fill_tree  = function
+        IntLit s -> (IntLit(s), Int) 
+        |CharLit s ->(CharLit(s),Char)
+        |StringLit s ->(StringLit(s),String)
+        |VecLit (s,s1)->(VecLit(s,s1),Vec)
+        |Id s as b-> (Id(s),baseexpr_b b) 
+        |Binop(e1,op,e2) as s-> let e1' = expr_b e1 and e2'=expr_b e2 in
+                                if(e1'=Float&&e2'=Int)
+                                    then (Binop(e1,op,Promote(e2)), baseexpr_b s)
+                                else if(e2'=Int&&e1'=Float)
+                                    then (Binop(e1,op,Promote(e2)), baseexpr_b s)
+                                else (Binop(e1,op,e2), baseexpr_b s)
+        *)
+    in
         check_ret(); List.iter stmt stmt_list (* End of check_block *)
     in 
     (* Construct the scopes list before calling check_block *)
@@ -343,7 +359,7 @@ in
                 (* Don't need  struct scope map as we have one and the type doesn't match as well.
                    So we are using an empty map *)
               | _      -> [(local_vars, LocalScope); (StringMap.empty, StructScope) ; (global_vars, GlobalScope)]
-    in 
+in 
     check_block (func.locals, func.body) scopes_list
 in
 List.iter function_check functions;
