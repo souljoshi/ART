@@ -1,0 +1,19 @@
+// This test is to see if arrays support strings.
+
+// include strings in the array
+char main()
+{	
+	string [5] x;
+	int i;
+
+	x[0] = "I";
+	x[1] = " ";
+	x[2] = "love";
+	x[3] = " ";
+	x[4] = "PLT.";
+	for (i = 0; i<5; i += 1)
+		prints(x[i]);
+
+}
+
+

@@ -1,0 +1,58 @@
+shape circle
+{
+    int radius;
+    int px;
+    int py;
+}
+
+circle::circle(int r, int x, int y)
+{
+    radius=r;
+    px=x;
+    py=y;
+}
+
+
+void circle::draw(int points)
+{  
+    int i,slice,angle,npx,npy;
+    slice=2*points;
+    for(i=0;i<points;i+=1)
+    {   
+        angle= slice *i;
+        npy = py+radius*angle;
+        npx = px+radius*angle;
+        printi(npx);
+        printi(npy);
+        
+    }
+}
+shape face
+{
+	shape circle eye1;
+	shape circle eye2;
+}
+face::face(shape circle x, shape circle y)
+{
+	eye1=x;
+	eye2=y;
+}
+
+void face::draw()
+{
+	eye1.draw(10);//cannot access member vars of members vars in nested shape  
+	printc('h');
+}
+
+int main()
+{		shape circle cir,cir2;	
+		shape face fac;
+	 	cir=circle(5,3,6);
+        cir2=circle(10,7,9);
+        cir.draw(4);
+        cir2.draw(5);
+        fac=face(cir,cir2);
+        fac.draw();
+        
+
+}

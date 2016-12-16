@@ -1,0 +1,31 @@
+/* Test basic struct declaration */
+void printiln(int x)
+{
+    printi(x);printc('\n');
+}
+struct intpair {
+    int x;
+    int y;
+}
+
+struct charpair {
+    char x, y;
+}
+
+int main ()
+{
+    struct intpair  a;
+    struct charpair b;
+
+    a.x = 77;
+    a.y = 18;
+
+    b.x = 'A';
+    b.y = 'q';
+
+    printiln(a.x);
+    printiln(a.y);
+
+    printc(b.x);
+    printc(b.y);
+}

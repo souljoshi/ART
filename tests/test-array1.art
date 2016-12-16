@@ -1,3 +1,8 @@
+void printiln(int x)
+{
+    printi(x);printc('\n');
+}
+
 int main()
 {
     int[10][5] v;
@@ -6,16 +11,16 @@ int main()
     int i, j;
 
     s[5] = 8;
-    printi(s[5]);
+    printiln(s[5]);
     v[2][4] = 9;
-    printi(v[2][4]);
+    printiln(v[2][4]);
 
     for (i = 0; i < 10 ; i += 1)
         for (j = 0; j < 5; j += 1)
             v[i][j] = i*5 + j;
     for (i = 0; i < 10 ; i += 1)
         for (j = 0; j < 5; j += 1)
-            printi(v[i][j]);
+            printiln(v[i][j]);
 
 }
 

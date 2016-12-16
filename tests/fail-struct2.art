@@ -1,0 +1,17 @@
+/* Undeclared member */
+
+struct intpair {
+    int x;
+    int y;
+}
+
+
+int main ()
+{
+    struct intpair  a;
+
+    a.x = 77;
+    a.y = 18;
+    a.z = 11;
+
+}

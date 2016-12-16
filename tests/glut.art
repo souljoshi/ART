@@ -1,0 +1,260 @@
+struct color { double r,g,b; }
+
+struct color color;
+
+double PI;
+
+int gl_points;
+int gl_lines;
+int gl_triangles;
+int gl_fan;
+
+
+shape axes
+{
+    double ox;
+    double oy;
+    double h;
+    double w;
+}
+
+axes::axes(double x, double y, double height, double width)
+{
+    ox = x; oy = y; h = height; w = width;
+}
+
+void axes::draw()
+{
+    int d;
+    double tick_g;
+    double tick_w;
+
+    glbegin(gl_lines);
+    glvertex(ox, oy + h/2);
+    glvertex(ox, oy - h/2);
+    glvertex(ox + w/2, oy);
+    glvertex(ox - w/2, oy);
+
+    tick_g = h/10;
+    tick_w = 0.01;
+
+    // Thick marks
+    for (d = 0; d < 5; d+=1)
+    {
+        // x tick right
+        glvertex(ox + d * tick_g, oy + tick_w);
+        glvertex(ox + d * tick_g, oy - tick_w);
+
+        //x tick left
+        glvertex(ox - d * tick_g, oy + tick_w);
+        glvertex(ox - d * tick_g, oy - tick_w);
+
+        // y yick top
+        glvertex(ox + tick_w, oy + d*tick_g);
+        glvertex(ox - tick_w, oy + d*tick_g);
+
+        // y yick bottom
+        glvertex(ox + tick_w, oy - d*tick_g);
+        glvertex(ox - tick_w, oy - d*tick_g);
+    }
+    
+    
+    glend();
+}
+
+
+/* A cicle with origin at x,y with radius r */
+shape circle 
+{
+    double r;
+    double ox;
+    double oy;
+    double[25] px;
+    double[25] py;
+}
+
+circle::circle(double x, double y, double radius)
+{
+    double theta;
+    int i;
+    ox = x;
+    oy = y;
+    r = radius;
+    theta = 0.0;
+    i = 0;
+    for (i = 0; i < 25; theta += 2 * PI / 25) {
+        px [i] = ox + r * cos(theta) ;py[i] =  oy + r * sin(theta);
+        i +=1;
+    }
+}
+
+int g(double x)
+{
+    return 0;
+}
+// This is the function from the example
+/* Notice that it only uses draw points. */
+void circle::draw()
+{
+    double theta;
+    double rad;
+    double inc;
+    int i; 
+    theta = 0.0;
+    rad = 0.0;
+
+    // Single circle is 1000 points YIKES
+    glcolor(1.0, 0.0, 1.0);
+    glbegin(gl_triangles);
+
+   /* while(theta <= 2  * PI) {
+        glvertex(ox, oy);
+        glvertex(ox +r * cos(theta),oy + r * sin(theta));
+        theta += 1.0/20.0 * PI;
+        glvertex(ox +r * cos(theta),oy + r * sin(theta));
+    }*/
+        for (i = 0; i < 25; i+=1)
+            glvertex(px[i] + ox, py[i] + oy);
+
+    glend();
+
+}
+
+// this is a path shape
+// a drawable circular buffer of points
+shape path
+{
+    int f, b;
+    double[128] px;
+    double[128] py;
+
+}
+int MOD(int x) 
+{
+    return x % 128;  
+} 
+
+path::path()
+{
+    int i;
+    glcolor(1.0, 0.0, 0.0);
+    for (i = MOD(f) ; MOD(i) != MOD(b); i+=1) {
+       px[MOD(i)] = 1.0 * i;
+       py[MOD(i)] = 1.0 * i;
+
+    }
+    
+
+}
+void path::draw()
+{
+    int i;
+    glcolor(1.0, 0.0, 0.0);
+    glbegin(gl_lines);
+
+    for (i = MOD(f+1) ; MOD(i) != MOD(b); i+=1) {
+        glvertex(px[MOD(i-1)], py[MOD(i-1)]);
+        glvertex(px[MOD(i)], py[MOD(i)]);
+    }
+    glend();
+    
+}
+
+
+void path::add_point(double x, double y)
+{
+    px[MOD(b)] = x;
+    py[MOD(b)] = y;
+    b+=1;
+    // if we run out of space
+    if (MOD(b) == MOD(f))
+        f+=1;
+}
+double g_last_time;
+double g_delay;
+
+double steps;
+double max_steps;
+
+// Definition is necessary
+void idle()
+{
+    double current_time;
+    current_time = seconds();
+
+    if (current_time - g_last_time >= g_delay)
+    {
+        // we may skip some steps depending on how slow the computer is
+            steps += 1.0;//(current_time - g_last_time)/g_delay;
+        // executes loop body ones
+            theta += .010 * PI;
+            c. ox = ox + 1.3 * c.r *cos(theta);
+            c. oy = oy + 1.3 * c.r * sin(theta);
+            p.add_point(c.ox, c.oy);
+        
+         g_last_time = current_time;
+         if (steps >= max_steps ) {
+            glut_leave_mainloop();
+        }
+
+        glut_repost();
+    }
+}
+
+
+shape circle c;
+shape path p;
+shape axes ax;
+double theta;
+double ox;
+double oy;
+
+// Definition is necessary
+void timer_callback(int nothing)
+{
+}
+
+// Definition is necessary
+void draw()
+{
+    glclear();
+    // Put Here
+    ax.draw();
+    c.draw();
+    p.draw();
+    // End Here
+    glswap();
+}
+
+void setfps(int x)
+{
+    g_delay =  1.0 / x;
+}
+
+void duration(double sec)
+{
+   steps = 0 + 0.0;
+    max_steps = sec / g_delay;
+}
+
+int y;
+int main()
+{
+    PI = 3.14159265;
+    c = circle(0.0, 0.0, 0.25);
+    p = path();
+    ax = axes(0.0,0.0,2.0,2.0);
+
+    gl_points = 0;
+    gl_lines = 1;
+    gl_triangles = 4;
+    gl_fan = 6;
+    g_last_time = seconds();   
+
+
+    setfps(24);
+    duration(100.0);
+
+	glut_init(1); //(* Inputing timer value *)
+	
+}

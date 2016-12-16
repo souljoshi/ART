@@ -1,0 +1,19 @@
+void printiln(int x)
+{
+    printi(x);printc('\n');
+}
+int foo(int y)
+{
+    int x;
+    if (y < 10)
+        x = 100;
+    else
+        x = 50;
+    return x;
+}
+
+int main()
+{
+    printiln(foo(500));
+    printiln(foo(3));
+}

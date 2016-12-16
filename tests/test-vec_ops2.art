@@ -1,0 +1,27 @@
+void printfln(double x)
+{
+    printf(x);printc('\n');
+}
+int main()
+{
+	vec v1;
+	vec v2;
+	vec v3;
+	vec v4;
+
+    // scalar multiplication
+	v1 = 2.0 * <1.0, 55.1>;
+    v2 = 2 * <1.0, 55.1>; // integer promotion
+    v3 = <1.0, 55.1> * 2.0;
+    v4 = <1.0, 55.1> * 2;
+
+    printfln(v1[0]);
+    printfln(v1[1]);
+    printfln(v2[0]);
+    printfln(v2[1]);
+    printfln(v3[0]);
+    printfln(v3[1]);
+    printfln(v4[0]);
+    printfln(v4[1]);
+
+}

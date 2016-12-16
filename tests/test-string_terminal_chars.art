@@ -1,0 +1,17 @@
+
+int main()
+{
+	
+	string a,b,c,d,e,f,g,h;
+	a="Hello\tWorld";
+	b= "Hello\nWorld";
+	d="Hello\bWorld";
+	e="Hello\rWorld";
+	prints(a);
+	prints("\n");
+	prints(b);
+	prints("\n");
+	prints(d);
+	prints("\n");
+	prints(e);
+}

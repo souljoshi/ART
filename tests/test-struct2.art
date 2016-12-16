@@ -1,0 +1,68 @@
+/* Test struct behavior in functions */
+void printiln(int x)
+{
+    printi(x);printc('\n');
+}
+
+struct intpair {
+    int x;
+    int y;
+}
+
+
+/* function that accepts struct by value */
+// This shouldn't change the struct
+void do_nothing (struct intpair pair)
+{
+    pair.x = 123;
+    pair.y = 42;
+}
+
+/* function that accepts struct by reference */
+// This should change the struct
+void modify (struct intpair& pair)
+{
+    pair.x = 21;
+    pair.y = 32;
+}
+
+/* funciton that returns a struct */
+struct intpair pair(int x, int y)
+{
+    struct intpair out;
+    out.x = x;
+    out.y = y;
+    return out;
+}
+
+int main() {
+
+    struct intpair a,b,c;
+
+    a.x = b.x = c.x = 0;
+    a.y = b.y = c.y = 0;
+
+
+    printiln(a.x);
+    printiln(a.y);
+    printc('\n');
+    printiln(b.x);
+    printiln(b.y);
+    printc('\n');
+    printiln(c.x);
+    printiln(c.y);
+    printc('\n');
+
+    do_nothing(a);
+    modify(b);
+    c = pair(1, -1);
+
+    printiln(a.x);
+    printiln(a.y);
+    printc('\n');
+    printiln(b.x);
+    printiln(b.y);
+    printc('\n');
+    printiln(c.x);
+    printiln(c.y);   
+}

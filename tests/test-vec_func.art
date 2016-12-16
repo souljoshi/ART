@@ -1,0 +1,37 @@
+void donothing(vec e)
+{
+    e = <2.0, 2.0>;
+}
+
+void zero_vec(vec &v)
+{
+    v = <0.0, 0.0>;
+}
+
+vec twice(vec &v)
+{
+    return 2 * v;
+}
+
+void print_vec(vec v)
+{
+    printc('[');
+    printf(v[0]);
+    printc(',');
+    printf(v[1]);
+    printc(']');
+    printc('\n');
+}
+
+int main()
+{
+    vec v;
+
+    v = <2.0, 5.0>;
+    print_vec(v);
+    donothing(v);
+    print_vec(v);
+    print_vec(twice(v));
+    zero_vec(v);
+    print_vec(v);
+}

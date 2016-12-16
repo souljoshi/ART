@@ -1,0 +1,12 @@
+void printiln(int x)
+{
+    printi(x);printc('\n');
+}
+int main()
+{
+    int i;
+    for(i = 0; i < 10; i = i + 1)
+    {
+        printiln(i);
+    }
+}

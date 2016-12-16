@@ -22,6 +22,7 @@ type trop = Cond
 type expr =
     IntLit of int
   | CharLit of char
+  | StringLit of string
   | FloatLit of float
   | VecLit of (float * float)
   | Id of string
@@ -38,7 +39,7 @@ type expr =
 
 type stosh = StructType | ShapeType
 (* these are the types you can use to declare an object *)
-type typ = Int | Char | Float | Vec | Void | Array of typ * expr | UserType of string*stosh
+type typ = Int | Char | Float | Vec | Void | Array of typ * expr | UserType of string*stosh | String
 
 type initer = Exprinit of expr | Listinit of initer list | Noinit
 
@@ -54,8 +55,11 @@ type fbind = typ * string * pass
 (* variable declaration *)
 type vdecl = typ * string * initer
 
+(* Context types *)
+type context = PointContext | LineContext | TriangleContext
+
 type stmt =
-    Block of vdecl list * stmt list 
+    Block of vdecl list * stmt list * context
   | Expr of expr
   | Return of expr
   | Break
@@ -150,6 +154,7 @@ paren_of_expr *) = function
     IntLit(l) -> string_of_int l
   | CharLit(l) -> "'" ^ (string_of_chr l) ^ "'"
   | FloatLit(l) -> string_of_float l
+  | StringLit(s) -> "" ^ s
   | VecLit(a,b)  -> "< " ^ (string_of_float a) ^ " , " ^ (string_of_float b) ^ " >"
   | Id(s) -> s
   | Vecexpr(e1,e2) -> " < "^ string_of_expr e1 ^ " , " ^ string_of_expr e2 ^ " >"
@@ -182,6 +187,7 @@ let rec string_of_typ = function
   | Void -> "void"
   | Float -> "double"
   | Vec  -> "vec"
+  | String -> "string"
   | UserType(n,ss) -> string_of_stosh ss ^ n
   | Array(_, _) as a -> let (t,l) = list_of_arr a
      in string_of_typ t ^ String.concat "" (List.map (fun e -> "[" ^ string_of_expr e ^ "]") l)
@@ -193,10 +199,6 @@ let string_of_fbind (t,s, v) =
     match v with 
       Value -> string_of_typ t ^" "^ s
     | Ref   -> string_of_typ t ^"& "^ s
-
-let string_of_usrtype s = string_of_stosh s.ss ^ " "^s.sname^" {\n"
-        ^ String.concat ";\n" (List.map string_of_bind s.decls) ^  ";\n}\n"
-
 
 let rec  string_of_initer = function
     Exprinit(e) -> string_of_expr e
@@ -211,15 +213,18 @@ let string_of_vdecl (t, id,i ) =
 
 
 let rec string_of_stmt = function
-    Block(decls, stmts) ->
-      "{\n" ^  String.concat "" (List.map string_of_vdecl (decls)) 
-      ^ String.concat "" (List.map string_of_stmt stmts) ^ "}\n"
+    Block(decls, stmts, ctxt) ->
+      let enclosers = function PointContext -> ("{","}") | LineContext -> ("[","]")
+                          | TriangleContext -> ("<",">") in
+      let opener,closer = enclosers ctxt in
+      opener^"\n" ^  String.concat "" (List.map string_of_vdecl (decls)) 
+      ^ String.concat "" (List.map string_of_stmt stmts) ^ closer ^ "\n"
   | Expr(expr) -> string_of_expr expr ^ ";\n";
   | Return(expr) -> "return " ^ string_of_expr expr ^ ";\n";
   | Break      -> "break;\n"
   | Continue   -> "continue;\n"
 
-  | If(e, s, Block([],[])) -> "if (" ^ string_of_expr e ^ ")\n" ^ string_of_stmt s
+  | If(e, s, Block([],[],_)) -> "if (" ^ string_of_expr e ^ ")\n" ^ string_of_stmt s
   | If(e, s1, s2) ->  "if (" ^ string_of_expr e ^ ")\n" ^
       string_of_stmt s1 ^ "else\n" ^ string_of_stmt s2
 
@@ -256,7 +261,11 @@ let string_fname f =
 let string_of_fdecl f = 
     string_rettyp f  ^ " " ^ string_fname f ^ " ( " ^ 
     String.concat ", " (List.map string_of_fbind f.params) ^ " )\n" ^
-    string_of_stmt (Block(f.locals, f.body))
+    string_of_stmt (Block(f.locals, f.body,PointContext))
+
+let string_of_usrtype s = string_of_stosh s.ss ^ " "^s.sname^" {\n"
+        ^ String.concat ";\n" (List.map string_of_bind s.decls) ^  ";\n}\n"
+        ^ String.concat "\n" (List.map string_of_fdecl (s.ctor::s.methods))
 
 let string_of_program p =
     String.concat "" (List.map string_of_vdecl p.v)  ^

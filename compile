@@ -34,5 +34,5 @@ fi
 
 ${ART} < $1 > /tmp/${base}.bc &&
 llc /tmp/${base}.bc &&
-gcc /tmp/${base}.s -o ${out}
+gcc /tmp/${base}.s -g -lm -lglut -lGLU -lGL -o $out 
 
