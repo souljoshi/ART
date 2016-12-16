@@ -212,7 +212,7 @@ in
                 |Mult when e1'=Vec&&e2'=Int -> Vec
                 |Mult when e1'=Vec&&e2'=Float -> Vec
                 |Mult when e1'=Int&&e2'=Vec -> Vec
-                |Mult when e1'=Float&&e2'=Int -> Vec
+                |Mult when e1'=Float&&e2'=Vec -> Vec
                 |Add|Sub|Mult|Div when e1'=Float && e2'=Float -> Float
                 |Add|Sub|Mult|Div when e1'=Int && e2'=Float -> Float 
                 |Add|Sub|Mult|Div when e1'=Float && e2'=Int -> Float
@@ -315,14 +315,14 @@ in
             then raise(Failure((string_of_expr e)^" is not a boolean value."))
             else() in 
         let rec stmt = function
-             Block (vl,sl)  -> check_block (vl, sl) scopes
+             Block (vl,sl,_)  -> check_block (vl, sl) scopes
             |Expr e -> ignore(expr_b e)
             |Return e -> let e1' = expr_b e in if e1'= func.rettyp then () else
                 raise(Failure("Incorrect return type in " ^ func.fname))
             |If(p,e1,e2) -> check_bool_expr p; stmt e1; stmt e2;
             |For(e1,e2,e3,state) -> ignore(expr_b e1); check_bool_expr e2; ignore(expr_b e3); stmt state
             |While(p,s) -> check_bool_expr p; stmt s 
-            |ForDec (vdecls,e2,e3,body) -> stmt  ( Block(vdecls, [For(Noexpr , e2, e3, body)]) )
+            |ForDec (vdecls,e2,e3,body) -> stmt  ( Block(vdecls, [For(Noexpr , e2, e3, body)],PointContext) )
             |Timeloop(s1,e1,s2,e2,st1) -> ()
             |Frameloop (s1,e1,s2,e2,st1)-> ()
             | Break | Continue -> () (* COMPLICATED: CHECK If in Loop *)
