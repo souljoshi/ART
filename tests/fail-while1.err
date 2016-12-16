@@ -1,1 +1,1 @@
-Fatal error: exception Not_found
+Fatal error: exception Failure("Unrecognized function foo did you forget to define it ?")
