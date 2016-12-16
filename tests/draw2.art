@@ -7,12 +7,12 @@ struct color color;
 shape circle 
 {
     double r;
-    double ox, oy;
+    vec o;
 }
 
-circle::circle(double x, double y, double radius)
+circle::circle(vec origin, double radius)
 {
-    ox = x; oy = y;
+    o = origin;
     r = radius;
 }
 
@@ -25,22 +25,22 @@ void circle::draw()
     // Single circle is 1000 points YIKES
 [
     for (double theta = 0.0; theta <= 2  * PI; theta += .05 * PI) {
-        drawpoint(ox + r*cos(theta - 0.05*PI), oy + r*sin(theta-0.05*PI));
-        drawpoint(ox + r*cos(theta), oy + r*sin(theta));
+        drawpoint(o + r*<cos(theta - 0.05*PI), sin(theta-0.05*PI)>);
+        drawpoint(o + r*<cos(theta), sin(theta)>);
     }
-    drawpoint(ox + r, oy);
+    drawpoint(o);
 ]
 }
 
-shape disk
+shape disk 
 {
     double r;
-    double ox, oy;
+    vec o;
 }
 
-disk::disk(double x, double y, double radius)
+disk::disk(vec origin, double radius)
 {
-    ox = x; oy = y;
+    o = origin;
     r = radius;
 }
 
@@ -50,22 +50,20 @@ disk::disk(double x, double y, double radius)
 void disk::draw()
 {
     setcolor(color.r, color.g, color.b);
-    // Single circle is 1000 points YIKES
-<
+<<
     for (double theta = 0.0; theta <= 2  * PI; theta += .05 * PI) {
-         drawpoint(ox , oy);
-        drawpoint(ox + r*cos(theta - 0.05*PI), oy + r*sin(theta-0.05*PI));
-        drawpoint(ox + r*cos(theta), oy + r*sin(theta));
+         drawpoint(o);
+        drawpoint(o + r*<cos(theta - 0.05*PI), sin(theta-0.05*PI)>);
+        drawpoint(o + r*<cos(theta), sin(theta)>);
     }
->
+>>
 }
 // this is a path shape
 // a drawable circular buffer of points
 shape path
 {
     int f, b;
-    double[128] px;
-    double[128] py;
+    vec[128] p;
 }
 
 path::path() { f = 0; b = 0; }
@@ -81,18 +79,17 @@ void path::draw()
 [
     if ( f != b)
     for (int i = MOD(f) + 1;  MOD(i) != MOD(b); i+=1) {    
-        drawpoint(px[MOD(i-1)], py[MOD(i-1)]);
-        drawpoint(px[MOD(i)], py[MOD(i)]);
+        drawpoint(p[MOD(i-1)]);
+        drawpoint(p[MOD(i)]);
     }
 ]
    
 }
 
 
-void path::add_point(double x, double y)
+void path::add_point(vec x)
 {
-    px[MOD(b)] = x;
-    py[MOD(b)] = y;
+    p[MOD(b)] = x;
     b+=1;
 
     // if we run out of space
@@ -105,11 +102,11 @@ void path::reset() { f = b = 0;}
 int main()
 {   
 
-    shape circle c = circle(0.0, 0.0, 0.25);
-    shape disk d  = disk(0.0, 0.0, 0.15);
+    shape circle c = circle(<0.0, 0.0>, 0.25);
+    shape disk d  = disk(<0.0, 0.0>, 0.15);
     shape path p = path();
     double theta = 0.0;
-    double ox = 0.0, oy = 0.0;
+    vec o = <0.0,0.0>;
     PI = 3.14159265;
     
     addshape(c); 
@@ -122,9 +119,8 @@ int main()
    timeloop (dt = 0.001 ; end = 10.0)
     {
         theta += .010 * PI;
-        c.ox = ox + 1.3 * c.r * cos(theta);
-        c.oy = oy + 1.3 * c.r * sin(theta);
-        p.add_point(c.ox, c.oy);
+        c.o = o + 1.3 * c.r * <cos(theta),sin(theta)>;
+        p.add_point(c.o);
     }
     printf(theta);
     printc('\n');
@@ -141,9 +137,8 @@ int main()
     timeloop (dt = 0.001; end = 10.0)
     {
         theta += .010 * PI;
-        d.ox = ox + 1.3 * d.r * cos(theta);
-        d.oy = oy + 1.3 * d.r * sin(theta);
-        p.add_point(d.ox, d.oy);
+        d.o = o + 1.3 * d.r * <cos(theta),sin(theta)>;
+        p.add_point(d.o);
     }  
     return 0;
 }
