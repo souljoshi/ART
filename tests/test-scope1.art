@@ -1,0 +1,15 @@
+int main ()
+{
+	int x = 50;
+
+	{
+		int y;
+		y = 100;
+		{
+			int z = 111;
+			printi(z);
+		}
+		printi(z);
+
+	}
+}

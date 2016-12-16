@@ -18,8 +18,10 @@ type trop = Cond
 
 (*type typ = Int | Char | Float | Vec | Void | Array of typ * expr | UserType of string*)
 
-
-type expr =
+type stosh = StructType | ShapeType
+(* these are the types you can use to declare an object *)
+type typ = Int | Char | Float | Vec | Void | Array of typ * expr | UserType of string*stosh | String
+and baseexpr =
     IntLit of int
   | CharLit of char
   | StringLit of string
@@ -37,9 +39,7 @@ type expr =
   | Member of expr * string
   | Noexpr
 
-type stosh = StructType | ShapeType
-(* these are the types you can use to declare an object *)
-type typ = Int | Char | Float | Vec | Void | Array of typ * expr | UserType of string*stosh | String
+and expr = baseexpr * typ
 
 type initer = Exprinit of expr | Listinit of initer list | Noinit
 
@@ -70,10 +70,6 @@ type stmt =
   | While of expr * stmt
   | Timeloop of string * expr * string * expr * stmt
   | Frameloop of string * expr * string * expr * stmt
-  (* Builtin Statements *)
-  | Drawpoint of expr * expr
-  | Addshape of expr list
-
 
 (* types of functions *)
 type ftyp = Func | Method | Constructor
@@ -148,7 +144,7 @@ let string_of_chr =  function
 
 
 (* Uncomment the next comment for full parenthesized *)
-let rec string_of_expr (*e = "( "^ paren_of_expr e ^ " )"
+let rec string_of_baseexpr (*e = "( "^ paren_of_expr e ^ " )"
 and 
 paren_of_expr *) = function
     IntLit(l) -> string_of_int l
@@ -171,6 +167,7 @@ paren_of_expr *) = function
   | Index(e1, e2) -> string_of_expr e1 ^ "[" ^ string_of_expr e2 ^ "]"
   | Member(e1, s) -> string_of_expr e1 ^ "." ^ s
   | Noexpr -> ""
+and string_of_expr (e,_) = string_of_baseexpr e
 
 let rec list_of_arr = function
     Array(Array(_,_) as a , i) ->  let (t,l) = list_of_arr a in (t, i::l)
@@ -243,12 +240,6 @@ let rec string_of_stmt = function
       "frameloop ( "^ id1 ^" = " ^ string_of_expr e1 ^ " ;" ^
       id2 ^" = "^ string_of_expr e2 ^ " )\n" ^ string_of_stmt s
 
-  (* Builtin Statements *)
-  | Drawpoint(e1, e2) -> "#drawpoint(" ^ string_of_expr e1 ^ " , "^
-                          string_of_expr e2 ^");\n"
-  | Addshape([e]) -> "#add( " ^ string_of_expr e ^ " );\n"
-  | Addshape(el) ->
-    "#add{" ^ String.concat ", " (List.map string_of_expr el) ^ "};\n"
  
 let string_rettyp f = 
     match f.typ  with
@@ -271,3 +262,6 @@ let string_of_program p =
     String.concat "" (List.map string_of_vdecl p.v)  ^
     String.concat "" (List.map string_of_usrtype p.s) ^
     String.concat "" (List.map string_of_fdecl p.f)  
+
+let default_ctr n = { rettyp = Void; fname = n; params = []; locals = [];
+                      body = [] ; typ = Constructor; owner = n }

@@ -11,9 +11,6 @@
      [] -> t
    | [i] -> Array(t, i)
    | i::l -> List.fold_left (fun at e -> Array(at,e)) (Array(t, i)) l
-
-  let default_ctr n = { rettyp = Void; fname = n; params = []; locals = [];
-                        body = [] ; typ = Constructor; owner = n }
 %}
 
 %token VOID INT CHAR DOUBLE VEC STRING
@@ -25,7 +22,7 @@
 %token EQ NEQ LT LEQ GT GEQ AND OR NOT LTLT GTGT
 %token RETURN IF ELSE FOR WHILE BREAK CONTINUE
 %token STRUCT SHAPE
-%token TLOOP FLOOP ADDSHAPE DRAW
+%token TLOOP FLOOP
 %token <int> INTLIT
 %token <char> CHARLIT
 %token <float> FLOATLIT
@@ -117,7 +114,7 @@ struct_or_shape_specifier:
 
 struct_or_shape_definition:
     struct_or_shape ID LBRACE struct_declaration_list RBRACE
-    { { ss = $1 ; sname = $2; decls = $4 ; ctor = default_ctr $2; methods = []} }
+    { { ss = $1 ; sname = $2; decls = $4 ; ctor = default_ctr ""; methods = []} }
 
 struct_declaration_list:
    struct_declaration                              {$1}
@@ -156,7 +153,7 @@ basic_typ:
 full_array_typ:
     basic_typ LBRACK expr RBRACK array_dim_list {Array((build_array $1 $5), $3)}
 incompl_array_typ:
-    basic_typ LBRACK RBRACK array_dim_list      {Array((build_array $1 $4),Noexpr)}
+    basic_typ LBRACK RBRACK array_dim_list      {Array((build_array $1 $4),(Noexpr,Void))}
 
 array_dim_list: /* List of array dimension declarations */
     /* Nothing */                     { [] }
@@ -194,7 +191,7 @@ stmt_list: /* inverted list of the statements */
 
 stmt:
     expr_opt SEMI                           { Expr $1 }
-  | RETURN SEMI                             { Return Noexpr }
+  | RETURN SEMI                             { Return (Noexpr,Void) }
   | RETURN expr SEMI                        { Return $2 }
   | BREAK SEMI                              { Break }
   | CONTINUE SEMI                           { Continue }
@@ -217,9 +214,6 @@ stmt:
   | FLOOP LPAREN ID ASSIGN expr SEMI ID ASSIGN expr RPAREN stmt
    { Frameloop($3, $5, $7, $9, $11) }
 
-  | DRAW LPAREN expr COMMA expr RPAREN SEMI            { Drawpoint($3, $5) }
-  | ADDSHAPE LPAREN expr RPAREN SEMI        { Addshape([$3]) }
-  | ADDSHAPE LBRACE expr_list RBRACE SEMI   { Addshape(List.rev $3) }
 
 stmt_block:
   /* Block */
@@ -234,7 +228,7 @@ decl_list_stmt_list:
 
 /* Optional Expression */
 expr_opt:
-  /* nothing */ { Noexpr }
+  /* nothing */ { (Noexpr,Void) }
   | expr          { $1 }
 
 expr:
@@ -242,16 +236,16 @@ expr:
 
   /* Conditional */
   /* $1 = bexpr, $3 = expr, $5 = expr */
-  |bexpr QMARK expr COLON expr %prec CONDITIONAL { Trop(Cond, $1, $3, $5) }
+  |bexpr QMARK expr COLON expr %prec CONDITIONAL { (Trop(Cond, $1, $3, $5),Void) }
 
   /* postfix expressions */
   /* Assignment */
-  |posexpr ASSIGN expr      { Asnop($1, Asn, $3) }
-  |posexpr PLUSASSIGN expr  { Asnop($1, CmpAsn(Add), $3) }
-  |posexpr MINUSASSIGN expr { Asnop($1, CmpAsn(Sub), $3) }
-  |posexpr TIMESASSIGN expr { Asnop($1, CmpAsn(Mult), $3) }
-  |posexpr DIVASSIGN expr   { Asnop($1, CmpAsn(Div), $3) }
-  |posexpr MODASSIGN expr   { Asnop($1, CmpAsn(Mod), $3) }
+  |posexpr ASSIGN expr      { (Asnop($1, Asn, $3), Void) }
+  |posexpr PLUSASSIGN expr  { (Asnop($1, CmpAsn(Add), $3), Void) }
+  |posexpr MINUSASSIGN expr { (Asnop($1, CmpAsn(Sub), $3), Void) }
+  |posexpr TIMESASSIGN expr { (Asnop($1, CmpAsn(Mult), $3), Void) }
+  |posexpr DIVASSIGN expr   { (Asnop($1, CmpAsn(Div), $3), Void) }
+  |posexpr MODASSIGN expr   { (Asnop($1, CmpAsn(Mod), $3), Void) }
 
 
 /* all expressions other than assignment/conditional */
@@ -260,62 +254,62 @@ bexpr:
     addexpr                {$1}
 
   /* relational */
-  | bexpr  LT    bexpr      { Binop($1, Less,   $3) }
-  | bexpr  LEQ   bexpr      { Binop($1, Leq,    $3) }
-  | bexpr  GT    bexpr      { Binop($1, Greater, $3)}
-  | bexpr  GEQ   bexpr      { Binop($1, Geq,    $3) }
+  | bexpr  LT    bexpr      { (Binop($1, Less,   $3), Void) }
+  | bexpr  LEQ   bexpr      { (Binop($1, Leq,    $3), Void) }
+  | bexpr  GT    bexpr      { (Binop($1, Greater, $3), Void)}
+  | bexpr  GEQ   bexpr      { (Binop($1, Geq,    $3), Void) }
 
   /* equality */
-  | bexpr  EQ    bexpr      { Binop($1, Equal, $3) }
-  | bexpr  NEQ   bexpr      { Binop($1, Neq,   $3) }
+  | bexpr  EQ    bexpr      { (Binop($1, Equal, $3), Void) }
+  | bexpr  NEQ   bexpr      { (Binop($1, Neq,   $3), Void) }
 
   /* logical AND/OR */
-  | bexpr  AND   bexpr      { Binop($1, And,   $3) }
-  | bexpr  OR    bexpr      { Binop($1, Or,    $3) }
+  | bexpr  AND   bexpr      { (Binop($1, And,   $3), Void) }
+  | bexpr  OR    bexpr      { (Binop($1, Or,    $3), Void) }
 
 /* Expressions that can be used in vec expressions */
 addexpr:
   /* Postfix expressions */
     posexpr                  {$1}
   /* unary */
-  | PLUS  addexpr %prec POS        { Unop(Pos, $2) }
-  | MINUS addexpr %prec NEG        { Unop(Neg, $2) }
-  | NOT addexpr                    { Unop(Not, $2) }
-  | PLUSPLUS   addexpr %prec PRE   { Unop(Preinc, $2)}
-  | MINUSMINUS addexpr %prec PRE   { Unop(Predec, $2)}
+  | PLUS  addexpr %prec POS        { (Unop(Pos, $2), Void) }
+  | MINUS addexpr %prec NEG        { (Unop(Neg, $2), Void) }
+  | NOT addexpr                    { (Unop(Not, $2), Void) }
+  | PLUSPLUS   addexpr %prec PRE   { (Unop(Preinc, $2), Void)}
+  | MINUSMINUS addexpr %prec PRE   { (Unop(Predec, $2), Void)}
 
   /* multiplicative */
-  | addexpr TIMES  addexpr      { Binop($1, Mult,  $3) }
-  | addexpr DIVIDE addexpr      { Binop($1, Div,   $3) }
-  | addexpr MOD    addexpr      { Binop($1, Mod,   $3) }
+  | addexpr TIMES  addexpr      { (Binop($1, Mult,  $3), Void) }
+  | addexpr DIVIDE addexpr      { (Binop($1, Div,   $3), Void) }
+  | addexpr MOD    addexpr      { (Binop($1, Mod,   $3), Void) }
 
   /* additive */
-  | addexpr PLUS   addexpr      { Binop($1, Add,   $3) }
-  | addexpr MINUS  addexpr      { Binop($1, Sub,   $3) }
+  | addexpr PLUS   addexpr      { (Binop($1, Add,   $3), Void) }
+  | addexpr MINUS  addexpr      { (Binop($1, Sub,   $3), Void) }
 
 posexpr: 
   /* Literals */
-    INTLIT                { IntLit($1) }
-  | CHARLIT               { CharLit($1) }
-  | FLOATLIT              { FloatLit($1) }
-  | VECTORLIT             { VecLit($1) }
-  | STRINGLIT             { StringLit($1)}
+    INTLIT                { (IntLit($1), Void) }
+  | CHARLIT               { (CharLit($1), Void) }
+  | FLOATLIT              { (FloatLit($1), Void) }
+  | VECTORLIT             { (VecLit($1), Void) }
+  | STRINGLIT             { (StringLit($1), Void)}
 
   /* Vector expression */
-  | LT addexpr COMMA addexpr GT   %prec VECEXPR { Vecexpr($2, $4) }
+  | LT addexpr COMMA addexpr GT   %prec VECEXPR { (Vecexpr($2, $4), Void) }
 
   /* primary expression */
-  | ID                    { Id($1) }
+  | ID                    { (Id($1),Void) }
   | LPAREN expr RPAREN    { $2 }
 
   /* postfix expression */
-  | posexpr LBRACK expr RBRACK    %prec INDEX   { Index($1, $3) }
-  | posexpr LPAREN arg_list RPAREN %prec CALL    { Call($1, List.rev $3) } 
+  | posexpr LBRACK expr RBRACK    %prec INDEX   { (Index($1, $3), Void) }
+  | posexpr LPAREN arg_list RPAREN %prec CALL    { (Call($1, List.rev $3), Void) } 
     
   /* List.rev is used because in arg_list, expr_list is build from the back cause it is more efficient*/
-  | posexpr DOT ID                %prec MEMB    { Member($1, $3) }
-  | posexpr PLUSPLUS              %prec POST    { Posop(Postinc, $1) }
-  | posexpr MINUSMINUS            %prec POST    { Posop(Postdec, $1) }
+  | posexpr DOT ID                %prec MEMB    { (Member($1, $3), Void) }
+  | posexpr PLUSPLUS              %prec POST    { (Posop(Postinc, $1), Void) }
+  | posexpr MINUSMINUS            %prec POST    { (Posop(Postdec, $1), Void) }
 
 arg_list:
   /* nothing */       {[]}
