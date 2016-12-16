@@ -91,9 +91,6 @@ rule token = parse
 | "break"     { BREAK }
 | "continue"  { CONTINUE }
 | "return"    { RETURN }
- (* Builtin Functions *)
-| "#add"       { ADDSHAPE }
-| "#drawpoint" { DRAW }
 (* Builtin Types *)
 | "void"        { VOID }
 | "int"         { INT  }

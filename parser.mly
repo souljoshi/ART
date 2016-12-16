@@ -22,7 +22,7 @@
 %token EQ NEQ LT LEQ GT GEQ AND OR NOT
 %token RETURN IF ELSE FOR WHILE BREAK CONTINUE
 %token STRUCT SHAPE
-%token TLOOP FLOOP ADDSHAPE DRAW
+%token TLOOP FLOOP
 %token <int> INTLIT
 %token <char> CHARLIT
 %token <float> FLOATLIT
@@ -213,9 +213,6 @@ stmt:
   | FLOOP LPAREN ID ASSIGN expr SEMI ID ASSIGN expr RPAREN stmt
    { Frameloop($3, $5, $7, $9, $11) }
 
-  | DRAW LPAREN expr COMMA expr RPAREN SEMI            { Drawpoint($3, $5) }
-  | ADDSHAPE LPAREN expr RPAREN SEMI        { Addshape([$3]) }
-  | ADDSHAPE LBRACE expr_list RBRACE SEMI   { Addshape(List.rev $3) }
 
 stmt_block:
   /* Block */

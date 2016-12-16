@@ -134,31 +134,25 @@ let function_check func =
     let member_var_type name var =
         let temp = get_struct_member_var name
         in
-        StringMap.find var temp 
-   
-    in    
+        StringMap.find var temp   
+    in       
     
-     let get_list_var name = 
-            let x= try StringMap.find name struct_name_list
-                    with Not_found -> raise(Failure(" Could not find struct " ^name ^ " did you forgot to create  it?" ))
-            in 
-                List.fold_left(fun m (t,n)-> StringMap.add n t m)
-                    StringMap.empty(x.decls)
-    in
-    
-    let check_struct_var name var = 
-            let temp  = get_list_var name 
-    in          try StringMap.find var temp
-                    with Not_found -> raise(Failure ("Cannot find local variable " ^ var ^" in "^ name))
-    in
-    
-    let check_mem_func_name name func =
+    (* Gets mem_func *)
+    let get_mem_func_name name func =
         let temp = get_member_funcs name 
     in try StringMap.find func temp
             with Not_found -> raise(Failure(func ^ " is not a member function of " ^name))
     in
     
-
+    let lookup_function f =
+      (* First try to find a matching constructor *)
+      try get_member_constr f
+      (* If that fails try to find a method.
+         this is guaranteed to fail in a normal function *)
+      with Not_found -> (try get_mem_func_name func.owner f
+      (* Finally look for normal function *)
+            with Not_found | Failure _ -> StringMap.find f function_decls)
+    in
     let rec check_block(local_decls, stmt_list) scopes =
 
         (* Prepend the block local variables to the scopes list *)
@@ -195,18 +189,15 @@ let function_check func =
         (* Gets type for variable name s [old ret_type]*)
         let ret_type n = _ret_type n scopes 
         in
+        (* Gets type of expression. [LATER ON HANDLE WITH SAST] *)
         let rec expr_b = function
-            IntLit _-> Int
+             IntLit _-> Int
             |CharLit _-> Char
             |StringLit _-> String
             |FloatLit _ -> Float
             |VecLit (_,_)-> Vec
-            |Id s -> if(func.typ=Method||func.typ=Constructor) (*ASSUMES THAT YOU ARE NOT USING SAME VAR NAME AS PARAMETERS*)
-                    then try member_var_type func.owner s
-                        with Not_found -> ret_type s 
-                else
-                    ret_type s
-            |Binop(e1,op,e2) as e -> let e1' = expr_b e1 and e2'=expr_b e2 in
+            |Id s -> ret_type s
+            |Binop(e1,op,e2) -> let e1' = expr_b e1 and e2'=expr_b e2 in
             (match op with
                 Add|Sub|Mult|Div|Mod when e1'=Int && e2'=Int -> Int
                 |Add|Sub|Mult|Div when e1'=Vec&&e2'=Vec -> Vec
@@ -224,104 +215,96 @@ let function_check func =
                 |Less|Leq|Greater|Geq when e1'=Int && e2'=Float -> Int
                 |Less|Leq|Greater|Geq when e1'=Float && e2'=Int-> Int
                 |And|Or when e1'=Int && e2'=Int -> Int
-                | _-> raise(Failure ("No unariy operator defined for "^ Ast.string_of_expr e1 ^ " "^Ast.string_of_expr e2))
+                | _-> raise(Failure ("Unsupported operands"^ Ast.string_of_expr e1 ^ " "^Ast.string_of_expr e2^" for "
+                                     ^(string_of_op op)))
             )
             |Unop(op,e1) -> let e1' = expr_b e1 in
-            (match op with
-            Neg when e1'=Int -> Int
-            |Neg when e1'=Float -> Float
-            |Neg when e1'=Vec -> Vec
-            |Pos when e1'=Int -> Int
-            |Pos when e1'=Float -> Float 
-            |Pos when e1'=Vec -> Vec
-            |Preinc when e1'= Int -> Int 
-            |Preinc when e1'= Float -> Float
-            |Predec when e1'= Int -> Int
-            |Predec when e1'= Float -> Float 
-            | _ -> raise(Failure("No unariy operator defined for "^ Ast.string_of_expr e1 ))
-            )
+                (match op with
+                    Neg when e1'=Int -> Int
+                    |Neg when e1'=Float -> Float
+                    |Neg when e1'=Vec -> Vec
+                    |Pos when e1'=Int -> Int
+                    |Pos when e1'=Float -> Float 
+                    |Pos when e1'=Vec -> Vec
+                    |Preinc when e1'= Int -> Int 
+                    |Preinc when e1'= Float -> Float
+                    |Predec when e1'= Int -> Int
+                    |Predec when e1'= Float -> Float 
+                    | _ -> raise(Failure("No unary operator defined for "^ Ast.string_of_expr e1 ))
+                )
             |Noexpr -> Void
             |Asnop(e1,asnp,e2)  -> let e1' = expr_b e1 and  e2'=expr_b e2 in 
-            (match asnp with
-            Asn when e1'=e2' ->  e1'
-            |Asn when e2'=Void -> e1' (*Extermely poor idea but need to figure out constructor problem that return void*)
-            |Asn when e1'=Float && e2'=Int ->  Float
-            |Asn when e1'=Int && e2'=Float ->  Float
-            |CmpAsn b when e1'=e2' ->  e1'
-            |CmpAsn b when e1'=Float && e2'=Int ->  Float
-            |CmpAsn b when e1'=Int && e2'=Float ->  Float
-            | _ -> raise (Failure ("Invalid assigment of " ^ Ast.string_of_typ e1' ^ " to "^Ast.string_of_typ e2'))
-            )
-            |Call(e1, actuals) as call -> let e1' = (match e1 with 
-                Id s -> let s' = try get_member_constr s 
-                                with Not_found -> function_decl s
-                in s'
+                (match asnp with
+                     Asn when e1'=e2' ->  e1'
+                    |Asn when e2'=Void -> e1' (*Extermely poor idea but need to figure out constructor problem that return void*)
+                    |Asn when e1'=Float && e2'=Int ->  Float
+                    |CmpAsn b when e1'=(expr_b (Binop(e1, b, e2))) ->  e1'
+                    (*|CmpAsn b when e1'=Float && e2'=Int ->  Float
+                    |CmpAsn b when e1'=Int && e2'=Float ->  Float*)
+                    | _ -> raise (Failure ("Invalid assigment of " ^ Ast.string_of_typ e1' ^ " to "^Ast.string_of_typ e2'))
+                )
+            |Call(e1, actuals) -> let e1' = (match e1 with 
+                Id s -> (try lookup_function s 
+                         with Not_found -> function_decl s)
                 |Member (e,s) -> let e'= expr_b e in let
-                                     e''= (match e' with
+                                     sname= (match e' with
                                             UserType(s,e1) -> s
-                                            | _-> raise(Failure("Not a UserType"))
+                                            | _-> raise(Failure("Dot operator on a non-user type"))
                                             )
-                                     in check_mem_func_name e'' s 
+                                     in get_mem_func_name sname s 
         
                 |_-> raise(Failure("here"))
                 )
-        in
+                in
                 let fd = e1' in
-                    if fd.fname = "drawpoint" && func.fname<>"draw"
-                        then raise(Failure("Cannot have draw point in none draw method"))
+                    if List.length actuals != List.length fd.params then
+                            raise (Failure ("Incorrect number of arguments "))
                     else
-                        if List.length actuals != List.length fd.params then
-                                raise (Failure ("Incorrect number of arguments "))
-                        else
-                                 List.iter2 (fun (ft, _,_) e -> let et = expr_b e in
-                                    ignore (check_ass ft et
-                                    (Failure ("Illegal actual argument found " ^ Ast.string_of_typ ft ^ " "^Ast.string_of_typ et))))
+                        (* MAY NEED TO REPLACE CHECK_ASS WITH ARG_ASS *)
+                         List.iter2 (fun (ft, _,_) e -> let et = expr_b e in
+                            ignore (check_ass ft et
+                            (Failure ("Illegal actual argument found " ^ Ast.string_of_typ ft ^ " "^Ast.string_of_typ et))))
                     fd.params actuals;
                 fd.rettyp
             |Vecexpr (e1,e2) -> Vec
-            |Posop (p,e2)-> let e2'=expr_b e2
-            in (match p with
-                Postinc when e2'=Float -> Float
-                |Postinc when e2'=Int -> Int
-                |Postdec when e2'=Float -> Float
-                |Postdec when e2'=Int -> Int
-                |_ -> raise(Failure("Cannot apply PostInc or PostDec " ^ " to" ^ Ast.string_of_expr e2))
+            |Posop (_,e2)-> let e2'=expr_b e2
+            in (match e2' with
+                |Int -> Int
+                |_ -> raise(Failure("Cannot apply PostInc or PostDec " ^ " to " ^ Ast.string_of_expr e2))
             )
-            |Trop(t,e1,e2,e3) -> Void
-            |Index(e1,e2) -> let e1' = expr_b e1 and e2' = expr_b e2
+            |Trop(t,e1,e2,e3) -> Void (* NEEDS TO BE CHECKED *)
+            |Index(e1,e2) -> let e1' = expr_b e1 and e2' = expr_b e2 (* ALLOW VECTOR INDEXING *)
                             in let te1' = (match e1' with
-                             Array(e1,e2)->e1
-                            | _-> raise(Failure("Not an array"))
+                             Array(t,_) -> t
+                            | _-> raise(Failure("Indexing a non-array"))
                                 )
                             in 
                             if e2'!= Int
                                 then raise(Failure ("Must index with an integer "))
                                  else te1'  
-            |Member(e1,e2) -> let e1' = expr_b e1
-        in let te1'= (match e1' with
-                UserType(s,e1) -> s
-                |_ -> raise(Failure("Not a UserType"))
-                )
-            in
-            check_struct_var te1' e2            
+            |Member(e1,s) -> let e1' = expr_b e1
+                in let te1'= (match e1' with
+                        UserType(s1,_) -> s1
+                        |_ -> raise(Failure("Dot operator on a non-user type"))
+                        )
+                    in
+                    ( try member_var_type te1' s with Not_found -> raise(Failure(s^" is not a member of "^(string_of_typ e1') )))           
         in 
         let check_bool_expr e = if expr_b e != Int (*Could take in any number need to force check 1 or 0*)
-            then raise(Failure(" Not a boolean value"))
+            then raise(Failure((string_of_expr e)^" is not a boolean value."))
             else() in 
         let rec stmt = function
              Block (vl,sl)  -> check_block (vl, sl) scopes
             |Expr e -> ignore(expr_b e)
             |Return e -> let e1' = expr_b e in if e1'= func.rettyp then () else
-                raise(Failure("Incorrect turn type on " ^ func.fname))
+                raise(Failure("Incorrect return type in " ^ func.fname))
             |If(p,e1,e2) -> check_bool_expr p; stmt e1; stmt e2;
             |For(e1,e2,e3,state) -> ignore(expr_b e1); check_bool_expr e2; ignore(expr_b e3); stmt state
             |While(p,s) -> check_bool_expr p; stmt s 
-            |ForDec (vdec,e1,e2,st1) -> ()
+            |ForDec (vdecls,e2,e3,body) -> stmt  ( Block(vdecls, [For(Noexpr , e2, e3, body)]) )
             |Timeloop(s1,e1,s2,e2,st1) ->()
             |Frameloop (s1,e1,s2,e2,st1)-> ()
-            |Drawpoint (e1,e2)-> ()
-            |Addshape e-> ()
-            |_-> raise(Failure ("Here"))   
+            | Break | Continue -> () (* COMPLICATED: CHECK If in Loop *)
         in 
         let check_ret () = match stmt_list with
             [Return _ ] -> ()
