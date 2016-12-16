@@ -228,7 +228,7 @@ decl_list_stmt_list:
 
 /* Optional Expression */
 expr_opt:
-  /* nothing */ { Noexpr }
+  /* nothing */ { (Noexpr,Void) }
   | expr          { $1 }
 
 expr:
@@ -299,7 +299,7 @@ posexpr:
   | LT addexpr COMMA addexpr GT   %prec VECEXPR { (Vecexpr($2, $4), Void) }
 
   /* primary expression */
-  | ID                    { Id($1) }
+  | ID                    { (Id($1),Void) }
   | LPAREN expr RPAREN    { $2 }
 
   /* postfix expression */

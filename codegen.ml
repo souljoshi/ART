@@ -41,7 +41,7 @@ let translate prog =
       | A.String -> string_t
       | A.Vec -> vec_t
       | A.Array(t,e) -> (match e with 
-            | A.IntLit(i) -> L.array_type (_ltype_of_typ m t) i
+            | (A.IntLit(i),_) -> L.array_type (_ltype_of_typ m t) i
             | _ -> raise(Failure "Arrays declaration requires int literals for now"))
       | A.UserType(s,_) -> StringMap.find s m
         (* Currently supporting only void, int and struct types *)
@@ -429,7 +429,8 @@ let translate prog =
                   | (_, ClosureScope)  -> raise (Failure ("No nested closure"))
                 )
           in
-          let rec non_local_expr = function
+          let rec non_local_expr (e,_) = non_local_baseexpr e
+          and non_local_baseexpr = function
               A.Id s -> (try ignore(scope_iter s scopes); StringSet.empty with Not_found -> StringSet.singleton s)
             | A.Vecexpr(e1,e2) -> StringSet.union (non_local_expr e1)  (non_local_expr e2)
             | A.Binop(e1,_,e2) -> StringSet.union (non_local_expr e1)  (non_local_expr e2)
@@ -437,7 +438,7 @@ let translate prog =
             | A.Unop(_,e)      -> non_local_expr e
             | A.Posop(_,e)     -> non_local_expr e
             | A.Trop(_,e1,e2,e3) -> StringSet.union (non_local_expr e1) (StringSet.union (non_local_expr e2)  (non_local_expr e3))
-            | A.Call(e1,el)  -> StringSet.union (match e1 with A.Id s-> StringSet.empty | _ -> non_local_expr e1) 
+            | A.Call(e1,el)  -> StringSet.union (match e1 with (A.Id s,_) -> StringSet.empty | _ -> non_local_expr e1) 
                                  ( List.fold_left (fun set e-> StringSet.union set (non_local_expr e)) StringSet.empty el)
             | A.Index(e1, e2)-> StringSet.union (non_local_expr e1)  (non_local_expr e2)
             | A.Member(e, _) -> non_local_expr e
@@ -450,7 +451,7 @@ let translate prog =
             | A.If(e,s1,s2) -> StringSet.union (non_local_expr e) (StringSet.union (non_local s1)  (non_local s2))
             | A.For(e1,e2,e3,s) -> StringSet.union (StringSet.union (non_local_expr e1) (non_local_expr e2)) 
                                     (StringSet.union (non_local_expr e3)  (non_local s))
-            | A.ForDec(decls,e2,e3,s)-> non_local ( A.Block(decls, [A.For(A.Noexpr, e2, e3, s)],A.PointContext))
+            | A.ForDec(decls,e2,e3,s)-> non_local ( A.Block(decls, [A.For((A.Noexpr,A.Void), e2, e3, s)],A.PointContext))
             | A.While(e,s) -> StringSet.union (non_local_expr e) (non_local s)
             | _ -> StringSet.empty
             (*| A.Timeloop of string * expr * string * expr * stmt
@@ -530,7 +531,7 @@ let translate prog =
                 let (stmt_list, local_decls) = List.fold_left
                       (* Handle expression initers by adding them as assignment expression statments *)
                       (fun (sl, ld) (t,n,i) -> 
-                            ( match i with A.Exprinit e -> A.Expr( A.Asnop(A.Id(n),A.Asn, e) )::sl , (t,n)::ld  
+                            ( match i with A.Exprinit e -> A.Expr( A.Asnop((A.Id(n),t),A.Asn, e),t)::sl , (t,n)::ld  
                               | _  -> sl, (t,n)::ld (* Silently ingore NoInit and ListInit *) 
                             )
                       ) (stmt_list, [])
@@ -602,7 +603,8 @@ let translate prog =
 
             (* Returns a tuple (type name, ast type) for an expression *)
             (* In final code [with semantic analysis] the ast type should be part of expr *)
-            let rec expr_type  = function
+            let rec expr_type (e,_) = baseexpr_type e
+            and baseexpr_type  = function
               A.IntLit i -> ("int", A.Int)
             | A.FloatLit f -> ("double", A.Float)
             | A.Id s -> let t =  lookup_type s in (string_of_typ2 t, t)
@@ -621,7 +623,7 @@ let translate prog =
                           in let t = fst(StringMap.find s varmap)
                           in (string_of_typ2 t, t)
             | A.StringLit s -> ("string",A.String)
-            |e -> raise (Failure ("Unsupported Expression for expr_type"^A.string_of_expr e))
+            |e -> raise (Failure ("Unsupported Expression for expr_type"^A.string_of_baseexpr e))
 
             in
 
@@ -724,11 +726,12 @@ let translate prog =
             in
 
             (* Construct code for an lvalue; return a pointer to access object *)
-            let rec lexpr builder = function
+            let rec lexpr builder (e,_) = lbaseexpr builder e
+            and lbaseexpr builder = function
                 A.Id s -> lookup s builder
               | A.Index(e1,e2) -> let e2' = expr builder e2 in
                   ( match e1 with 
-                      A.Id _ | A.Index(_,_) | A.Member(_,_) -> 
+                      (A.Id _,_) | (A.Index(_,_),_) | (A.Member(_,_),_) -> 
                         L.build_gep (lexpr builder e1) [|L.const_int i32_t 0; e2'|] "tmp" builder
                     | _ -> let e1' = expr builder e1 in (* e1 should be indexible *)
                            let tmp = L.build_alloca (L.type_of e1') "indtmp" builder in
@@ -739,11 +742,12 @@ let translate prog =
                   (* Obtain index of s in the struct type of expression e *)
                   let (sname, _ ) = expr_type e in let i = memb_index sname s in
                   L.build_gep e' [|L.const_int i32_t 0; L.const_int i32_t i|] "tmp" builder
-              | e -> raise (Failure ("Trying to assign to an non l-value: "^(A.string_of_expr e)))
+              | e -> raise (Failure ("Trying to assign to an non l-value: "^(A.string_of_baseexpr e)))
 
     
             (* Construct code for an expression; return its value *)
-            and expr builder = function (* Takes args builder and Ast.expr *)
+            and expr builder (e,_) = baseexpr builder e
+            and baseexpr builder = function (* Takes args builder and Ast.expr *)
                 A.IntLit i -> L.const_int i32_t i
               | A.CharLit c -> L.const_int i8_t (int_of_char c) (* 1 byte characters *)
               | A.Noexpr -> L.const_int i32_t 0  (* No expression is 0 *)
@@ -779,17 +783,18 @@ let translate prog =
                     else
                       match_type type_of_e1' op e1' e2' "tmp" builder
 
-              | A.Index(e1,e2) as arr-> L.build_load (lexpr builder arr) "tmp" builder
+              | A.Index(e1,e2) as arr-> L.build_load (lbaseexpr builder arr) "tmp" builder
 
-              | A.Member(e, s) as mem -> L.build_load (lexpr builder mem) "tmp" builder
+              | A.Member(e, s) as mem -> L.build_load (lbaseexpr builder mem) "tmp" builder
 
               | A.Asnop (el, op, er) ->
                    let el' = lexpr builder el in
+                   let (_,t) = el in
                    (match op with
                        A.Asn -> let e' = expr builder er in
                                  ignore (L.build_store e' el' builder); e'
                        (* The code here must change if supporting non-identifiers *)
-                     | A.CmpAsn bop -> let e' = expr builder (A.Binop(el, bop, er)) in
+                     | A.CmpAsn bop -> let e' = expr builder (A.Binop(el, bop, er),t) in
                                  ignore (L.build_store e' el' builder); e'
                    )
 
@@ -805,11 +810,11 @@ let translate prog =
 
 
                 (* This ok only for few built_in functions *)
-              | A.Call (A.Id "printi", [e]) -> L.build_call printf_func [|int_format_str ; (expr builder e) |] "printf" builder
-              | A.Call (A.Id "printc", [e]) -> L.build_call printf_func [|char_format_str ; (expr builder e) |] "printf" builder
-              | A.Call (A.Id "prints", [e]) -> L.build_call printf_func [|string_format_str ; (expr builder e) |] "printf" builder
-              | A.Call (A.Id "printf", [e]) -> L.build_call printf_func [|float_format_str ; (expr builder e) |] "printf" builder
-              | A.Call (A.Id "addshape", el) -> 
+              | A.Call ((A.Id "printi", _),[e]) -> L.build_call printf_func [|int_format_str ; (expr builder e) |] "printf" builder
+              | A.Call ((A.Id "printc", _),[e]) -> L.build_call printf_func [|char_format_str ; (expr builder e) |] "printf" builder
+              | A.Call ((A.Id "prints", _),[e]) -> L.build_call printf_func [|string_format_str ; (expr builder e) |] "printf" builder
+              | A.Call ((A.Id "printf", _),[e]) -> L.build_call printf_func [|float_format_str ; (expr builder e) |] "printf" builder
+              | A.Call ((A.Id "addshape", _),el) -> 
                     let add_one_shape ex = 
                       let fdef' = L.const_bitcast (fst(lookup_method (fst(expr_type ex)) "draw")) (L.pointer_type void_i8p_t) in
                       let i = L.build_load shape_list_ind "sindex" builder in
@@ -823,12 +828,12 @@ let translate prog =
                     in ignore(List.iter add_one_shape el); L.undef void_t
                 (* A call without a dot expression refers to three possiblities. In order of precedence: *)
                 (* constructor call, method call (within struct scope), function call *)
-              | A.Call (A.Id f, act) ->
+              | A.Call ((A.Id f,_), act) ->
                  (* The llvm type array of the calling functions parameters
                     Can be use to retreive the "this" argument *)
                  (try let fdef = StringMap.find f glut_decls in 
                   let actuals = if (f = "drawpoint") (* Convert vector into two arguments *)
-                    then let v = (List.hd act) in List.map (expr builder) [ A.Index(v,A.IntLit(0)) ; A.Index(v,A.IntLit(1))]
+                    then let v = (List.hd act) in List.map (expr builder) [ (A.Index(v,(A.IntLit(0),A.Int)),A.Float) ; (A.Index(v,(A.IntLit(1),A.Int)), A.Float)]
                     else List.rev (List.map (expr builder) (List.rev act)) in
                   do_glut_func fdef (Array.of_list actuals) builder
                 with Not_found -> (
@@ -839,7 +844,7 @@ let translate prog =
                  let arg_passer builder (_,_,pass) = function
                     (* Identifier, index, and member expressions may be passed by reference.
                        Other types are required to be passed by value. *)
-                    A.Id(_) | A.Index(_,_) | A.Member(_,_) as e -> (match pass with
+                    (A.Id(_),_) | (A.Index(_,_),_) | (A.Member(_,_),_) as e -> (match pass with
                               A.Ref -> lexpr builder e (* This gets the pointer to the variable *)
                             | A.Value -> expr builder e )
                   | e  -> expr builder e
@@ -865,13 +870,13 @@ let translate prog =
                   )
                ))
               (* Explicit method calls with dot operator *)
-              | A.Call (A.Member(e,s), act) ->
+              | A.Call ((A.Member(e,s),_), act) ->
                  let (sname, _ ) = expr_type e in
                  let (fdef, fdecl) = lookup_method sname s in
                  (* Helper function for pass by value handling *)
                  (* Same us the above code *)
                  let arg_passer builder (_,_,pass) = function
-                    A.Id(_) | A.Index(_,_) | A.Member(_,_) as e -> (match pass with
+                    (A.Id(_),_) | (A.Index(_,_),_) | (A.Member(_,_),_) as e -> (match pass with
                               A.Ref -> lexpr builder e (* This gets the pointer to the variable *)
                             | A.Value -> expr builder e )
                   | e  -> expr builder e
@@ -883,7 +888,7 @@ let translate prog =
                  let result = (match fdecl.A.rettyp with A.Void -> "" (* don't name result for void llvm issue*)
                                                     | _ -> s^"_result") in
                  L.build_call fdef (Array.of_list actuals) result builder
-              |  e -> raise (Failure ("Unsupported expression: "^(A.string_of_expr e)))(* Ignore other expressions *)
+              |  e -> raise (Failure ("Unsupported expression: "^(A.string_of_baseexpr e)))(* Ignore other expressions *)
             in
 
             (* Build the code for the given statement; return the builder for
@@ -948,7 +953,7 @@ let translate prog =
                 (*  make equivalent while *)
                 | A.For (e1, e2, e3, body) -> stmt builder
                     ( A.Block ( [], [  A.Expr e1; A.While (e2, A.Block ([], [body; A.Expr e3],A.PointContext) ) ] , A.PointContext) )
-                | A.ForDec (vdecls, e2, e3, body) -> stmt builder ( A.Block(vdecls, [A.For(A.Noexpr , e2, e3, body)], A.PointContext) )
+                | A.ForDec (vdecls, e2, e3, body) -> stmt builder ( A.Block(vdecls, [A.For((A.Noexpr,A.Void) , e2, e3, body)], A.PointContext) )
                 | A.Timeloop(s1, e1, s2, e2, stmt) ->
                     let ftype = L.function_type void_t [| |] in
                     let fdef = L.define_function "timeloop." ftype the_module in

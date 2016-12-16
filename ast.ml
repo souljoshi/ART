@@ -144,7 +144,7 @@ let string_of_chr =  function
 
 
 (* Uncomment the next comment for full parenthesized *)
-let rec string_of_basexpr (*e = "( "^ paren_of_expr e ^ " )"
+let rec string_of_baseexpr (*e = "( "^ paren_of_expr e ^ " )"
 and 
 paren_of_expr *) = function
     IntLit(l) -> string_of_int l
@@ -167,7 +167,7 @@ paren_of_expr *) = function
   | Index(e1, e2) -> string_of_expr e1 ^ "[" ^ string_of_expr e2 ^ "]"
   | Member(e1, s) -> string_of_expr e1 ^ "." ^ s
   | Noexpr -> ""
-and string_of_expr (e,_) = string_of_basexpr e
+and string_of_expr (e,_) = string_of_baseexpr e
 
 let rec list_of_arr = function
     Array(Array(_,_) as a , i) ->  let (t,l) = list_of_arr a in (t, i::l)
