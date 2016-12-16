@@ -26,7 +26,7 @@ let struct_build prog =
 
     in  
     (* A map of all struct/shape types *)
-    let structs = List.fold_left ( fun m st -> StringMap.add st.sname st m)
+    let structs = List.fold_left ( fun m st -> report_dup(fun n-> "Duplicate Member variable Name " ^n ^"in " ^ st.sname)(List.map (fun (t,n) ->  n)st.decls); StringMap.add st.sname st m)
                 StringMap.empty prog.s in
     let (structs,funcs) = (* Refers to structs and non-member functions *)
         (* Puts methods and constructors with appropriate struct and returns tuple
@@ -77,7 +77,7 @@ let built_in_fun = StringMap.add "printi"
 (StringMap.add "cos"{rettyp=Float;fname="cos";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None";}
 (StringMap.add "sin"{rettyp=Float;fname="sin";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None";}
 (StringMap.add "setcolor"{rettyp=Void;fname="setcolor";params=[(Float,"x",Value);(Float,"x",Value);(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None";}
-(StringMap.add "drawpoint"{rettyp=Void;fname="drawpoint";params=[(Float,"x",Value);(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None";}
+(StringMap.add "drawpoint"{rettyp=Void;fname="drawpoint";params=[(Vec,"x",Value)];locals=[];body=[];typ=Func;owner="None";}
 (StringMap.singleton "printc" {rettyp=Void; fname="printf";params=[(Char, "x",Value)];locals=[];body=[];typ=Func;owner="None";}))))))))
 (*let function_decls =
     List.map(fun fd -> fd.fname) functions*)
