@@ -1,4 +1,8 @@
 /* Test struct behavior in functions */
+void printiln(int x)
+{
+    printi(x);printc('\n');
+}
 
 struct intpair {
     int x;
@@ -39,26 +43,26 @@ int main() {
     a.y = b.y = c.y = 0;
 
 
-    printi(a.x);
-    printi(a.y);
+    printiln(a.x);
+    printiln(a.y);
     printc('\n');
-    printi(b.x);
-    printi(b.y);
+    printiln(b.x);
+    printiln(b.y);
     printc('\n');
-    printi(c.x);
-    printi(c.y);
+    printiln(c.x);
+    printiln(c.y);
     printc('\n');
 
     do_nothing(a);
     modify(b);
     c = pair(1, -1);
 
-    printi(a.x);
-    printi(a.y);
+    printiln(a.x);
+    printiln(a.y);
     printc('\n');
-    printi(b.x);
-    printi(b.y);
+    printiln(b.x);
+    printiln(b.y);
     printc('\n');
-    printi(c.x);
-    printi(c.y);   
+    printiln(c.x);
+    printiln(c.y);   
 }

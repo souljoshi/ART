@@ -1,3 +1,7 @@
+void printiln(int x)
+{
+    printiln(x);printc('\n');
+}
 struct test {
 
     int x;
@@ -20,8 +24,8 @@ void test::print_test()
 {
         printc('{');
         printc('\n');
-        printi(x);
-        printi(y);
+        printiln(x);
+        printiln(y);
         printc('}');
         printc('\n');
 }
@@ -98,6 +102,6 @@ int main ()
         s2 = s1;
         sc = screen();
         v=sc.chained(2);
-        printi(v);
+        printiln(v);
 
 }

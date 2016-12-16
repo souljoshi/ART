@@ -1,3 +1,7 @@
+void printiln(int x)
+{
+    printi(x);printc('\n');
+}
 int set(int &x, int v)
 {
     x = v;
@@ -23,24 +27,24 @@ int main ()
     b = 3;
     c = 4;
 
-    printi(a);
-    printi(b);
-    printi(c);
+    printiln(a);
+    printiln(b);
+    printiln(c);
 
     no_change(a); 
     no_change(b);
     no_change(c);
 
     printc('\n');
-    printi(a);
-    printi(b);
-    printi(c);
+    printiln(a);
+    printiln(b);
+    printiln(c);
 
     set (a, 7);
     xchg (b, c);
 
     printc('\n');
-    printi(a);
-    printi(b);
-    printi(c);
+    printiln(a);
+    printiln(b);
+    printiln(c);
 }

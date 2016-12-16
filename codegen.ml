@@ -27,6 +27,7 @@ let translate prog =
     let string_t = L.pointer_type i8_t
     and i8ptr_t = L.pointer_type i8_t
     and i8ptrptr_t = L.pointer_type (L.pointer_type i8_t)
+    and vec_t = L.vector_type double_t 2
     in
 
     (* General verson of lltype_of_typ that takes a struct map *)
@@ -38,12 +39,13 @@ let translate prog =
       | A.Void -> void_t
       | A.Float -> double_t
       | A.String -> string_t
+      | A.Vec -> vec_t
       | A.Array(t,e) -> (match e with 
-            |A.IntLit(i) -> L.array_type (_ltype_of_typ m t) i
+            | A.IntLit(i) -> L.array_type (_ltype_of_typ m t) i
             | _ -> raise(Failure "Arrays declaration requires int literals for now"))
       | A.UserType(s,_) -> StringMap.find s m
         (* Currently supporting only void, int and struct types *)
-      | _   -> raise (Failure "Only valid types are int/char/void/string/double")
+      | _   -> raise (Failure "Only valid types are int/char/void/string/double/vec")
 
     in
 
@@ -604,9 +606,12 @@ let translate prog =
               A.IntLit i -> ("int", A.Int)
             | A.FloatLit f -> ("double", A.Float)
             | A.Id s -> let t =  lookup_type s in (string_of_typ2 t, t)
+            | A.VecLit(f1, f2) -> ("vec", A.Vec)
+            | A.Vecexpr(e1, e2) -> ("vec", A.Vec)
             | A.Index(a, e) -> (match snd(expr_type a) with (* First get type of the expr being indexed *)
                                 (* The type of the index expression is the subtype 't' of the array *)
                                 A.Array (t, e2) -> (string_of_typ2 t, t)
+                              | A.Vec -> (string_of_typ2 A.Float, A.Float)
                               | _ -> raise (Failure ("Indexing non array")))
 
             | A.Member(e, s) -> let (n,t) = expr_type e (* Get type name of the expression before dot *)
@@ -638,7 +643,17 @@ let translate prog =
             
             let match_type typ op =
                   let float_type = (L.type_of (L.const_float double_t 1.1))
-                in if typ=float_type
+                  and vec_type = L.type_of(L.const_vector [|L.const_float double_t 1.1 ; L.const_float double_t 1.1 |])
+                in 
+                if typ=vec_type
+                  then match op with
+                      A.Add -> L.build_fadd
+                    | A.Sub     -> L.build_fsub
+                    | A.Mult    -> L.build_fmul
+                    | A.Div     -> L.build_fdiv
+                    | _         -> raise (Failure "Unsupported binary operation for vectors")
+
+                else if typ=float_type
                   then match op with
                     A.Add -> L.build_fadd
                     | A.Sub     -> L.build_fsub
@@ -670,7 +685,43 @@ let translate prog =
                     | A.Greater -> L.build_icmp L.Icmp.Sgt
                     | A.Geq     -> L.build_icmp L.Icmp.Sge
               
-              in
+            in
+            let vec_scalar_mult e1'' e2'' builder =
+                let type_of_e1'' = L.type_of(e1'') 
+                and type_of_e2'' = L.type_of(e2'')
+                and float_type = L.type_of(L.const_float double_t 1.1)
+                and vec_type = L.type_of(L.const_vector [|L.const_float double_t 1.1 ; L.const_float double_t 1.1 |])
+                in
+                (
+                  if type_of_e2'' = float_type
+                  then 
+                  (
+                    let vec_of_e2'' = L.const_vector [| L.const_float double_t 0.0 ; L.const_float double_t 0.0 |]
+                  in
+                    let insert_element1 = L.build_insertelement vec_of_e2'' e2'' (L.const_int i32_t 0) "tmp1" builder
+                  in
+                    let insert_element2 = L.build_insertelement insert_element1 e2'' (L.const_int i32_t 1) "tmp2" builder
+                  in
+                    match_type vec_type A.Mult e1'' insert_element2 "tmp" builder
+                  )
+                  else 
+                  (
+                    if type_of_e1'' = float_type
+                    then
+                    ( 
+                      let vec_of_e1'' = L.const_vector [| L.const_float double_t 0.0 ; L.const_float double_t 0.0 |]
+                    in
+                      let insert_element1 = L.build_insertelement vec_of_e1'' e1'' (L.const_int i32_t 0) "tmp1" builder
+                    in
+                      let insert_element2 = L.build_insertelement insert_element1 e1'' (L.const_int i32_t 1) "tmp2" builder
+                    in
+                      match_type vec_type A.Mult insert_element2 e2'' "tmp" builder
+                    )
+                    else
+                      raise (Failure "Unsupported binary operation for vectors")
+                  )
+                )
+            in
 
             (* Construct code for an lvalue; return a pointer to access object *)
             let rec lexpr builder = function
@@ -683,7 +734,7 @@ let translate prog =
                   L.build_gep e' [|L.const_int i32_t 0; L.const_int i32_t i|] "tmp" builder
               | _ -> raise (Failure "Trying to assign to an non l-value")
 
-
+    
             (* Construct code for an expression; return its value *)
             and expr builder = function (* Takes args builder and Ast.expr *)
                 A.IntLit i -> L.const_int i32_t i
@@ -691,19 +742,35 @@ let translate prog =
               | A.Noexpr -> L.const_int i32_t 0  (* No expression is 0 *)
               | A.StringLit s -> string_create s builder
               | A.FloatLit f -> L.const_float double_t f
+              | A.VecLit(f1, f2) -> L.const_vector [|(L.const_float double_t f1) ; (L.const_float double_t f2)|]
+              | A.Vecexpr(e1, e2) -> 
+                  let e1' = expr builder e1
+                  and e2' = expr builder e2
+                in
+                  let tmp_vec = L.const_vector [| L.const_float double_t 0.0 ; L.const_float double_t 0.0 |]
+                in
+                  let insert_element1 = L.build_insertelement tmp_vec e1' (L.const_int i32_t 0) "tmp1" builder
+                in
+                  L.build_insertelement insert_element1 e2' (L.const_int i32_t 1) "tmp2" builder
               | A.Id s -> L.build_load (lookup s builder) s builder (* Load the variable into register and return register *)
               | A.Binop (e1, op, e2) ->
                   let e1' = expr builder e1 
                   and e2' = expr builder e2 
                   and float_type = L.type_of(L.const_float double_t 1.1)
+                  and vec_type = L.type_of(L.const_vector [|L.const_float double_t 1.1 ; L.const_float double_t 1.1 |])
                 in
                   let type_of_e1' = L.type_of(e1') and type_of_e2' = L.type_of(e2')
-                in if type_of_e1' <> type_of_e2'
-                      then let ret= convert_type e1' e2' builder
-                    in let x = fst ret and y = snd ret
-                      in match_type float_type op x y "temp" builder
-                else
-                  match_type type_of_e1' op e1' e2' "tmp" builder
+                in 
+                if type_of_e1' <> type_of_e2'
+                    then let ret= convert_type e1' e2' builder
+                        in let x = fst ret and y = snd ret
+                        in 
+                        (if ((L.type_of x) = vec_type || (L.type_of y) = vec_type) && op = A.Mult
+                          then vec_scalar_mult x y builder (*Handle vector scalar multiplication *)
+                          else match_type float_type op x y "temp" builder
+                        )
+                    else
+                      match_type type_of_e1' op e1' e2' "tmp" builder
 
               | A.Index(e1,e2) as arr-> L.build_load (lexpr builder arr) "tmp" builder
 

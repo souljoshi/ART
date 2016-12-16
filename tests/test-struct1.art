@@ -1,5 +1,8 @@
 /* Test basic struct declaration */
-
+void printiln(int x)
+{
+    printi(x);printc('\n');
+}
 struct intpair {
     int x;
     int y;
@@ -20,8 +23,8 @@ int main ()
     b.x = 'A';
     b.y = 'q';
 
-    printi(a.x);
-    printi(a.y);
+    printiln(a.x);
+    printiln(a.y);
 
     printc(b.x);
     printc(b.y);

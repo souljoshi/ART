@@ -1,0 +1,24 @@
+void printfln(double x)
+{
+    printf(x);printc('\n');
+}
+int main()
+{
+	vec v1;
+	vec v2;
+	double f1;
+	double f2;
+
+	f1 = 2.0;
+	f2 = 5.5;
+
+    v1 = <1.0 + 1.0, 55.1 + 2.0>;
+
+    v2 = <f1 * f2, f2 / 2>;
+
+    printfln(v1[0]);
+    printfln(v1[1]);
+    printfln(v2[0]);
+    printfln(v2[1]);
+
+}
