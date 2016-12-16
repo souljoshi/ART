@@ -1,3 +1,7 @@
+void printiln(int x)
+{
+    printi(x);printc('\n');
+}
 int main()
 {
     int x;
@@ -6,8 +10,8 @@ int main()
     if (x == 0)
     {
         x = 10;
-        printi(x);
-        printi(y); // y not defined
+        printiln(x);
+        printiln(y); // y not defined
     }
 
 }

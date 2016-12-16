@@ -1,0 +1,6 @@
+int main()
+{
+    vec v1;
+
+    v1[0] = 10; // Error, only works with doubles
+}

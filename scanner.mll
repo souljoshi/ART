@@ -82,6 +82,8 @@ rule token = parse
 | "||"        { OR }
 | "!"         { NOT }
 | "::"        { DCOLON }
+| "<<"        { LTLT }
+| ">>"        { GTGT }
 | "if"        { IF }
 | "else"      { ELSE }
 | "for"       { FOR }

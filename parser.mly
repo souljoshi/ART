@@ -19,7 +19,7 @@
 %token PLUS MINUS TIMES DIVIDE MOD
 %token ASSIGN PLUSASSIGN MINUSASSIGN TIMESASSIGN 
 %token DIVASSIGN MODASSIGN PLUSPLUS MINUSMINUS
-%token EQ NEQ LT LEQ GT GEQ AND OR NOT
+%token EQ NEQ LT LEQ GT GEQ AND OR NOT LTLT GTGT
 %token RETURN IF ELSE FOR WHILE BREAK CONTINUE
 %token STRUCT SHAPE
 %token TLOOP FLOOP
@@ -44,6 +44,7 @@
 %right PRE /* prefix increment/decrement */
 %right NOT NEG POS
 %left INDEX CALL MEMB /* member */ POST /* postfix decrement/increment */
+%nonassoc VECEXPR
 
 %start program
 %type <Ast.prog> program
@@ -189,7 +190,7 @@ stmt_list: /* inverted list of the statements */
   | stmt_list stmt { $2 :: $1 }
 
 stmt:
-    expr SEMI                               { Expr $1 }
+    expr_opt SEMI                           { Expr $1 }
   | RETURN SEMI                             { Return Noexpr }
   | RETURN expr SEMI                        { Return $2 }
   | BREAK SEMI                              { Break }
@@ -198,7 +199,7 @@ stmt:
   /* Block */
   | stmt_block                               { $1 }   /* defined in stmt_block: */
 
-  | IF LPAREN expr RPAREN stmt %prec NOELSE { If($3, $5, Block([],[])) }
+  | IF LPAREN expr RPAREN stmt %prec NOELSE { If($3, $5, Block([],[],PointContext)) }
   | IF LPAREN expr RPAREN stmt ELSE stmt    { If($3, $5, $7) }
 
   | FOR LPAREN expr_opt SEMI expr_opt SEMI expr_opt RPAREN stmt
@@ -216,8 +217,14 @@ stmt:
 
 stmt_block:
   /* Block */
-    LBRACE stmt_list RBRACE                 { Block([], List.rev $2) }
-  | LBRACE declaration_list stmt_list RBRACE{ Block($2, List.rev $3)} /* Already Reversed */
+    LBRACE decl_list_stmt_list RBRACE     { Block(fst $2, snd $2, PointContext) }
+  | LBRACK decl_list_stmt_list RBRACK     { Block(fst $2, snd $2, LineContext) }
+  | LTLT decl_list_stmt_list GTGT             { Block(fst $2, snd $2, TriangleContext) }
+
+decl_list_stmt_list:
+    stmt_list                   {([], List.rev $1)} /* stmt_list needs to be reversed */
+  | declaration_list stmt_list  {($1, List.rev $2)} /* declaration doesn't need reversing */
+
 
 /* Optional Expression */
 expr_opt:
@@ -243,24 +250,8 @@ expr:
 
 /* all expressions other than assignment/conditional */
 bexpr:
-  /* Postfix expressions */
-  posexpr                  {$1}
-
-  /* unary */
-  | PLUS  bexpr %prec POS        { Unop(Pos, $2) }
-  | MINUS bexpr %prec NEG        { Unop(Neg, $2) }
-  | NOT bexpr                    { Unop(Not, $2) }
-  | PLUSPLUS   bexpr %prec PRE   { Unop(Preinc, $2)}
-  | MINUSMINUS bexpr %prec PRE   { Unop(Predec, $2)}
-
-  /* multiplicative */
-  | bexpr TIMES  bexpr      { Binop($1, Mult,  $3) }
-  | bexpr DIVIDE bexpr      { Binop($1, Div,   $3) }
-  | bexpr MOD    bexpr      { Binop($1, Mod,   $3) }
-
-  /* additive */
-  | bexpr PLUS   bexpr      { Binop($1, Add,   $3) }
-  | bexpr MINUS  bexpr      { Binop($1, Sub,   $3) }
+  /* Additive expressions */
+    addexpr                {$1}
 
   /* relational */
   | bexpr  LT    bexpr      { Binop($1, Less,   $3) }
@@ -276,7 +267,25 @@ bexpr:
   | bexpr  AND   bexpr      { Binop($1, And,   $3) }
   | bexpr  OR    bexpr      { Binop($1, Or,    $3) }
 
+/* Expressions that can be used in vec expressions */
+addexpr:
+  /* Postfix expressions */
+    posexpr                  {$1}
+  /* unary */
+  | PLUS  addexpr %prec POS        { Unop(Pos, $2) }
+  | MINUS addexpr %prec NEG        { Unop(Neg, $2) }
+  | NOT addexpr                    { Unop(Not, $2) }
+  | PLUSPLUS   addexpr %prec PRE   { Unop(Preinc, $2)}
+  | MINUSMINUS addexpr %prec PRE   { Unop(Predec, $2)}
 
+  /* multiplicative */
+  | addexpr TIMES  addexpr      { Binop($1, Mult,  $3) }
+  | addexpr DIVIDE addexpr      { Binop($1, Div,   $3) }
+  | addexpr MOD    addexpr      { Binop($1, Mod,   $3) }
+
+  /* additive */
+  | addexpr PLUS   addexpr      { Binop($1, Add,   $3) }
+  | addexpr MINUS  addexpr      { Binop($1, Sub,   $3) }
 
 posexpr: 
   /* Literals */
@@ -286,6 +295,9 @@ posexpr:
   | VECTORLIT             { VecLit($1) }
   | STRINGLIT             { StringLit($1)}
 
+  /* Vector expression */
+  | LT addexpr COMMA addexpr GT   %prec VECEXPR { Vecexpr($2, $4) }
+
   /* primary expression */
   | ID                    { Id($1) }
   | LPAREN expr RPAREN    { $2 }
@@ -293,6 +305,7 @@ posexpr:
   /* postfix expression */
   | posexpr LBRACK expr RBRACK    %prec INDEX   { Index($1, $3) }
   | posexpr LPAREN arg_list RPAREN %prec CALL    { Call($1, List.rev $3) } 
+    
   /* List.rev is used because in arg_list, expr_list is build from the back cause it is more efficient*/
   | posexpr DOT ID                %prec MEMB    { Member($1, $3) }
   | posexpr PLUSPLUS              %prec POST    { Posop(Postinc, $1) }

@@ -1,5 +1,8 @@
 /* Testing basic scoping Rules */
-
+void printiln(int x)
+{
+    printiln(x);printc('\n');
+}
 int z;
 
 struct first { int z; }
@@ -25,21 +28,21 @@ int main()
         struct first x;
         struct second y;
 
-        printi(z);
+        printiln(z);
         printc('\n');
 
         x = first(-10);
         y = second(-12);
 
-        printi(z);
-        printi(x.z);
-        printi(y.y);
+        printiln(z);
+        printiln(x.z);
+        printiln(y.y);
         printc('\n');
 
         x.member();
         y.member();
 
-        printi(z);
-        printi(x.z);
-        printi(y.y);
+        printiln(z);
+        printiln(x.z);
+        printiln(y.y);
 }

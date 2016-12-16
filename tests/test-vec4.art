@@ -1,0 +1,87 @@
+void printfln(double x)
+{
+    printf(x);printc('\n');
+}
+int main()
+{
+    vec v1;
+    vec v2;
+    vec v3;
+    vec v4;
+    vec v5;
+    vec v6;
+    vec v7;
+    vec v8;
+    vec v9;
+    vec v10;
+    vec v11;
+    double f1;
+    double f2;
+    int i1;
+
+    i1 = 2;
+
+    v2 = <66.5, 12.0>;
+    
+
+    f1 = 2.0;
+    f2 = 10.5;
+
+    //v3 = <f1, f2>;
+    v3 = <1.0+f1, 2.1+f2>;
+
+    //v4 = v2 + v3; // this is giving error right now, need to fix
+
+    //v4 = <66.5, 12.0> + v3; // this is giving error right now, need to fix
+
+    v4 = <66.5, 12.0> + <1.0, 55.1>;
+    v5 = <66.5, 12.0> - <1.0, 55.1>;
+    v6 = <66.5, 12.0> * <1.0, 55.1>;
+    v7 = <66.5, 12.0> / <1.0, 55.1>;
+
+    v8 = v4 + v6; 
+    //will give error "Operation not supported for vectors" as expected
+
+    v9 = <66.5, 12.0> * 2.0; // scalar mulitplication
+    //v10 = v8 * <66.5, 12.0>;
+    v10 = v3 * f1;
+    //v10 = 2.0 + <66.5, 12.0>; // will give error "Unsupported binary operation" as expected
+    //v10 = v4;
+    //v5 * v4;
+
+
+    //v11 = v4 + v5;
+    //v11 = <66.5, 12.0> * 5;
+    v11 = f1 * <66.5, 12.0>;
+
+    v1[0] = 10.5;
+    v1[1] = 4.2;
+
+    //v3[0] = 9.9;
+
+    printfln(v1[0]);
+    printfln(v1[1]);
+
+    //printfln(v2[0]);
+    //printfln(v2[1]);
+
+    printfln(v3[0]);
+    printfln(v3[1]);
+
+    printfln(v4[0]);
+    printfln(v4[1]);
+    printfln(v5[0]);
+    printfln(v5[1]);
+    printfln(v6[0]);
+    printfln(v6[1]);
+    printfln(v7[0]);
+    printfln(v7[1]);
+    printfln(v8[0]);
+    printfln(v8[1]);
+    printfln(v9[0]);
+    printfln(v9[1]);
+    printfln(v10[0]);
+    printfln(v10[1]);
+    printfln(v11[0]);
+    printfln(v11[1]);
+}

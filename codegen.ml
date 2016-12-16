@@ -27,6 +27,7 @@ let translate prog =
     let string_t = L.pointer_type i8_t
     and i8ptr_t = L.pointer_type i8_t
     and i8ptrptr_t = L.pointer_type (L.pointer_type i8_t)
+    and vec_t = L.vector_type double_t 2
     in
 
     (* General verson of lltype_of_typ that takes a struct map *)
@@ -38,12 +39,13 @@ let translate prog =
       | A.Void -> void_t
       | A.Float -> double_t
       | A.String -> string_t
+      | A.Vec -> vec_t
       | A.Array(t,e) -> (match e with 
-            |A.IntLit(i) -> L.array_type (_ltype_of_typ m t) i
+            | A.IntLit(i) -> L.array_type (_ltype_of_typ m t) i
             | _ -> raise(Failure "Arrays declaration requires int literals for now"))
       | A.UserType(s,_) -> StringMap.find s m
         (* Currently supporting only void, int and struct types *)
-      | _   -> raise (Failure "Only valid types are int/char/void/string/double")
+      | _   -> raise (Failure "Only valid types are int/char/void/string/double/vec")
 
     in
 
@@ -166,10 +168,8 @@ let translate prog =
       else if glvertex_func   == fdef then   L.build_call glvertex_func    [|act.(0) ; act.(1) |] "" builder  
       else if sin_func         == fdef then   L.build_call sin_func        [|act.(0)|] "" builder 
       else if cos_func         == fdef then   L.build_call cos_func        [|act.(0)|] "" builder
-      (* Draw Point *)
-      else  (ignore( L.build_call glbegin_func     [|L.const_int i32_t 0 |] "" builder);
-            ignore(L.build_call glvertex_func    [|act.(0) ; act.(1) |] "" builder );
-            L.build_call glend_func [|  |] "" builder )
+      (* Draw Point - draws vertices *)
+      else L.build_call glvertex_func    [|act.(0) ; act.(1) |] "" builder
 
     in
     let do_glut_init argc argv title draw_func idle_func builder = 
@@ -258,6 +258,16 @@ let translate prog =
         (* Get an instruction builder that will emit instructions in the current function *)
         let builder = L.builder_at_end context (L.entry_block the_function) in
 
+        (* Checks if function is a draw shape method *)
+        let is_draw_shape fdecl = (fdecl.A.typ = A.Method) && (fdecl.A.fname = "draw") &&
+            ((let s = List.find (fun s -> s.A.sname = fdecl.A.owner) structs in s.A.ss) = A.ShapeType)
+        in
+        (* call a closing glend in a shape_draw before before emitting return *)
+        let build_custom_ret_void builder =
+          ( if is_draw_shape fdecl 
+              then ignore(L.build_call glend_func [|  |] "" builder) else ());
+          L.build_ret_void builder
+        in
         (* For unique globals, use a name that ends with '.' *)
         (* NOTE: there can only be one variable name "foo." that is a unique global *)
         let unique_global n init = match (L.lookup_global n the_module) with
@@ -274,7 +284,7 @@ let translate prog =
         in
 
         (* Format strings for printf call *)
-        let int_format_str = unique_global_stringptr "%d\n" "ifmt."  in
+        let int_format_str = unique_global_stringptr "%d" "ifmt."  in
         let char_format_str = unique_global_stringptr "%c" "cfmt."   in
         let string_format_str = unique_global_stringptr "%s" "sfmt." in
         let float_format_str = unique_global_stringptr "%f" "ffmt."  in
@@ -434,13 +444,13 @@ let translate prog =
             | _  -> StringSet.empty
           in
           let rec non_local = function
-              A.Block(decls, stmts) -> non_block_locals decls stmts scopes
+              A.Block(decls, stmts,_) -> non_block_locals decls stmts scopes
             | A.Expr(e)   -> non_local_expr e
             | A.Return(e) -> non_local_expr e
             | A.If(e,s1,s2) -> StringSet.union (non_local_expr e) (StringSet.union (non_local s1)  (non_local s2))
             | A.For(e1,e2,e3,s) -> StringSet.union (StringSet.union (non_local_expr e1) (non_local_expr e2)) 
                                     (StringSet.union (non_local_expr e3)  (non_local s))
-            | A.ForDec(decls,e2,e3,s)-> non_local ( A.Block(decls, [A.For(A.Noexpr, e2, e3, s)]))
+            | A.ForDec(decls,e2,e3,s)-> non_local ( A.Block(decls, [A.For(A.Noexpr, e2, e3, s)],A.PointContext))
             | A.While(e,s) -> StringSet.union (non_local_expr e) (non_local s)
             | _ -> StringSet.empty
             (*| A.Timeloop of string * expr * string * expr * stmt
@@ -596,9 +606,12 @@ let translate prog =
               A.IntLit i -> ("int", A.Int)
             | A.FloatLit f -> ("double", A.Float)
             | A.Id s -> let t =  lookup_type s in (string_of_typ2 t, t)
+            | A.VecLit(f1, f2) -> ("vec", A.Vec)
+            | A.Vecexpr(e1, e2) -> ("vec", A.Vec)
             | A.Index(a, e) -> (match snd(expr_type a) with (* First get type of the expr being indexed *)
                                 (* The type of the index expression is the subtype 't' of the array *)
                                 A.Array (t, e2) -> (string_of_typ2 t, t)
+                              | A.Vec -> (string_of_typ2 A.Float, A.Float)
                               | _ -> raise (Failure ("Indexing non array")))
 
             | A.Member(e, s) -> let (n,t) = expr_type e (* Get type name of the expression before dot *)
@@ -630,7 +643,17 @@ let translate prog =
             
             let match_type typ op =
                   let float_type = (L.type_of (L.const_float double_t 1.1))
-                in if typ=float_type
+                  and vec_type = L.type_of(L.const_vector [|L.const_float double_t 1.1 ; L.const_float double_t 1.1 |])
+                in 
+                if typ=vec_type
+                  then match op with
+                      A.Add -> L.build_fadd
+                    | A.Sub     -> L.build_fsub
+                    | A.Mult    -> L.build_fmul
+                    | A.Div     -> L.build_fdiv
+                    | _         -> raise (Failure "Unsupported binary operation for vectors")
+
+                else if typ=float_type
                   then match op with
                     A.Add -> L.build_fadd
                     | A.Sub     -> L.build_fsub
@@ -662,20 +685,63 @@ let translate prog =
                     | A.Greater -> L.build_icmp L.Icmp.Sgt
                     | A.Geq     -> L.build_icmp L.Icmp.Sge
               
-              in
+            in
+            let vec_scalar_mult e1'' e2'' builder =
+                let type_of_e1'' = L.type_of(e1'') 
+                and type_of_e2'' = L.type_of(e2'')
+                and float_type = L.type_of(L.const_float double_t 1.1)
+                and vec_type = L.type_of(L.const_vector [|L.const_float double_t 1.1 ; L.const_float double_t 1.1 |])
+                in
+                (
+                  if type_of_e2'' = float_type
+                  then 
+                  (
+                    let vec_of_e2'' = L.const_vector [| L.const_float double_t 0.0 ; L.const_float double_t 0.0 |]
+                  in
+                    let insert_element1 = L.build_insertelement vec_of_e2'' e2'' (L.const_int i32_t 0) "tmp1" builder
+                  in
+                    let insert_element2 = L.build_insertelement insert_element1 e2'' (L.const_int i32_t 1) "tmp2" builder
+                  in
+                    match_type vec_type A.Mult e1'' insert_element2 "tmp" builder
+                  )
+                  else 
+                  (
+                    if type_of_e1'' = float_type
+                    then
+                    ( 
+                      let vec_of_e1'' = L.const_vector [| L.const_float double_t 0.0 ; L.const_float double_t 0.0 |]
+                    in
+                      let insert_element1 = L.build_insertelement vec_of_e1'' e1'' (L.const_int i32_t 0) "tmp1" builder
+                    in
+                      let insert_element2 = L.build_insertelement insert_element1 e1'' (L.const_int i32_t 1) "tmp2" builder
+                    in
+                      match_type vec_type A.Mult insert_element2 e2'' "tmp" builder
+                    )
+                    else
+                      raise (Failure "Unsupported binary operation for vectors")
+                  )
+                )
+            in
 
             (* Construct code for an lvalue; return a pointer to access object *)
             let rec lexpr builder = function
                 A.Id s -> lookup s builder
               | A.Index(e1,e2) -> let e2' = expr builder e2 in
-                    L.build_gep (lexpr builder e1) [|L.const_int i32_t 0; e2'|] "tmp" builder
+                  ( match e1 with 
+                      A.Id _ | A.Index(_,_) | A.Member(_,_) -> 
+                        L.build_gep (lexpr builder e1) [|L.const_int i32_t 0; e2'|] "tmp" builder
+                    | _ -> let e1' = expr builder e1 in (* e1 should be indexible *)
+                           let tmp = L.build_alloca (L.type_of e1') "indtmp" builder in
+                           ignore (L.build_store e1' tmp builder);
+                      L.build_gep tmp [|L.const_int i32_t 0; e2'|] "tmp" builder
+                  )
               | A.Member(e, s) -> let e' = lexpr builder e in
                   (* Obtain index of s in the struct type of expression e *)
                   let (sname, _ ) = expr_type e in let i = memb_index sname s in
                   L.build_gep e' [|L.const_int i32_t 0; L.const_int i32_t i|] "tmp" builder
-              | _ -> raise (Failure "Trying to assign to an non l-value")
+              | e -> raise (Failure ("Trying to assign to an non l-value: "^(A.string_of_expr e)))
 
-
+    
             (* Construct code for an expression; return its value *)
             and expr builder = function (* Takes args builder and Ast.expr *)
                 A.IntLit i -> L.const_int i32_t i
@@ -683,19 +749,35 @@ let translate prog =
               | A.Noexpr -> L.const_int i32_t 0  (* No expression is 0 *)
               | A.StringLit s -> string_create s builder
               | A.FloatLit f -> L.const_float double_t f
+              | A.VecLit(f1, f2) -> L.const_vector [|(L.const_float double_t f1) ; (L.const_float double_t f2)|]
+              | A.Vecexpr(e1, e2) -> 
+                  let e1' = expr builder e1
+                  and e2' = expr builder e2
+                in
+                  let tmp_vec = L.const_vector [| L.const_float double_t 0.0 ; L.const_float double_t 0.0 |]
+                in
+                  let insert_element1 = L.build_insertelement tmp_vec e1' (L.const_int i32_t 0) "tmp1" builder
+                in
+                  L.build_insertelement insert_element1 e2' (L.const_int i32_t 1) "tmp2" builder
               | A.Id s -> L.build_load (lookup s builder) s builder (* Load the variable into register and return register *)
               | A.Binop (e1, op, e2) ->
                   let e1' = expr builder e1 
                   and e2' = expr builder e2 
                   and float_type = L.type_of(L.const_float double_t 1.1)
+                  and vec_type = L.type_of(L.const_vector [|L.const_float double_t 1.1 ; L.const_float double_t 1.1 |])
                 in
                   let type_of_e1' = L.type_of(e1') and type_of_e2' = L.type_of(e2')
-                in if type_of_e1' <> type_of_e2'
-                      then let ret= convert_type e1' e2' builder
-                    in let x = fst ret and y = snd ret
-                      in match_type float_type op x y "temp" builder
-                else
-                  match_type type_of_e1' op e1' e2' "tmp" builder
+                in 
+                if type_of_e1' <> type_of_e2'
+                    then let ret= convert_type e1' e2' builder
+                        in let x = fst ret and y = snd ret
+                        in 
+                        (if ((L.type_of x) = vec_type || (L.type_of y) = vec_type) && op = A.Mult
+                          then vec_scalar_mult x y builder (*Handle vector scalar multiplication *)
+                          else match_type float_type op x y "temp" builder
+                        )
+                    else
+                      match_type type_of_e1' op e1' e2' "tmp" builder
 
               | A.Index(e1,e2) as arr-> L.build_load (lexpr builder arr) "tmp" builder
 
@@ -745,7 +827,9 @@ let translate prog =
                  (* The llvm type array of the calling functions parameters
                     Can be use to retreive the "this" argument *)
                  (try let fdef = StringMap.find f glut_decls in 
-                  let actuals = List.rev (List.map (expr builder) (List.rev act)) in
+                  let actuals = if (f = "drawpoint") (* Convert vector into two arguments *)
+                    then let v = (List.hd act) in List.map (expr builder) [ A.Index(v,A.IntLit(0)) ; A.Index(v,A.IntLit(1))]
+                    else List.rev (List.map (expr builder) (List.rev act)) in
                   do_glut_func fdef (Array.of_list actuals) builder
                 with Not_found -> (
                 
@@ -805,11 +889,28 @@ let translate prog =
             (* Build the code for the given statement; return the builder for
              the statement's successor *)
             let rec stmt builder = function
-                  A.Block (vl, sl) -> build_block_body (vl, sl) builder scopes
+                  A.Block (vl, sl,ctxt) ->
+                    (* Handle context start *)
+                    let glcontext = function A.PointContext -> 0 | A.LineContext -> 1 | A.TriangleContext -> 4 in
+                    let contexti = L.const_int i32_t (glcontext ctxt) in
+
+                    let builder =
+                    (* start a new context if necessary.*)
+                    (if ctxt = A.PointContext then () (* Point context is noop *)
+                      else (ignore(L.build_call glend_func [| |] "" builder);
+                            ignore(L.build_call glbegin_func [|contexti|] "" builder))
+                    );
+                    build_block_body (vl, sl) builder scopes
+                    in
+                    (if ctxt = A.PointContext then () (* Point context is noop *)
+                      else (ignore(L.build_call glend_func [| |] "" builder);
+                            ignore(L.build_call glbegin_func [|L.const_int i32_t 0|] "" builder))
+                    );
+                    builder
                 | A.Expr e -> ignore (expr builder e); builder  (* Simply evaluate expression *)
 
                 | A.Return e -> ignore (match fdecl.A.rettyp with  (* Different cases for void and non-void *)
-                    A.Void -> L.build_ret_void builder
+                    A.Void -> build_custom_ret_void builder
                     | _ -> L.build_ret (expr builder e) builder); builder
                 | A.If (predicate, then_stmt, else_stmt) ->
                     let bool_val = expr builder predicate in
@@ -846,8 +947,8 @@ let translate prog =
 
                 (*  make equivalent while *)
                 | A.For (e1, e2, e3, body) -> stmt builder
-                    ( A.Block ( [], [  A.Expr e1; A.While (e2, A.Block ([], [body; A.Expr e3]) ) ] ) )
-                | A.ForDec (vdecls, e2, e3, body) -> stmt builder ( A.Block(vdecls, [A.For(A.Noexpr , e2, e3, body)]) )
+                    ( A.Block ( [], [  A.Expr e1; A.While (e2, A.Block ([], [body; A.Expr e3],A.PointContext) ) ] , A.PointContext) )
+                | A.ForDec (vdecls, e2, e3, body) -> stmt builder ( A.Block(vdecls, [A.For(A.Noexpr , e2, e3, body)], A.PointContext) )
                 | A.Timeloop(s1, e1, s2, e2, stmt) ->
                     let ftype = L.function_type void_t [| |] in
                     let fdef = L.define_function "timeloop." ftype the_module in
@@ -901,10 +1002,16 @@ let translate prog =
                   | _      -> closure_scopes@[(formal_vars, LocalScope); (StringMap.empty, StructScope) ; (global_vars, GlobalScope)]
         in 
 
-        let builder = build_block_body (fdecl.A.locals, fdecl.A.body) builder scopes_list in
+        let builder = 
+          (* Add glbegin to beginning of shape draw methods *)
+          ( if (is_draw_shape fdecl) 
+              then ignore(L.build_call glbegin_func     [|L.const_int i32_t 0 |] "" builder)
+              else ()
+          );
+          build_block_body (fdecl.A.locals, fdecl.A.body) builder scopes_list in
         (* Add a return if the last block falls off the end *)
         add_terminal builder (match fdecl.A.rettyp with
-            A.Void -> L.build_ret_void
+            A.Void -> build_custom_ret_void
           | t -> L.build_ret (L.const_int (ltype_of_typ t) 0))
     in
     (* old build_function_body *)

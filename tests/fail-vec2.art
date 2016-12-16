@@ -1,0 +1,6 @@
+int main()
+{
+    vec v1;
+    v1 = <10.5, 5.5, 12.5>; 
+    // syntax error, only 2 element vectors accepted
+}

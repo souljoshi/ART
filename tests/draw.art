@@ -42,7 +42,7 @@ path::path() { f = 0; b = 0; }
 
 int MOD(int x) 
 {
-    return x % 127;  
+    return x % 128;  
 } 
 
 void path::draw()
