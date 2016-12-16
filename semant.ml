@@ -174,6 +174,14 @@ let function_check func =
             let locals =  List.fold_left add_local StringMap.empty local_decls
             in  stmt_list,(locals, LocalScope)::scopes
         in
+
+        let print_scope  scope = 
+    List.iter(fun s -> let smap = fst s
+    in StringMap.iter( fun s n-> print_endline s) smap
+    ) (List.rev scope)
+
+in
+
         (* Recursive ret_type *)
         let rec _ret_type n scopes =
             let hd = List.hd scopes in
@@ -182,9 +190,9 @@ let function_check func =
                   | (locls, LocalScope)  -> ( try StringMap.find n locls
                                               with Not_found -> _ret_type n (List.tl scopes) )
                   | (_, StructScope) -> (
-                    try member_var_type func.owner n with Failure _ -> _ret_type n (List.tl scopes) )
+                    try member_var_type func.owner n  with Not_found-> _ret_type n (List.tl scopes) )
                 )
-                with Not_found -> raise(Failure("Undeclared variable " ^n))
+                with Not_found -> raise(Failure("Undeclared variable " ^n ^" in "^func.fname ^ " with owner "^func.owner))
         in
         (* Gets type for variable name s [old ret_type]*)
         let ret_type n = _ret_type n scopes 
