@@ -164,7 +164,7 @@ let function_check func =
             let (stmt_list, local_decls) = List.fold_left
                   (* Handle expression initers by adding them as assignment expression statments *)
                   (fun (sl, ld) (t,n,i) -> 
-                        ( match i with Exprinit e ->  Expr( Asnop(Id(n),Asn, e) )::sl , (t,n)::ld  
+                        ( match i with Exprinit e ->  Expr( Asnop((Id(n), t),Asn, e),Void)::sl , (t,n)::ld  
                           | _  ->  sl, (t,n)::ld (* Silently ingore NoInit and ListInit. HANDLE OTHER INTIIALIZERS*) 
                         )
                   ) (stmt_list, [])
@@ -198,7 +198,8 @@ in
         let ret_type n = _ret_type n scopes 
         in
         (* Gets type of expression. [LATER ON HANDLE WITH SAST] *)
-        let rec expr_b = function
+        let rec expr_b (e,_) = baseexpr_b e
+        and baseexpr_b = function
              IntLit _-> Int
             |CharLit _-> Char
             |StringLit _-> String
@@ -246,15 +247,15 @@ in
                      Asn when e1'=e2' -> e1'
                     |Asn when e2'=Void -> e1' (*Extermely poor idea but need to figure out constructor problem that return void*)
                     |Asn when e1'=Float && e2'=Int ->  Float
-                    |CmpAsn b when e1'=(expr_b (Binop(e1, b, e2))) ->  e1'
+                    |CmpAsn b when e1'=(expr_b (Binop(e1, b, e2), Void)) ->  e1'
                     (*|CmpAsn b when e1'=Float && e2'=Int ->  Float
                     |CmpAsn b when e1'=Int && e2'=Float ->  Float*)
                     | _ -> raise (Failure ("Invalid assigment of " ^ Ast.string_of_typ e2' ^ " to "^Ast.string_of_typ e1'))
                 )
             |Call(e1, actuals) -> let e1' = (match e1 with 
-                Id s -> (try lookup_function s 
+                (Id s,_) -> (try lookup_function s 
                          with Not_found -> function_decl s)
-                |Member (e,s) -> let e'= expr_b e in let
+                |(Member (e,s),_) -> let e'= expr_b e in let
                                      sname= (match e' with
                                             UserType(s,e1) -> s
                                             | _-> raise(Failure("Dot operator on a non-user type"))
@@ -322,7 +323,7 @@ in
             |If(p,e1,e2) -> check_bool_expr p; stmt e1; stmt e2;
             |For(e1,e2,e3,state) -> ignore(expr_b e1); check_bool_expr e2; ignore(expr_b e3); stmt state
             |While(p,s) -> check_bool_expr p; stmt s 
-            |ForDec (vdecls,e2,e3,body) -> stmt  ( Block(vdecls, [For(Noexpr , e2, e3, body)],PointContext) )
+            |ForDec (vdecls,e2,e3,body) -> stmt  ( Block(vdecls, [For((Noexpr,Void) , e2, e3, body)],PointContext) )
             |Timeloop(s1,e1,s2,e2,st1) -> ()
             |Frameloop (s1,e1,s2,e2,st1)-> ()
             | Break | Continue -> () (* COMPLICATED: CHECK If in Loop *)
