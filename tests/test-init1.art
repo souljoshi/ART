@@ -1,0 +1,80 @@
+struct fun {int x; int y;}
+struct comp { int[3] x; int y; struct fun f;}
+
+void comp::print() {
+        prints("{");
+        prints("[ ");
+        for (int i = 0; i < 3; i+=1)
+        {
+               printi(x[i]);prints(" "); 
+        }
+        prints("]");
+        prints(",");
+        printi(y);
+        prints(",");
+        f.print();
+        prints("}");
+}
+void comp::println() { print(); prints("\n");}
+void printv(vec v)
+{
+        prints("[");
+        printf(v[0]);prints(",");
+        printf(v[1]);prints("]\n");
+}
+
+void printarr(int[10] &a)
+{
+        prints("[ ");
+        for (int i = 0; i < 10; i+=1)
+        {
+               printi(a[i]);prints(" "); 
+        }
+        prints(" ]\n");
+}
+void printcomparr(struct comp[3] &a)
+{
+        prints("[ ");
+        for (int i = 0; i < 3; i+=1)
+        {
+              a[i].print();prints(" "); 
+        }
+        prints(" ]\n");
+}
+
+void fun::print()
+{ 
+        prints("{");
+        printi(x);prints(",");
+        printi(y);
+        prints("}");
+}
+
+void fun::println(){ print(); prints("\n");}
+
+int i  = 3;
+char c = 'D';
+double d = 9.8;
+string s;
+vec v;// = < 1.0 + 2.0 , 1.3 + 1.5 >;
+int[10] arr = {1,2,3,4,5,6};
+struct fun f = {3,4};
+struct comp comp = {{8,9,10},3,{4,4}};
+struct comp[3] arrcomp = {{{8,9,10},3,{4,4}},};
+
+void f(double &v) {}
+int main()
+{
+    struct fun z;
+    string b = "Hi World\n";
+    printarr(arr);
+    printi(i);prints("\n");
+    printc(c);prints("\n");
+    printf(d);prints("\n");
+    prints(s);
+    printv(v);
+    //printi(f.x);
+    f.println();
+    comp.println();
+   printcomparr(arrcomp);
+}

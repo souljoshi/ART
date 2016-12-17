@@ -82,9 +82,27 @@ let translate prog =
           | A.VecLit(f1, f2) -> L.const_vector [|(L.const_float double_t f1) ; (L.const_float double_t f2)|]
           | _ -> raise(Failure("Attempt to initialize global variable with a non-const"))
         in
-        let construct_initer t = function
-           A.Exprinit e -> lvalue_of_lit (fst(A.const_expr e))
-          | _ -> L.const_null(ltype_of_typ t)
+        let const_null t = if t = A.String then (lvalue_of_lit (A.StringLit "")) else L.const_null(ltype_of_typ t)
+        in
+        let expand_list i max l t = 
+          let rec helper i max l = if i < max then (const_null t)::(helper (i+1) max l) else l in
+          l@(helper i max [])
+        in
+        let rec construct_initer t = function
+            A.Exprinit e -> lvalue_of_lit (fst(A.const_expr e))
+          | A.Listinit il -> (match t with
+                A.Array(t2,e) -> let len = A.get_int(fst(A.const_expr e)) in
+                  let l =  List.map (construct_initer t2) il in 
+                  let (i,l) = List.fold_left (fun (c,ol) m -> if c < len then (c+1,m::ol) else (c,ol)) (0,[]) l in
+                  let l = expand_list i len (List.rev l) t2 in
+                  L.const_array (ltype_of_typ t2)(Array.of_list l)
+              | A.UserType(n,_) ->
+                (* type of members *)
+                let dtl = List.map (fun (t,_)-> t) ((List.find ( fun s -> s.A.sname = n) prog.s).A.decls ) in
+                L.const_named_struct (ltype_of_typ t) (Array.of_list(List.map2 construct_initer dtl il))
+              | _ -> raise(Failure("Nested initializer cannot be used with "^(A.string_of_typ t)))
+            ) 
+          | A.Noinit -> const_null t
         in
         let global_var m (t,n,i) = (* map (type,name,initer) *)
           let init = construct_initer t i

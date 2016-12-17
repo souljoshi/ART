@@ -188,7 +188,7 @@ let rec string_of_typ = function
   | Float -> "double"
   | Vec  -> "vec"
   | String -> "string"
-  | UserType(n,ss) -> string_of_stosh ss ^ n
+  | UserType(n,ss) -> string_of_stosh ss ^ " " ^ n
   | Array(_, _) as a -> let (t,l) = list_of_arr a
      in string_of_typ t ^ String.concat "" (List.map (fun e -> "[" ^ string_of_expr e ^ "]") l)
  
