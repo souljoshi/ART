@@ -1,0 +1,11 @@
+int main()
+{
+	// checking that elements of vector expression must evaluate to float
+	vec v1;
+	v1 = <10.0 + 5, 5.5 * 4>; // would be accepted
+	v1 = <1+2, 2+5>; // would fail
+	printf(v1[0]);
+	printc('\n');
+	printf(v1[1]);
+	printc('\n');
+}

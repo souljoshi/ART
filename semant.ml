@@ -289,7 +289,12 @@ in
                             (Failure ("Illegal actual argument found " ^ Ast.string_of_typ ft ^ " "^Ast.string_of_typ et^ " in function "^func.fname))))
                     fd.params actuals;
                 fd.rettyp
-            |Vecexpr (e1,e2) -> Vec
+            |Vecexpr (e1,e2) -> 
+                let e1' = expr_b e1 and e2' = expr_b e2
+                in
+                if (e1' != Float || e2' != Float)
+                    then raise(Failure("Elements of Vector must be floats."))
+                else Vec
             |Posop (_,e2)-> let e2'=expr_b e2
             in (match e2' with
                 |Int -> Int
@@ -340,6 +345,7 @@ in
             |While(p,s) -> check_bool_expr p; stmt s 
             |ForDec (vdecls,e2,e3,body) -> stmt  ( Block(vdecls, [For((Noexpr,Void) , e2, e3, body)],PointContext) )
             |Timeloop(s1,e1,s2,e2,st1) -> 
+                (* NEED TO CHECK STATEMENTS AS WELL *)
                 if s1 = s2 then raise(Failure("Duplicate variable name in timeloop definition."))
                 else
                     let e1' = expr_b e1 
@@ -349,6 +355,7 @@ in
                         then ()
                     else raise(Failure("Only float expressions are accepted in timeloop definition."))
             |Frameloop (s1,e1,s2,e2,st1)-> 
+                (* NEED TO CHECK STATEMENTS AS WELL *)
                 if s1 = s2 then raise(Failure("Duplicate variable name in frameloop definition."))
                 else
                     let e1' = expr_b e1 
