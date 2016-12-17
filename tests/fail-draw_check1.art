@@ -1,3 +1,5 @@
+// draw must be defined for shapes
+
 shape circle
 {
 	double r;
@@ -9,9 +11,11 @@ circle::circle(double x)
 	printf(r);
 }
 
+/*
 void circle::draw(int x)
 {
 }
+*/
 
 int main()
 {

@@ -1,4 +1,4 @@
-/* Undeclared member */
+/* Undeclared struct */
 
 struct intpair {
     int x;
@@ -9,9 +9,5 @@ struct intpair {
 int main ()
 {
     struct intpair  a;
-
-    a.x = 77;
-    a.y = 18;
-    a.z = 11;
-
+    struct charpair b; // char pair is not declared
 }
