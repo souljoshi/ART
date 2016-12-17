@@ -67,26 +67,25 @@ let translate prog =
     let ltype_of_typ t = _ltype_of_typ struct_ltypes t
 
     in
+
     (* Declaring each global variable and storing value in a map.
        global_vars is a map of var names to llvm global vars representation.
        Global decls are three tuples (typ, name, initer) *)
     let global_vars =
-        (* LLvm value of a literal expression *)
+            (* LLvm value of a literal expression *)
         let lvalue_of_lit = function
             A.IntLit i -> L.const_int i32_t i
           | A.CharLit c -> L.const_int i8_t (int_of_char c) (* 1 byte characters *)
           | A.Noexpr -> L.const_int i32_t 0  (* No expression is 0 *)
           | A.StringLit s -> let l = L.define_global "unamed." (L.const_stringz context s) the_module in
-                            L.const_gep l [|L.const_int i32_t 0|]
+                            L.const_bitcast (L.const_gep l [|L.const_int i32_t 0|]) i8ptr_t
           | A.FloatLit f -> L.const_float double_t f
           | A.VecLit(f1, f2) -> L.const_vector [|(L.const_float double_t f1) ; (L.const_float double_t f2)|]
           | _ -> raise(Failure("Attempt to initialize global variable with a non-const"))
         in
         let const_null t = if t = A.String then (lvalue_of_lit (A.StringLit "")) else L.const_null(ltype_of_typ t)
         in
-        let expand_list i max l t = 
-          let rec helper i max l = if i < max then (const_null t)::(helper (i+1) max l) else l in
-          l@(helper i max [])
+        let expand_list i max l t = A._expand_list i max l t const_null
         in
         let rec construct_initer t = function
             A.Exprinit e -> lvalue_of_lit (fst(A.const_expr e))
@@ -98,7 +97,7 @@ let translate prog =
                   L.const_array (ltype_of_typ t2)(Array.of_list l)
               | A.UserType(n,_) ->
                 (* type of members *)
-                let dtl = List.map (fun (t,_)-> t) ((List.find ( fun s -> s.A.sname = n) prog.s).A.decls ) in
+                let dtl = List.map (fun (t,_)-> t) ((List.find ( fun s -> s.A.sname = n) prog.A.s).A.decls ) in
                 L.const_named_struct (ltype_of_typ t) (Array.of_list(List.map2 construct_initer dtl il))
               | _ -> raise(Failure("Nested initializer cannot be used with "^(A.string_of_typ t)))
             ) 
@@ -471,7 +470,7 @@ let translate prog =
             | A.Call(e1,el)  -> StringSet.union (match e1 with (A.Id s,_) -> StringSet.empty | _ -> non_local_expr e1) 
                                  ( List.fold_left (fun set e-> StringSet.union set (non_local_expr e)) StringSet.empty el)
             | A.Index(e1, e2)-> StringSet.union (non_local_expr e1)  (non_local_expr e2)
-            | A.Member(e, _) -> non_local_expr e
+            | A.Member(e, _) | A.Promote(e) -> non_local_expr e
             | _  -> StringSet.empty
           in
           let rec non_local = function
@@ -549,7 +548,28 @@ let translate prog =
 
             (* Prepend the block local variables to the scopes list *)
             (* Prepend any initializers to the statment list *)
-            let (stmt_list, scopes) = 
+            let (stmt_list, scopes) =
+                let null_initer t = A._null_initer prog.A.s t in
+                (* takes the lvalue ast expression le to be evaluated and the initializer *)
+                let rec construct_initer (le,t) = function
+                    A.Exprinit e -> let e = (try A.const_expr e with Failure _ -> e) in
+                                  [A.Expr( A.Asnop((le,t),A.Asn, e),t)] 
+                  | A.Listinit il -> (match t with
+                        A.Array(t2,e) -> let arrlen = A.get_int(fst(A.const_expr e)) in
+                          (* Expand the initializer as appropriate *)
+                          let il = A._expand_list (List.length il) arrlen il t2 null_initer in
+                          (* Construct each initer upto the length of the array *)
+                          fst (List.fold_left (fun (il2,c) init -> if c < arrlen 
+                              then (il2@(construct_initer (A.Index((le,t),(A.IntLit(c),A.Int)),t2) init ) , c+1)
+                              else (il2,c)) ([],0) il)
+                      | A.UserType(n,_) ->
+                        (* decls list*)
+                        let ml = ((List.find ( fun s -> s.A.sname = n) prog.A.s).A.decls )  in
+                        List.fold_left2 (fun il2 (t2,n) init -> il2@(construct_initer (A.Member((le,t),n),t2) init )) [] ml il
+                      | _ -> raise(Failure("Nested initializer cannot be used with "^(A.string_of_typ t)))
+                    ) 
+                  | (*A.Noinit*)_ -> []
+                in 
                 let add_local m (t,n) =
                   (* Currently all block local variables are allocated at the entry block 
                      This prevents multiple allocas for loop local variables. The only issue with this
@@ -557,8 +577,11 @@ let translate prog =
                      (* NOTE this translation should be moved to the semantic part of the code *)
                   let builder = L.builder_at context (L.instr_begin(L.entry_block the_function)) in
                   let local_var = L.build_alloca (ltype_of_typ t) n builder (* allocate space for local *)
-                  in StringMap.add n (local_var,t) m in
-                let (stmt_list, local_decls) = List.fold_left
+                  in StringMap.add n (local_var,t) m 
+                in
+                let stmt_list = (List.fold_left (fun l (t,n,i) -> l@(construct_initer (A.Id(n),t) i)) [] local_decls)@stmt_list
+                and local_decls = List.map (fun (t,n,_) -> (t,n)) local_decls in
+                (*List.fold_left
                       (* Handle expression initers by adding them as assignment expression statments *)
                       (fun (sl, ld) (t,n,i) -> 
                             ( match i with A.Exprinit e -> A.Expr( A.Asnop((A.Id(n),t),A.Asn, e),t)::sl , (t,n)::ld  
@@ -567,7 +590,7 @@ let translate prog =
                       ) (stmt_list, [])
                     (* Need to reverse since we are pushing to top of stmt_list. Luckily, the fold unreversed local_decls *)
                     (List.rev local_decls)
-                in
+                in*)
                 let locals =  List.fold_left add_local StringMap.empty local_decls
                 in stmt_list,(locals, LocalScope)::scopes
             in

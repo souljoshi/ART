@@ -413,3 +413,21 @@ let rec const_expr = function
   | (Promote((e1,t1)),dst) -> do_lit_promote (e1,t1) t1 dst
   | e -> raise(Failure ("Non-const expression "^(string_of_expr e)^" where constexpr is expected."))
 
+(* Initer related functions *)
+(* i=current_size max=maxi size l=list t=type to fill with using with_fun *)
+let _expand_list i max l t with_fun = 
+      let rec helper i max l = if i < max then (with_fun t)::(helper (i+1) max l) else l in
+      l@(helper i max [])
+
+let rec _null_initer sl = function 
+    Int           -> Exprinit(IntLit(0),Int)
+  | Char          -> Exprinit(CharLit('\000'),Char)
+  | Float         -> Exprinit(FloatLit(0.0),Float)
+  | Vec           -> Exprinit(VecLit(0.0,0.0),Vec)
+  | String        -> Exprinit(StringLit(""),String)
+  | Array(t,e)    -> let len = get_int(fst(const_expr e)) in
+                     Listinit(_expand_list 0 len [] t (_null_initer sl))
+
+  | UserType(n,_) -> let ml = ((List.find ( fun s -> s.sname = n) sl).decls ) in
+                     Listinit( List.rev (List.fold_left (fun il (t2,_) -> (_null_initer sl t2)::il) [] ml) )
+  | _ -> raise(Failure ("Trying to obtain initializer for void type"))
