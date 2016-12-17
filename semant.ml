@@ -280,13 +280,26 @@ in
         
                 |_-> raise(Failure("here"))
                 )
-                in
+                in 
                 let fd = e1' in
                     if List.length actuals != List.length fd.params then
                             if fd.fname="addshape"&&(List.length actuals)>0 then () else raise (Failure ("Incorrect number of arguments in "^func.fname))
                     else
-                        (* MAY NEED TO REPLACE CHECK_ASS WITH ARG_ASS *)
-                         List.iter2 (fun (ft, _,_) e -> let et = snd(expr_b e) in
+                        List.iter2 (fun (t, s, p) e -> if p = Ref then 
+                            let e = (expr_b e) in
+                            match e with 
+                                (Id(s),_) -> ()
+                                | (Member(e,s),_) -> ()
+                                | (Index(e,_),_) -> 
+                                    (match e with  
+                                    | (Id _, Vec) | (_,Array(_,_)) -> ()
+                                    | (_,t) as e-> raise(Failure("Illegal pass by reference."))
+                                    ) 
+                                | _ -> raise(Failure("Illegal pass by reference."))  
+                            )
+                        fd.params actuals;
+
+                        List.iter2 (fun (ft, _,_) e -> let et = snd(expr_b e) in
                             ignore (check_ass ft et
                             (Failure ("Illegal actual argument found " ^ Ast.string_of_typ ft ^ " "^Ast.string_of_typ et^ " in function "^func.fname))))
                     fd.params actuals;
@@ -315,16 +328,16 @@ in
                                     else 
                                         raise(Failure("Cannot return incompatiable types"))
                                     )
-            |(Index(e1,e2),_) -> let e1' = snd(expr_b e1) and e2' = snd(expr_b e2) (* ALLOW VECTOR INDEXING *)
-                            in let te1' = (match e1' with
+            |(Index(e1,e2),_) -> let (e1',t1') = (expr_b e1) and (e2',t2') = (expr_b e2) (* ALLOW VECTOR INDEXING *)
+                            in let te1' = (match t1' with
                              Array(t,_) -> t
                              |Vec -> Float
                             | _-> raise(Failure("Indexing a non-array/vector"))
                                 )
                             in 
-                            if e2'!= Int
+                            if t2'!= Int
                                 then raise(Failure ("Must index with an integer "))
-                                 else (Index(e1,e2),te1')  
+                                 else (Index((e1',t1'),(e2',t2')),te1')  
             |(Member(e1,s),_) -> let e1' = snd(expr_b e1)
                 in let te1'= (match e1' with
                         UserType(s1,_) -> s1
@@ -349,7 +362,7 @@ in
             |While(p,s) -> check_bool_expr p; stmt s 
             |ForDec (vdecls,e2,e3,body) -> stmt  ( Block(vdecls, [For((Noexpr,Void) , e2, e3, body)],PointContext) )
             |Timeloop(s1,e1,s2,e2,st1) -> 
-                (* NEED TO CHECK STATEMENTS AS WELL *)
+                (* Need to check statements also ? *)
                 if s1 = s2 then raise(Failure("Duplicate variable name in timeloop definition."))
                 else
                     let e1' = snd(expr_b e1) 
@@ -359,7 +372,7 @@ in
                         then ()
                     else raise(Failure("Only float expressions are accepted in timeloop definition."))
             |Frameloop (s1,e1,s2,e2,st1)-> 
-                (* NEED TO CHECK STATEMENTS AS WELL *)
+                (* Need to check statements also ? *)
                 if s1 = s2 then raise(Failure("Duplicate variable name in frameloop definition."))
                 else
                     let e1' = snd(expr_b e1) 
