@@ -1,3 +1,5 @@
+// check duplicate function name
+
 void test(int a, int b)
 {
 	a=5;
