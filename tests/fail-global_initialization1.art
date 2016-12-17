@@ -1,0 +1,15 @@
+int x = 5; // ok
+int y = 5.5; // error
+//int y = 1;
+
+int main()
+{
+	printi(x);
+	printi(y);
+
+	x = 10;
+	y = 20;
+	
+	printi(x);
+	printi(y);
+}

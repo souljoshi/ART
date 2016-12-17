@@ -362,7 +362,16 @@ in
     
     let check_bool_expr e = if snd(expr_b e) != Int (*Could take in any number need to force check 1 or 0*)
             then raise(Failure((string_of_expr e)^" is not a boolean value."))
-            else() in 
+            else() in
+    List.iter(fun (t,n,e) -> ( match e with 
+                                    Exprinit e -> let (e1',t1') = (expr_b e)
+                                                        in if(t1'=t)
+                                                            then ()
+                                                        else raise(Failure("Global var "^n^" needs to be assigned to type "^string_of_typ t^ " not "^string_of_typ t1'))
+                                    |_ -> ()
+                                    )) globals;
+
+
         let rec stmt = function
              Block (vl,sl,_)  -> check_block (vl, sl) scopes
             |Expr e -> ignore(expr_b e)

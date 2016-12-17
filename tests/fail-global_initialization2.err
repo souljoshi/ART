@@ -1,0 +1,1 @@
+Fatal error: exception Failure("Global var x needs to be assigned to type int not string")
