@@ -231,51 +231,51 @@ in
             |(VecLit (f1,f2),_)-> (VecLit(f1,f2), Vec)
             |(Id s, _) as s1 ->  (Id s, ret_type s)
             |(Promote s, _) -> (Promote s ,Float)
-            |(Binop(e1,op,e2),_) -> let e1' = snd(expr_b e1) and e2'=snd(expr_b e2) in
+            |(Binop(e1,op,e2),_) -> let (e1',t1') = (expr_b e1) and (e2',t2')=(expr_b e2) in
             (match op with
-                Add|Sub|Mult|Div|Mod when e1'=Int && e2'=Int -> (Binop(e1,op,e2),Int)
-                |Add|Sub|Mult|Div when e1'=Vec&&e2'=Vec -> (Binop(e1,op,e2),Vec)
-                |Mult when e1'=Vec&&e2'=Int ->  (Binop(e1,op,(Promote(e2),Float)),Vec)
-                |Mult when e1'=Vec&&e2'=Float -> (Binop(e1,op,e2),Vec)
-                |Mult when e1'=Int&&e2'=Vec ->  (Binop((Promote(e1),Float),op,e2),Vec)
-                |Mult when e1'=Float&&e2'=Vec -> (Binop(e1,op,e2),Vec)
-                |Add|Sub|Mult|Div when e1'=Float && e2'=Float -> (Binop(e1,op,e2),Float)
-                |Add|Sub|Mult|Div when e1'=Int && e2'=Float -> (Binop((Promote(e1),Float),op,e2),Float)
-                |Add|Sub|Mult|Div when e1'=Float && e2'=Int -> (Binop(e1,op,(Promote(e2),Float)),Float)
-                |Equal|Neq when e1'=e2'-> (Binop(e1,op,e2),Int) 
-                |Equal|Neq when e1'=Float && e2'=Int -> (Binop((Promote(e1),Float),op,e2),Int)
-                 |Equal|Neq when e1'=Int && e2'=Float -> (Binop(e1,op,(Promote(e2),Float)),Int) 
-                |Less|Leq|Greater|Geq when e1'=e2' -> (Binop(e1,op,e2),Int)
-                |Less|Leq|Greater|Geq when e1'=Int && e2'=Float -> (Binop((Promote(e1),Float),op,e2),Int)
-                |Less|Leq|Greater|Geq when e1'=Float && e2'=Int-> (Binop(e1,op,(Promote(e2),Float)),Int)
-                |And|Or when e1'=Int && e2'=Int -> (Binop(e1,op,e2),Int)
+                Add|Sub|Mult|Div|Mod when t1'=Int && t2'=Int -> (Binop((e1',t1'),op,(e2',t2')),Int)
+                |Add|Sub|Mult|Div when t1'=Vec&&t2'=Vec -> (Binop((e1',t1'),op,(e2',t2')),Vec)
+                |Mult when t1'=Vec&&t2'=Int ->  (Binop((e1',t1'),op,(Promote((e2',t2')),Float)),Vec)
+                |Mult when t1'=Vec&&t2'=Float -> (Binop((e1',t1'),op,(e2',t2')),Vec)
+                |Mult when t1'=Int&&t2'=Vec ->  (Binop((Promote((e1',t1')),Float),op,(e2',t2')),Vec)
+                |Mult when t1'=Float&&t2'=Vec -> (Binop((e1',t1'),op,(e2',t2')),Vec)
+                |Add|Sub|Mult|Div when t1'=Float && t2'=Float -> (Binop((e1',t1'),op,(e2',t2')),Float)
+                |Add|Sub|Mult|Div when t1'=Int && t2'=Float -> (Binop((Promote(e1',t1'),Float),op,(e2',t2')),Float)
+                |Add|Sub|Mult|Div when t1'=Float && t2'=Int -> (Binop((e1',t1'),op,(Promote((e2',t2')),Float)),Float)
+                |Equal|Neq when t1'=t2'-> (Binop((e1',t1'),op,(e2',t2')),Int)
+                |Equal|Neq when t1'=Float && t2'=Int -> (Binop((Promote(e1',t1'),Float),op,(e2',t2')),Int)
+                 |Equal|Neq when t1'=Int && t2'=Float -> (Binop((e1',t1'),op,(Promote((e2',t2')),Float)),Int)
+                |Less|Leq|Greater|Geq when t1'=t2' -> (Binop((e1',t1'),op,(e2',t2')),Int)
+                |Less|Leq|Greater|Geq when t1'=Int && t2'=Float -> (Binop((Promote(e1',t1'),Float),op,(e2',t2')),Int)
+                |Less|Leq|Greater|Geq when t1'=Float && t2'=Int-> (Binop((e1',t1'),op,(Promote((e2',t2')),Float)),Int)
+                |And|Or when t1'=Int && t2'=Int -> (Binop((e1',t1'),op,(e2',t2')),Int)
                 | _-> raise(Failure ("Unsupported operands"^ Ast.string_of_expr e1 ^ " "^Ast.string_of_expr e2^" for "
                                      ^(string_of_op op)))
             )
-            |(Unop(op,e1),_) -> let e1' = snd(expr_b e1) in
+            |(Unop(op,e1),_) -> let (e1',t1') = (expr_b e1) in
                 (match op with
-                    Neg when e1'=Int -> (Unop(op,e1),Int)
-                    |Neg when e1'=Float -> (Unop(op,e1),Float)
-                    |Neg when e1'=Vec -> (Unop(op,e1),Vec)
-                    |Pos when e1'=Int -> (Unop(op,e1),Int)
-                    |Pos when e1'=Float -> (Unop(op,e1),Float) 
-                    |Pos when e1'=Vec -> (Unop(op,e1),Vec)
-                    |Preinc when e1'= Int -> (Unop(op,e1),Int)
-                    |Preinc when e1'= Float -> (Unop(op,e1),Float)
-                    |Predec when e1'= Int -> (Unop(op,e1),Int)
-                    |Predec when e1'= Float -> (Unop(op,e1),Float) 
+                    Neg when t1'=Int -> (Unop(op,(e1',t1')),Int)
+                    |Neg when t1'=Float -> (Unop(op,(e1',t1')),Float)
+                    |Neg when t1'=Vec -> (Unop(op,(e1',t1')),Vec)
+                    |Pos when t1'=Int -> (Unop(op,(e1',t1')),Int)
+                    |Pos when t1'=Float -> (Unop(op,(e1',t1')),Float) 
+                    |Pos when t1'=Vec -> (Unop(op,(e1',t1')),Vec)
+                    |Preinc when t1'= Int -> (Unop(op,(e1',t1')),Int)
+                    |Preinc when t1'= Float -> (Unop(op,(e1',t1')),Float)
+                    |Predec when t1'= Int -> (Unop(op,(e1',t1')),Int)
+                    |Predec when t1'= Float -> (Unop(op,(e1',t1')),Float) 
                     | _ -> raise(Failure("No unary operator defined for "^ Ast.string_of_expr e1 ))
                 )
             |(Noexpr,_) -> (Noexpr,Void)
-            |(Asnop(e1,asnp,e2),_)  -> let e1' = snd(expr_b e1) and  e2'=snd(expr_b e2) in 
+            |(Asnop(e1,asnp,e2),_)  -> let (e1',t1') = (expr_b e1) and  (e2',t2')=(expr_b e2) in 
                 (match asnp with
-                     Asn when e1'=e2' -> (Asnop(e1,asnp,e2),e1')
-                    |Asn when e2'=Void -> (Asnop(e1,asnp,e2),e1') (*Extermely poor idea but need to figure out constructor problem that return void*)
-                    |Asn when e1'=Float && e2'=Int ->  (Asnop(e1,asnp,e2),Float)
-                    |CmpAsn b when e1'=snd(expr_b (Binop(e1, b, e2), Void)) ->  (Asnop (e1,asnp,e2),e1')
+                     Asn when t1'=t2' -> (Asnop((e1',t1'),asnp,(e2',t2')),t1')
+                    |Asn when t2'=Void -> (Asnop((e1',t1'),asnp,(e2',t2')),t1') (*Extermely poor idea but need to figure out constructor problem that return void*)
+                    |Asn when t1'=Float && t2'=Int ->  (Asnop((e1',t1'),asnp,(e2',t2')),Float)
+                    |CmpAsn b when t1'=snd(expr_b (Binop((e1',t1'), b, (e2',t2')), Void)) ->  (Asnop ((e1',t1'),asnp,(e2',t2')),t1')
                     (*|CmpAsn b when e1'=Float && e2'=Int ->  Float
                     |CmpAsn b when e1'=Int && e2'=Float ->  Float*)
-                    | _ -> raise (Failure ("Invalid assigment of " ^ Ast.string_of_typ e2' ^ " to "^Ast.string_of_typ e1'))
+                    | _ -> raise (Failure ("Invalid assigment of " ^ Ast.string_of_typ t2' ^ " to "^Ast.string_of_typ t1'))
                 )
             |(Call(e1, actuals),_) -> let e1' = (match e1 with 
                 ((Id s),_) -> (try lookup_function s 
@@ -301,46 +301,46 @@ in
                     fd.params actuals;
                 (Call(e1,actuals),fd.rettyp)
             |(Vecexpr (e1,e2),_) -> 
-                let e1' = snd(expr_b e1) and e2' = snd(expr_b e2)
+                let (e1',t1') = (expr_b e1) and (e2',t2') = (expr_b e2)
                 in
-                if (e1' != Float || e2' != Float)
+                if (t1' != Float || t2' != Float)
                     then raise(Failure("Elements of Vector must be floats."))
-                else (Vecexpr(e1,e2),Vec)
-            |(Posop (s,e2),_)-> let e2'=snd(expr_b e2)
-            in (match e2' with
-                |Int -> (Posop(s,e2),Int)
+                else (Vecexpr((e1',t1'),(e2',t2')),Vec)
+            |(Posop (s,e2),_)-> let (e2',t2')=(expr_b e2)
+            in (match t2' with
+                |Int -> (Posop(s,(e2',t2')),Int)
                 |_ -> raise(Failure("Cannot apply PostInc or PostDec " ^ " to " ^ Ast.string_of_expr e2))
             )
-            |(Trop(sz,e1,e2,e3),_) -> let e1'=snd(expr_b e1) and e2'= snd(expr_b e2) and e3'=snd(expr_b e3)
-                                 in if(e1'!=Int)
+            |(Trop(sz,e1,e2,e3),_) -> let (e1',t1')=(expr_b e1) and (e2',t2')=(expr_b e2) and (e3',t3')=(expr_b e3)
+                                 in if(t1'!=Int)
                                     then raise(Failure("Need a Condtional statement"))
                                 else(
-                                    if(e1'=e2')
-                                        then (Trop(sz,e1,e2,e3),e1')
-                                    else if(e1'=Float&&e2'=Int)
-                                        then (Trop(sz,e1,(Promote(e2),Float),e3),e1')
-                                    else if(e1'=Int&&e2'=Float)
-                                            then (Trop(sz,(Promote(e1),Float),e2,e3),e1')
+                                    if(t1'=t2')
+                                        then (Trop(sz,(e1',t1'),(e2',t2'),(e3',t3')),t1')
+                                    else if(t1'=Float&&t2'=Int)
+                                        then (Trop(sz,(e1',t1'),(Promote((e2',t2')),Float),(e3',t3')),t1')
+                                    else if(t1'=Int&&t2'=Float)
+                                            then (Trop(sz,(Promote((e1',t1')),Float),(e2',t2'),(e3',t3')),t1')
                                     else 
                                         raise(Failure("Cannot return incompatiable types"))
                                     )
-            |(Index(e1,e2),_) -> let e1' = snd(expr_b e1) and e2' = snd(expr_b e2) (* ALLOW VECTOR INDEXING *)
-                            in let te1' = (match e1' with
+            |(Index(e1,e2),_) -> let (e1',t1') = (expr_b e1) and (e2',t2') = (expr_b e2) (* ALLOW VECTOR INDEXING *)
+                            in let te1' = (match t1' with
                              Array(t,_) -> t
                              |Vec -> Float
                             | _-> raise(Failure("Indexing a non-array/vector"))
                                 )
                             in 
-                            if e2'!= Int
+                            if t2'!= Int
                                 then raise(Failure ("Must index with an integer "))
-                                 else (Index(e1,e2),te1')  
-            |(Member(e1,s),_) -> let e1' = snd(expr_b e1)
-                in let te1'= (match e1' with
+                                 else (Index((e1',t1'),(e2',t2')),te1')  
+            |(Member(e1,s),_) -> let (e1',t1') = (expr_b e1)
+                in let te1'= (match t1' with
                         UserType(s1,_) -> s1
                         |_ -> raise(Failure("Dot operator on a non-user type"))
                         )
                     in
-                    ( try (Member(e1,s),member_var_type te1' s) with Not_found -> raise(Failure(s^" is not a member of "^(string_of_typ e1') )))  
+                    ( try (Member((e1',t1'),s),member_var_type te1' s) with Not_found -> raise(Failure(s^" is not a member of "^(string_of_typ t1'))))  
                 
         | _ -> (Noexpr,Void)        
         in 
@@ -385,32 +385,6 @@ in
             |_ -> ()
         in
 
-        (*let rec fill_tree (e,t) = fill_basetree e
-        and  fill_basetree  = function
-        (IntLit s, _) -> (IntLit(s), Int) 
-        |(CharLit s,_) ->(CharLit(s),Char)
-        |(StringLit s,_) ->(StringLit(s),String)
-        |(VecLit(s,s1),_) ->(VecLit(s,s1),Vec)
-        |(Id s, _) as b-> (Id (s),expr_b b)
-        | (Vecexpr (e1,e2),_) as s1 -> (Vecexpr(e1,e2),expr_b s1)
-        |(Binop(e1,op,e2),_) as s1-> let e1' = expr_b e1 and e2'=expr_b e2  in
-                                if(e1'=Float&&e2'=Int)
-                                    then (Binop(e1,op,(Promote(e2),Float)), expr_b s1) (*handels cases of the float premotion*)
-                                else if(e2'=Int&&e1'=Float)
-                                    then (Binop((Promote(e1),Float),op,e2), expr_b s1)
-                                else (Binop(e1,op,e2), expr_b s1)
-        |(Unop (unop,e2),_) as s1 -> (Unop (unop,e2),expr_b s1)
-        |(Posop (pop,e1),_) as s1 -> (Posop (pop,e1),expr_b s1)
-        | (Asnop (e1,op,e2),_)as s1 -> let e1' = expr_b e1 and e2'=expr_b e2 in
-                                        if(e1'=Float&&e2'=Int)
-                                    then (Asnop(e1,op,(Promote(e2),Float)), expr_b s1) (*handels cases of the float premotion*)
-                                else (Asnop(e1,op,e2), expr_b s1)
-        | (Call(e1,e2),_) as s1 -> (Call(e1,e2),expr_b s1)
-        | (Index(e1,e2),_) as s1 -> (Index(e1,e2),expr_b s1)
-        | (Member(e1,e2),_) as s1 -> (Member(e1,e2),expr_b s1)
-        | (Trop(cond,e1,e2,e3),_) as s1 -> (Trop(cond,e1,e2,e3),expr_b s1)
-        in
-    *)
         check_ret(); List.iter stmt stmt_list (* End of check_block *)
     in 
     (* Construct the scopes list before calling check_block *)
