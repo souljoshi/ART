@@ -205,7 +205,10 @@ in
                   | (_, StructScope) -> (
                     try member_var_type func.owner n  with Not_found-> _ret_type n (List.tl scopes) )
                 )
-                with Not_found -> raise(Failure("Undeclared variable " ^n ^" in "^func.fname ^ " with owner "^func.owner))
+                with Not_found -> 
+                    if func.owner = ""
+                    then raise(Failure("Undeclared variable " ^n ^" in "^func.fname))
+                    else raise(Failure("Undeclared variable " ^n ^" in "^func.fname ^ " with owner "^func.owner))
         in
         (* Gets type for variable name s [old ret_type]*)
         let ret_type n = _ret_type n scopes 

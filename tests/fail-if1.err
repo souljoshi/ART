@@ -1,1 +1,1 @@
-Fatal error: exception Failure("Undeclared variable y")
+Fatal error: exception Failure("Undeclared variable y in main")
