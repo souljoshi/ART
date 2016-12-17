@@ -289,14 +289,14 @@ addexpr:
 
 posexpr: 
   /* Literals */
-    INTLIT                { (IntLit($1), Void) }
-  | CHARLIT               { (CharLit($1), Void) }
-  | FLOATLIT              { (FloatLit($1), Void) }
-  | VECTORLIT             { (VecLit($1), Void) }
-  | STRINGLIT             { (StringLit($1), Void)}
+    INTLIT                { (IntLit($1), Int) }
+  | CHARLIT               { (CharLit($1), Char) }
+  | FLOATLIT              { (FloatLit($1), Float) }
+  | VECTORLIT             { (VecLit($1), Vec) }
+  | STRINGLIT             { (StringLit($1), String)}
 
   /* Vector expression */
-  | LT addexpr COMMA addexpr GT   %prec VECEXPR { (Vecexpr($2, $4), Void) }
+  | LT addexpr COMMA addexpr GT   %prec VECEXPR { (Vecexpr($2, $4), Vec) }
 
   /* primary expression */
   | ID                    { (Id($1),Void) }

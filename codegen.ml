@@ -40,12 +40,10 @@ let translate prog =
       | A.Float -> double_t
       | A.String -> string_t
       | A.Vec -> vec_t
-      | A.Array(t,e) -> (match e with 
+      | A.Array(t,e) -> (match (A.const_expr e) with 
             | (A.IntLit(i),_) -> L.array_type (_ltype_of_typ m t) i
-            | _ -> raise(Failure "Arrays declaration requires int literals for now"))
+            | _ -> raise(Failure "Arrays declaration requires int expression"))
       | A.UserType(s,_) -> StringMap.find s m
-        (* Currently supporting only void, int and struct types *)
-      | _   -> raise (Failure "Only valid types are int/char/void/string/double/vec")
 
     in
 
