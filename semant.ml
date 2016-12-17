@@ -19,7 +19,25 @@ let check_ass lval rval err =
         |_-> raise err                        (*Since this is a special case I supsend the one to one checking and just use rval*)
     )
 
+(*
+let check_draw methods =
+    try List.find (fun f2 -> f2.fname = "Draw") methods
+        with Not_found -> raise(Failure("Draw method is not defined for Shape"));
 
+
+let get_struct_member_var name = let st = try StringMap.find name struct_name_list
+        with  Not_found -> raise(Failure("Could not find member func"))
+        in List.fold_left(fun m (t,n) -> StringMap.add n t m)
+            StringMap.empty st.decls
+    in
+    
+    (* Gets type of var in struct *)
+    let member_var_type name var =
+        let temp = get_struct_member_var name
+        in
+        StringMap.find var temp   
+    in  
+*)
 
 let struct_build prog =
     let globals = prog.v
@@ -53,7 +71,13 @@ let struct_build prog =
     in
     { s = List.map (fun st -> let s = StringMap.find st.sname structs in
             (* If no contructor is defined add default *)
-            {ss = s.ss;sname = s.sname; decls = s.decls; ctor = if (s.ctor.fname="") then default_ctr s.sname else s.ctor; methods = s.methods}
+            {ss = s.ss;sname = s.sname; decls = s.decls; ctor = if (s.ctor.fname="") then default_ctr s.sname else s.ctor; 
+                methods = 
+                (if (s.ss = ShapeType) 
+                    then 
+                    try ignore( List.find (fun f2 -> f2.fname = "draw") s.methods); s.methods 
+                    with Not_found -> raise (Failure ("No draw method in Shape"))
+                else s.methods)}
         ) prog.s;
       f = List.rev funcs ; v = globals }
 
