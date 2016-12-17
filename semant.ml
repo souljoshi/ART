@@ -339,7 +339,15 @@ in
             |For(e1,e2,e3,state) -> ignore(expr_b e1); check_bool_expr e2; ignore(expr_b e3); stmt state
             |While(p,s) -> check_bool_expr p; stmt s 
             |ForDec (vdecls,e2,e3,body) -> stmt  ( Block(vdecls, [For((Noexpr,Void) , e2, e3, body)],PointContext) )
-            |Timeloop(s1,e1,s2,e2,st1) -> ()
+            |Timeloop(s1,e1,s2,e2,st1) -> 
+                if s1 = s2 then raise(Failure("Duplicate variable name in timeloop definition."))
+                else
+                    let e1' = expr_b e1 
+                    and e2' = expr_b e2
+                    in 
+                    if e1' = Float && e2' = Float 
+                        then ()
+                    else raise(Failure("Only float expressions are accepted in timeloop definition."))
             |Frameloop (s1,e1,s2,e2,st1)-> ()
             | Break | Continue -> () (* COMPLICATED: CHECK If in Loop *)
         in 
@@ -348,7 +356,9 @@ in
             |Return _ :: _ -> raise(Failure("Can't put more code after return"))
             |_ -> ()
         in
-         (*let rec fill_tree  = function
+        (*
+           let rec fill_tree (e,t) = fill_basetree e
+           and fill_basetree  = function
         IntLit s -> (IntLit(s), Int) 
         |CharLit s ->(CharLit(s),Char)
         |StringLit s ->(StringLit(s),String)
