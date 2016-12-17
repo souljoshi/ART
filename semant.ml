@@ -371,6 +371,15 @@ in
                                     |_ -> ()
                                     )) globals;
 
+    List.iter(fun (t,n,e) -> ( match t with 
+                                  Array(_,e)  -> let (e1',t1') = (expr_b e)
+                                                        in
+                                                        (match e1' with
+                                                        | IntLit _ -> ()
+                                                        |_->  raise(Failure("Cannot declare any array without a intger constant not variables ")))                  
+                                    |_ -> ()
+                                    )) func.locals;
+
 
         let rec stmt = function
              Block (vl,sl,_)  -> check_block (vl, sl) scopes
