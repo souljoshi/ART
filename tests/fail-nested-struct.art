@@ -1,0 +1,17 @@
+struct hey
+{
+	int d;
+}
+
+struct rec{
+	
+
+	struct rec d;
+	int x;
+}
+
+int main()
+{
+	struct rec r ;
+	r.x=5;
+}

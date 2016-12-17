@@ -30,7 +30,7 @@ let struct_build prog =
                 StringMap.empty prog.s in
 
                  List.iter(fun fd -> List.iter(fun (t,n)-> (match t with 
-                                                UserType(s,_) -> let x= StringMap.mem s structs in if x=false then raise(Failure("Must define struct "^s ^" before using it in struct "^fd.sname))   
+                                                UserType(s,_) -> if(fd.sname = s) then raise(Failure("Cannot nest struct/shape "^fd.sname^" within itself ")) else let x= StringMap.mem s structs in if x=false then raise(Failure("Must define struct "^s ^" before using it in struct "^fd.sname))            
                                                 | _-> ()   
                                                 ))fd.decls) prog.s;
     let (structs,funcs) = (* Refers to structs and non-member functions *)
