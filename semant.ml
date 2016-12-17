@@ -340,19 +340,31 @@ in
             |Return _ :: _ -> raise(Failure("Can't put more code after return"))
             |_ -> ()
         in
-         (*let rec fill_tree  = function
-        IntLit s -> (IntLit(s), Int) 
-        |CharLit s ->(CharLit(s),Char)
-        |StringLit s ->(StringLit(s),String)
-        |VecLit (s,s1)->(VecLit(s,s1),Vec)
-        |Id s as b-> (Id(s),baseexpr_b b) 
-        |Binop(e1,op,e2) as s-> let e1' = expr_b e1 and e2'=expr_b e2 in
+        let rec fill_tree (e,t) = fill_basetree e
+        and  fill_basetree  = function
+        (IntLit s, _) -> (IntLit(s), Int) 
+        |(CharLit s,_) ->(CharLit(s),Char)
+        |(StringLit s,_) ->(StringLit(s),String)
+        |(VecLit(s,s1),_) ->(VecLit(s,s1),Vec)
+        |(Id s, _) as b-> (Id (s),expr_b b)
+        | (Vecexpr (e1,e2),_) as s1 -> (Vecexpr(e1,e2),expr_b s1)
+        |(Binop(e1,op,e2),_) as s1-> let e1' = expr_b e1 and e2'=expr_b e2  in
                                 if(e1'=Float&&e2'=Int)
-                                    then (Binop(e1,op,Promote(e2)), baseexpr_b s)
+                                    then (Binop(e1,op,(Promote(e2),Float)), expr_b s1) (*handels cases of the float premotion*)
                                 else if(e2'=Int&&e1'=Float)
-                                    then (Binop(e1,op,Promote(e2)), baseexpr_b s)
-                                else (Binop(e1,op,e2), baseexpr_b s)
-        *)
+                                    then (Binop((Promote(e1),Float),op,e2), expr_b s1)
+                                else (Binop(e1,op,e2), expr_b s1)
+        |(Unop (unop,e2),_) as s1 -> (Unop (unop,e2),expr_b s1)
+        |(Posop (pop,e1),_) as s1 -> (Posop (pop,e1),expr_b s1)
+        | (Asnop (e1,op,e2),_)as s1 -> let e1' = expr_b e1 and e2'=expr_b e2 in
+                                        if(e1'=Float&&e2'=Int)
+                                    then (Asnop(e1,op,(Promote(e2),Float)), expr_b s1) (*handels cases of the float premotion*)
+                                else (Asnop(e1,op,e2), expr_b s1)
+        | (Call(e1,e2),_) as s1 -> (Call(e1,e2),expr_b s1)
+        | (Index(e1,e2),_) as s1 -> (Index(e1,e2),expr_b s1)
+        | (Member(e1,e2),_) as s1 -> (Member(e1,e2),expr_b s1)
+        | (Trop(cond,e1,e2,e3),_) as s1 -> (Trop(cond,e1,e2,e3),expr_b s1)
+        in
         check_ret(); List.iter stmt stmt_list (* End of check_block *)
     in 
     (* Construct the scopes list before calling check_block *)
