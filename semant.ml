@@ -27,6 +27,11 @@ let struct_build prog =
     (* A map of all struct/shape types *)
     let structs = List.fold_left ( fun m st -> report_dup(fun n-> "Duplicate member variable named " ^n ^" in struct " ^ st.sname)(List.map (fun (t,n) ->  n)st.decls); StringMap.add st.sname st m)
                 StringMap.empty prog.s in
+
+                 List.iter(fun fd -> List.iter(fun (t,n)-> (match t with 
+                                                UserType(s,_) -> let x= StringMap.mem s structs in if x=false then raise(Failure("Must define struct "^s ^" before using it in struct "^fd.sname))   
+                                                | _-> ()   
+                                                ))fd.decls) prog.s;
     let (structs,funcs) = (* Refers to structs and non-member functions *)
         (* Puts methods and constructors with appropriate struct and returns tuple
             (map, bool) *)
@@ -111,23 +116,14 @@ let global_vars = List.fold_left(fun m(t,n,_)->StringMap.add n t m) StringMap.em
 in
 let function_check func =
 
-    let formal_vars = List.fold_left(fun m(t,n,_)->StringMap.add n t m) StringMap.empty (func.params)
-    in
-    (* Top level local_vars *)
-    let local_vars =  List.fold_left(fun m(t,n,i)-> StringMap.add n t m)
-                            formal_vars (func.locals)
-    in
-        report_dup(fun n-> "Duplicate Parameter Named " ^n ^" in " ^ func.fname)(List.map (fun (_,a,_) ->  a)func.params);    (*Checks is there exists duplicate parameter names and function local name*)
-        report_dup(fun n-> "Duplicate local Named " ^n ^ " in " ^ func.fname)
-            ((List.map (fun (_,a,_) ->  a)func.params)@(List.map (fun (_,a,_) ->  a)func.locals));  
-
     (* Map of struct name to struct *)
     let struct_name_list = List.fold_left(fun m usr -> StringMap.add usr.sname usr m) (*creates a struct names list*)
         StringMap.empty(structs)
     in 
-    (* Given struct give map of method names to method *)
+
+(* Given struct give map of method names to method *)
     let get_member_funcs name = let st = try StringMap.find name struct_name_list (*creates a struct member funciontlist*)
-        with  Not_found -> raise(Failure("Could not find memeber func"))
+        with  Not_found -> raise(Failure("Could not find struct "^name))
         in List.fold_left(fun m s -> StringMap.add s.fname s m)
             StringMap.empty st.methods
     in 
@@ -138,7 +134,7 @@ let function_check func =
     
     (* Get map of memb_variables to their type *)
     let get_struct_member_var name = let st = try StringMap.find name struct_name_list
-        with  Not_found -> raise(Failure("Could not find member func"))
+        with  Not_found -> raise(Failure("Could not find struct "^name))
         in List.fold_left(fun m (t,n) -> StringMap.add n t m)
             StringMap.empty st.decls
     in
@@ -156,6 +152,19 @@ let function_check func =
     in try StringMap.find func temp
             with Not_found -> raise(Failure(func ^ " is not a member function of " ^name))
     in
+
+    let formal_vars = List.fold_left(fun m(t,n,_)->StringMap.add n t m) StringMap.empty (func.params)
+    in
+    (* Top level local_vars *)
+    let local_vars =  List.fold_left(fun m(t,n,i)-> (match t with
+                                                    UserType(s,t1) -> get_struct_member_var s; StringMap.add n t m
+                                                    | _ -> StringMap.add n t m
+                                                    ))formal_vars (func.locals)
+    in
+        report_dup(fun n-> "Duplicate Parameter Named " ^n ^" in " ^ func.fname)(List.map (fun (_,a,_) ->  a)func.params);    (*Checks is there exists duplicate parameter names and function local name*)
+        report_dup(fun n-> "Duplicate local Named " ^n ^ " in " ^ func.fname)
+            ((List.map (fun (_,a,_) ->  a)func.params)@(List.map (fun (_,a,_) ->  a)func.locals));  
+    
     
     let lookup_function f =
       (* First try to find a matching constructor *)
