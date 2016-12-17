@@ -79,7 +79,7 @@ void path::draw()
 [
     if ( f != b)
     for (int i = MOD(f) + 1;  MOD(i) != MOD(b); i+=1) {    
-        drawpoint(p[MOD(i-1)]);
+        drawpoint(10);
         drawpoint(p[MOD(i)]);
     }
 ]

@@ -15,7 +15,8 @@ let report_dup  exceptf list =
 let check_ass lval rval err =
     if lval = rval then lval else 
     (match lval with 
-        UserType(s,ShapeType) when s=".shape" ->rval (*Since addshape demands a string  for the name that it will use as a type I give it a String Dummy and will past semant*)
+        UserType(s,ShapeType) when s=".shape" ->rval
+     (*Since addshape demands a string  for the name that it will use as a type I give it a String Dummy and will past semant*)
         |_-> raise err                        (*Since this is a special case I supsend the one to one checking and just use rval*)
     )
 
@@ -289,13 +290,26 @@ in
         
                 |_-> raise(Failure("here"))
                 )
-                in
+                in 
                 let fd = e1' in
                     if List.length actuals != List.length fd.params then
                             if fd.fname="addshape"&&(List.length actuals)>0 then () else raise (Failure ("Incorrect number of arguments in "^func.fname))
                     else
-                        (* MAY NEED TO REPLACE CHECK_ASS WITH ARG_ASS *)
-                         List.iter2 (fun (ft, _,_) e -> let et = snd(expr_b e) in
+                        List.iter2 (fun (t, s, p) e -> if p = Ref then 
+                            let e = (expr_b e) in
+                            match e with 
+                                (Id(s),_) -> ()
+                                | (Member(e,s),_) -> ()
+                                | (Index(e,_),_) -> 
+                                    (match e with  
+                                    | (Id _, Vec) | (_,Array(_,_)) -> ()
+                                    | (_,t) as e-> raise(Failure("Illegal pass by reference."))
+                                    ) 
+                                | _ -> raise(Failure("Illegal pass by reference."))  
+                            )
+                        fd.params actuals;
+
+                        List.iter2 (fun (ft, _,_) e -> let et = snd(expr_b e) in
                             ignore (check_ass ft et
                             (Failure ("Illegal actual argument found " ^ Ast.string_of_typ ft ^ " "^Ast.string_of_typ et^ " in function "^func.fname))))
                     fd.params actuals;
@@ -334,6 +348,7 @@ in
                             if t2'!= Int
                                 then raise(Failure ("Must index with an integer "))
                                  else (Index((e1',t1'),(e2',t2')),te1')  
+
             |(Member(e1,s),_) -> let (e1',t1') = (expr_b e1)
                 in let te1'= (match t1' with
                         UserType(s1,_) -> s1
@@ -358,7 +373,7 @@ in
             |While(p,s) -> check_bool_expr p; stmt s 
             |ForDec (vdecls,e2,e3,body) -> stmt  ( Block(vdecls, [For((Noexpr,Void) , e2, e3, body)],PointContext) )
             |Timeloop(s1,e1,s2,e2,st1) -> 
-                (* NEED TO CHECK STATEMENTS AS WELL *)
+                (* Need to check statements also ? *)
                 if s1 = s2 then raise(Failure("Duplicate variable name in timeloop definition."))
                 else
                     let e1' = snd(expr_b e1) 
@@ -368,7 +383,7 @@ in
                         then ()
                     else raise(Failure("Only float expressions are accepted in timeloop definition."))
             |Frameloop (s1,e1,s2,e2,st1)-> 
-                (* NEED TO CHECK STATEMENTS AS WELL *)
+                (* Need to check statements also ? *)
                 if s1 = s2 then raise(Failure("Duplicate variable name in frameloop definition."))
                 else
                     let e1' = snd(expr_b e1) 

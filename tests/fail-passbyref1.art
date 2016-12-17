@@ -1,0 +1,15 @@
+void double_ref(double &z)
+{
+	z = 3.0;
+	printf(z);
+	printc('\n');
+}
+
+int main()
+{
+	// can index with vector literal except when passing by reference
+	printf(<10.0, 5.5>[0]); 
+	printc('\n');
+
+	double_ref(<10.0, 5.5>[0]); // not allowed
+}
