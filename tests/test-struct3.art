@@ -1,0 +1,38 @@
+/*test to see if strings can be assigned from inside a struct*/
+// Also test to see if 
+
+
+struct stringPair{
+	string s1;
+	string s2;
+}
+
+struct intCharStruct {
+    int x;
+    char y;
+    struct stringPair z;
+}
+
+int main ()
+{
+    struct intCharStruct  a;
+    struct stringPair s;
+
+    s.s1 = "string inside a struct";
+    s.s2 = "SECOND string inside a struct";
+
+    
+    a.x = 77;
+    a.y = 'c';
+    a.z = s;
+
+    a.z.s2 = "CHANGED string inside a struct"; 
+
+    printi (a.x); printc ('\n');
+    printc (a.y); printc ('\n');
+    prints (s.s1); printc ('\n');
+    prints (a.z.s1); printc('\n');
+    prints (a.z.s2);
+
+
+}
