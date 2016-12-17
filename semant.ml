@@ -20,6 +20,7 @@ let check_ass lval rval err =
     )
 
 
+
 let struct_build prog =
     let globals = prog.v
     and functions = prog.f
@@ -52,7 +53,7 @@ let struct_build prog =
     in
     { s = List.map (fun st -> let s = StringMap.find st.sname structs in
             (* If no contructor is defined add default *)
-            {ss = s.ss;sname = s.sname; decls = s.decls; ctor = if (s.ctor.fname="") then default_ctr s.sname else s.ctor; methods =s.methods}
+            {ss = s.ss;sname = s.sname; decls = s.decls; ctor = if (s.ctor.fname="") then default_ctr s.sname else s.ctor; methods = s.methods}
         ) prog.s;
       f = List.rev funcs ; v = globals }
 
@@ -92,9 +93,12 @@ let function_decl s = try StringMap.find s function_decls       (*Builds a strin
     with Not_found -> raise (Failure ("Unrecognized function " ^ s ^" did you forget to define it ?"))
 in
 
-let _ = function_decl "main" (*Makes sure that main is defined*)        
+let  main_check = let mn = function_decl "main" 
+        in if(mn.rettyp!=Int)
+            then raise(Failure("Main must be defined as return type int"))
+           else ()(*Makes sure that main is defined*)        
 in
-
+    main_check;
 let global_vars = List.fold_left(fun m(t,n,_)->StringMap.add n t m) StringMap.empty(globals)
 in
 let function_check func =

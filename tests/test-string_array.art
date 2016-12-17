@@ -1,7 +1,7 @@
 // This test is to see if arrays support strings.
 
 // include strings in the array
-char main()
+int  main()
 {	
 	string [5] x;
 	int i;
