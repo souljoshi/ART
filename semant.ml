@@ -348,7 +348,15 @@ in
                     if e1' = Float && e2' = Float 
                         then ()
                     else raise(Failure("Only float expressions are accepted in timeloop definition."))
-            |Frameloop (s1,e1,s2,e2,st1)-> ()
+            |Frameloop (s1,e1,s2,e2,st1)-> 
+                if s1 = s2 then raise(Failure("Duplicate variable name in frameloop definition."))
+                else
+                    let e1' = expr_b e1 
+                    and e2' = expr_b e2
+                    in 
+                    if e1' = Float && e2' = Float 
+                        then ()
+                    else raise(Failure("Only float expressions are accepted in frameloop definition."))
             | Break | Continue -> () (* COMPLICATED: CHECK If in Loop *)
         in 
         let check_ret () = match stmt_list with

@@ -1,0 +1,5 @@
+int main()
+{
+	// checking for only float expressions in frameloop definition
+	frameloop (fps = 0.1 ; frames = 10){ }
+}
