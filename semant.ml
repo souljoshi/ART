@@ -349,7 +349,6 @@ in
                                     then (Binop(e1,op,Promote(e2)), baseexpr_b s)
                                 else (Binop(e1,op,e2), baseexpr_b s)
         *)
-    in
         check_ret(); List.iter stmt stmt_list (* End of check_block *)
     in 
     (* Construct the scopes list before calling check_block *)
