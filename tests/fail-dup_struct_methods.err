@@ -1,0 +1,1 @@
+Fatal error: exception Failure("There already exists a method called size in struct circle")

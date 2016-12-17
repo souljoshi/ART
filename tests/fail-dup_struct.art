@@ -1,0 +1,15 @@
+// duplicate struct name
+
+struct circle
+{
+	int radius;
+}
+
+struct circle
+{
+	int r;
+}
+
+int main()
+{
+}

@@ -1,0 +1,21 @@
+// check that structs are defined before
+// they are used in another struct
+
+struct circle
+{
+	int radius;
+}
+
+struct disc
+{
+	struct circle c1; // ok
+}
+
+struct square
+{
+	struct rectangle r1; // fail
+}
+
+int main()
+{
+}
