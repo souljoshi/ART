@@ -19,8 +19,6 @@ let check_ass lval rval err =
         |_-> raise err                        (*Since this is a special case I supsend the one to one checking and just use rval*)
     )
 
-
-
 let struct_build prog =
     let globals = prog.v
     and functions = prog.f
@@ -53,7 +51,17 @@ let struct_build prog =
     in
     { s = List.map (fun st -> let s = StringMap.find st.sname structs in
             (* If no contructor is defined add default *)
-            {ss = s.ss;sname = s.sname; decls = s.decls; ctor = if (s.ctor.fname="") then default_ctr s.sname else s.ctor; methods = s.methods}
+            {ss = s.ss;sname = s.sname; decls = s.decls; ctor = if (s.ctor.fname="") then default_ctr s.sname else s.ctor; 
+                methods = 
+                if s.ss = ShapeType
+                    then 
+                        let draw = try List.find (fun f2 -> f2.fname = "draw") s.methods
+                        with Not_found -> raise (Failure ("No draw method in Shape")) s.methods
+                        in 
+                            if (draw.rettyp!=Void||draw.params!=[])
+                            then raise(Failure("Draw method must have return type Void and no parameters"))
+                            else s.methods       
+                else s.methods}
         ) prog.s;
       f = List.rev funcs ; v = globals }
 
@@ -203,65 +211,64 @@ in
         let ret_type n = _ret_type n scopes 
         in
         (* Gets type of expression. [LATER ON HANDLE WITH SAST] *)
-        let rec expr_b (e,_) = baseexpr_b e
-        and baseexpr_b = function
-             IntLit _-> Int
-            |CharLit _-> Char
-            |StringLit _-> String
-            |FloatLit _ -> Float
-            |VecLit (_,_)-> Vec
-            |Id s -> ret_type s
-            |Promote _ -> Float
-            |Binop(e1,op,e2) -> let e1' = expr_b e1 and e2'=expr_b e2 in
+        let rec expr_b  = function
+             (IntLit s,_)-> (IntLit s,Int)
+            |(CharLit s, _)-> (CharLit s, Char)
+            |(StringLit s,_)-> (StringLit s, String)
+            |(FloatLit s,_)-> (FloatLit s, Float)
+            |(VecLit (f1,f2),_)-> (VecLit(f1,f2), Vec)
+            |(Id s, _) as s1 ->  (Id s, ret_type s)
+            |(Promote s, _) -> (Promote s ,Float)
+            |(Binop(e1,op,e2),_) -> let e1' = snd(expr_b e1) and e2'=snd(expr_b e2) in
             (match op with
-                Add|Sub|Mult|Div|Mod when e1'=Int && e2'=Int -> Int
-                |Add|Sub|Mult|Div when e1'=Vec&&e2'=Vec -> Vec
-                |Mult when e1'=Vec&&e2'=Int -> Vec
-                |Mult when e1'=Vec&&e2'=Float -> Vec
-                |Mult when e1'=Int&&e2'=Vec -> Vec
-                |Mult when e1'=Float&&e2'=Vec -> Vec
-                |Add|Sub|Mult|Div when e1'=Float && e2'=Float -> Float
-                |Add|Sub|Mult|Div when e1'=Int && e2'=Float -> Float 
-                |Add|Sub|Mult|Div when e1'=Float && e2'=Int -> Float
-                |Equal|Neq when e1'=e2'-> Int 
-                |Equal|Neq when e1'=Float && e2'=Int -> Int 
-                 |Equal|Neq when e1'=Int && e2'=Float -> Int 
-                |Less|Leq|Greater|Geq when e1'=e2' -> Int
-                |Less|Leq|Greater|Geq when e1'=Int && e2'=Float -> Int
-                |Less|Leq|Greater|Geq when e1'=Float && e2'=Int-> Int
-                |And|Or when e1'=Int && e2'=Int -> Int
+                Add|Sub|Mult|Div|Mod when e1'=Int && e2'=Int -> (Binop(e1,op,e2),Int)
+                |Add|Sub|Mult|Div when e1'=Vec&&e2'=Vec -> (Binop(e1,op,e2),Vec)
+                |Mult when e1'=Vec&&e2'=Int ->  (Binop(e1,op,(Promote(e2),Float)),Vec)
+                |Mult when e1'=Vec&&e2'=Float -> (Binop(e1,op,e2),Vec)
+                |Mult when e1'=Int&&e2'=Vec ->  (Binop((Promote(e1),Float),op,e2),Vec)
+                |Mult when e1'=Float&&e2'=Vec -> (Binop(e1,op,e2),Vec)
+                |Add|Sub|Mult|Div when e1'=Float && e2'=Float -> (Binop(e1,op,e2),Float)
+                |Add|Sub|Mult|Div when e1'=Int && e2'=Float -> (Binop((Promote(e1),Float),op,e2),Float)
+                |Add|Sub|Mult|Div when e1'=Float && e2'=Int -> (Binop(e1,op,(Promote(e2),Float)),Float)
+                |Equal|Neq when e1'=e2'-> (Binop(e1,op,e2),Int) 
+                |Equal|Neq when e1'=Float && e2'=Int -> (Binop((Promote(e1),Float),op,e2),Int)
+                 |Equal|Neq when e1'=Int && e2'=Float -> (Binop(e1,op,(Promote(e2),Float)),Int) 
+                |Less|Leq|Greater|Geq when e1'=e2' -> (Binop(e1,op,e2),Int)
+                |Less|Leq|Greater|Geq when e1'=Int && e2'=Float -> (Binop((Promote(e1),Float),op,e2),Int)
+                |Less|Leq|Greater|Geq when e1'=Float && e2'=Int-> (Binop(e1,op,(Promote(e2),Float)),Int)
+                |And|Or when e1'=Int && e2'=Int -> (Binop(e1,op,e2),Int)
                 | _-> raise(Failure ("Unsupported operands"^ Ast.string_of_expr e1 ^ " "^Ast.string_of_expr e2^" for "
                                      ^(string_of_op op)))
             )
-            |Unop(op,e1) -> let e1' = expr_b e1 in
+            |(Unop(op,e1),_) -> let e1' = snd(expr_b e1) in
                 (match op with
-                    Neg when e1'=Int -> Int
-                    |Neg when e1'=Float -> Float
-                    |Neg when e1'=Vec -> Vec
-                    |Pos when e1'=Int -> Int
-                    |Pos when e1'=Float -> Float 
-                    |Pos when e1'=Vec -> Vec
-                    |Preinc when e1'= Int -> Int 
-                    |Preinc when e1'= Float -> Float
-                    |Predec when e1'= Int -> Int
-                    |Predec when e1'= Float -> Float 
+                    Neg when e1'=Int -> (Unop(op,e1),Int)
+                    |Neg when e1'=Float -> (Unop(op,e1),Float)
+                    |Neg when e1'=Vec -> (Unop(op,e1),Vec)
+                    |Pos when e1'=Int -> (Unop(op,e1),Int)
+                    |Pos when e1'=Float -> (Unop(op,e1),Float) 
+                    |Pos when e1'=Vec -> (Unop(op,e1),Vec)
+                    |Preinc when e1'= Int -> (Unop(op,e1),Int)
+                    |Preinc when e1'= Float -> (Unop(op,e1),Float)
+                    |Predec when e1'= Int -> (Unop(op,e1),Int)
+                    |Predec when e1'= Float -> (Unop(op,e1),Float) 
                     | _ -> raise(Failure("No unary operator defined for "^ Ast.string_of_expr e1 ))
                 )
-            |Noexpr -> Void
-            |Asnop(e1,asnp,e2)  -> let e1' = expr_b e1 and  e2'=expr_b e2 in 
+            |(Noexpr,_) -> (Noexpr,Void)
+            |(Asnop(e1,asnp,e2),_)  -> let e1' = snd(expr_b e1) and  e2'=snd(expr_b e2) in 
                 (match asnp with
-                     Asn when e1'=e2' -> e1'
-                    |Asn when e2'=Void -> e1' (*Extermely poor idea but need to figure out constructor problem that return void*)
-                    |Asn when e1'=Float && e2'=Int ->  Float
-                    |CmpAsn b when e1'=(expr_b (Binop(e1, b, e2), Void)) ->  e1'
+                     Asn when e1'=e2' -> (Asnop(e1,asnp,e2),e1')
+                    |Asn when e2'=Void -> (Asnop(e1,asnp,e2),e1') (*Extermely poor idea but need to figure out constructor problem that return void*)
+                    |Asn when e1'=Float && e2'=Int ->  (Asnop(e1,asnp,e2),Float)
+                    |CmpAsn b when e1'=snd(expr_b (Binop(e1, b, e2), Void)) ->  (Asnop (e1,asnp,e2),e1')
                     (*|CmpAsn b when e1'=Float && e2'=Int ->  Float
                     |CmpAsn b when e1'=Int && e2'=Float ->  Float*)
                     | _ -> raise (Failure ("Invalid assigment of " ^ Ast.string_of_typ e2' ^ " to "^Ast.string_of_typ e1'))
                 )
-            |Call(e1, actuals) -> let e1' = (match e1 with 
-                (Id s,_) -> (try lookup_function s 
+            |(Call(e1, actuals),_) -> let e1' = (match e1 with 
+                ((Id s),_) -> (try lookup_function s 
                          with Not_found -> function_decl s)
-                |(Member (e,s),_) -> let e'= expr_b e in let
+                |(Member (e,s),_)-> let e'= snd(expr_b e) in let
                                      sname= (match e' with
                                             UserType(s,e1) -> s
                                             | _-> raise(Failure("Dot operator on a non-user type"))
@@ -276,31 +283,36 @@ in
                             if fd.fname="addshape"&&(List.length actuals)>0 then () else raise (Failure ("Incorrect number of arguments in "^func.fname))
                     else
                         (* MAY NEED TO REPLACE CHECK_ASS WITH ARG_ASS *)
-                         List.iter2 (fun (ft, _,_) e -> let et = expr_b e in
+                         List.iter2 (fun (ft, _,_) e -> let et = snd(expr_b e) in
                             ignore (check_ass ft et
                             (Failure ("Illegal actual argument found " ^ Ast.string_of_typ ft ^ " "^Ast.string_of_typ et^ " in function "^func.fname))))
                     fd.params actuals;
-                fd.rettyp
-            |Vecexpr (e1,e2) -> Vec
-            |Posop (_,e2)-> let e2'=expr_b e2
+                (Call(e1,actuals),fd.rettyp)
+            |(Vecexpr (e1,e2),_) -> 
+                let e1' = snd(expr_b e1) and e2' = snd(expr_b e2)
+                in
+                if (e1' != Float || e2' != Float)
+                    then raise(Failure("Elements of Vector must be floats."))
+                else (Vecexpr(e1,e2),Vec)
+            |(Posop (s,e2),_)-> let e2'=snd(expr_b e2)
             in (match e2' with
-                |Int -> Int
+                |Int -> (Posop(s,e2),Int)
                 |_ -> raise(Failure("Cannot apply PostInc or PostDec " ^ " to " ^ Ast.string_of_expr e2))
             )
-            |Trop(_,e1,e2,e3) -> let e1'=expr_b e1 and e2'= expr_b e2 and e3'=expr_b e3
+            |(Trop(sz,e1,e2,e3),_) -> let e1'=snd(expr_b e1) and e2'= snd(expr_b e2) and e3'=snd(expr_b e3)
                                  in if(e1'!=Int)
                                     then raise(Failure("Need a Condtional statement"))
                                 else(
                                     if(e1'=e2')
-                                        then e1'
+                                        then (Trop(sz,e1,e2,e3),e1')
                                     else if(e1'=Float&&e2'=Int)
-                                        then e1'
+                                        then (Trop(sz,e1,(Promote(e2),Float),e3),e1')
                                     else if(e1'=Int&&e2'=Float)
-                                            then e2'
+                                            then (Trop(sz,(Promote(e1),Float),e2,e3),e1')
                                     else 
                                         raise(Failure("Cannot return incompatiable types"))
                                     )
-            |Index(e1,e2) -> let e1' = expr_b e1 and e2' = expr_b e2 (* ALLOW VECTOR INDEXING *)
+            |(Index(e1,e2),_) -> let e1' = snd(expr_b e1) and e2' = snd(expr_b e2) (* ALLOW VECTOR INDEXING *)
                             in let te1' = (match e1' with
                              Array(t,_) -> t
                              |Vec -> Float
@@ -309,30 +321,50 @@ in
                             in 
                             if e2'!= Int
                                 then raise(Failure ("Must index with an integer "))
-                                 else te1'  
-            |Member(e1,s) -> let e1' = expr_b e1
+                                 else (Index(e1,e2),te1')  
+            |(Member(e1,s),_) -> let e1' = snd(expr_b e1)
                 in let te1'= (match e1' with
                         UserType(s1,_) -> s1
                         |_ -> raise(Failure("Dot operator on a non-user type"))
                         )
                     in
-                    ( try member_var_type te1' s with Not_found -> raise(Failure(s^" is not a member of "^(string_of_typ e1') )))           
+                    ( try (Member(e1,s),member_var_type te1' s) with Not_found -> raise(Failure(s^" is not a member of "^(string_of_typ e1') )))  
+                
+        | _ -> (Noexpr,Void)        
         in 
     
-    let check_bool_expr e = if expr_b e != Int (*Could take in any number need to force check 1 or 0*)
+    let check_bool_expr e = if snd(expr_b e) != Int (*Could take in any number need to force check 1 or 0*)
             then raise(Failure((string_of_expr e)^" is not a boolean value."))
             else() in 
         let rec stmt = function
              Block (vl,sl,_)  -> check_block (vl, sl) scopes
             |Expr e -> ignore(expr_b e)
-            |Return e -> let e1' = expr_b e in if e1'= func.rettyp then () else
+            |Return e -> let e1' = snd(expr_b e) in if e1'= func.rettyp then () else
                 raise(Failure("Incorrect return type in " ^ func.fname))
             |If(p,e1,e2) -> check_bool_expr p; stmt e1; stmt e2;
             |For(e1,e2,e3,state) -> ignore(expr_b e1); check_bool_expr e2; ignore(expr_b e3); stmt state
             |While(p,s) -> check_bool_expr p; stmt s 
             |ForDec (vdecls,e2,e3,body) -> stmt  ( Block(vdecls, [For((Noexpr,Void) , e2, e3, body)],PointContext) )
-            |Timeloop(s1,e1,s2,e2,st1) -> ()
-            |Frameloop (s1,e1,s2,e2,st1)-> ()
+            |Timeloop(s1,e1,s2,e2,st1) -> 
+                (* NEED TO CHECK STATEMENTS AS WELL *)
+                if s1 = s2 then raise(Failure("Duplicate variable name in timeloop definition."))
+                else
+                    let e1' = snd(expr_b e1) 
+                    and e2' = snd(expr_b e2)
+                    in 
+                    if e1' = Float && e2' = Float 
+                        then ()
+                    else raise(Failure("Only float expressions are accepted in timeloop definition."))
+            |Frameloop (s1,e1,s2,e2,st1)-> 
+                (* NEED TO CHECK STATEMENTS AS WELL *)
+                if s1 = s2 then raise(Failure("Duplicate variable name in frameloop definition."))
+                else
+                    let e1' = snd(expr_b e1) 
+                    and e2' = snd(expr_b e2)
+                    in 
+                    if e1' = Float && e2' = Float 
+                        then ()
+                    else raise(Failure("Only float expressions are accepted in frameloop definition."))
             | Break | Continue -> () (* COMPLICATED: CHECK If in Loop *)
         in 
         let check_ret () = match stmt_list with
@@ -340,7 +372,8 @@ in
             |Return _ :: _ -> raise(Failure("Can't put more code after return"))
             |_ -> ()
         in
-        let rec fill_tree (e,t) = fill_basetree e
+
+        (*let rec fill_tree (e,t) = fill_basetree e
         and  fill_basetree  = function
         (IntLit s, _) -> (IntLit(s), Int) 
         |(CharLit s,_) ->(CharLit(s),Char)
@@ -365,6 +398,7 @@ in
         | (Member(e1,e2),_) as s1 -> (Member(e1,e2),expr_b s1)
         | (Trop(cond,e1,e2,e3),_) as s1 -> (Trop(cond,e1,e2,e3),expr_b s1)
         in
+    *)
         check_ret(); List.iter stmt stmt_list (* End of check_block *)
     in 
     (* Construct the scopes list before calling check_block *)

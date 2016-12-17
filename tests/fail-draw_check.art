@@ -1,0 +1,22 @@
+shape circle
+{
+	double r;
+}
+
+circle::circle(double x)
+{
+	r = x;
+	printf(r);
+}
+
+void circle::draw(int x)
+{
+}
+
+int main()
+{
+	shape circle new = circle(10.0);
+	printc('\n');
+	prints("Hello");
+	printc('\n');
+}

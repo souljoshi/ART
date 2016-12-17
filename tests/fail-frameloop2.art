@@ -1,0 +1,5 @@
+int main()
+{
+	// checking duplicate variables in frameloop definition
+	frameloop (fps = 0.1 ; fps = 10.0){ }
+}
