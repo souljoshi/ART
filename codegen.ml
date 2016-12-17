@@ -71,9 +71,23 @@ let translate prog =
        global_vars is a map of var names to llvm global vars representation.
        Global decls are three tuples (typ, name, initer) *)
     let global_vars =
+        (* LLvm value of a literal expression *)
+        let lvalue_of_lit = function
+            A.IntLit i -> L.const_int i32_t i
+          | A.CharLit c -> L.const_int i8_t (int_of_char c) (* 1 byte characters *)
+          | A.Noexpr -> L.const_int i32_t 0  (* No expression is 0 *)
+          | A.StringLit s -> let l = L.define_global "unamed." (L.const_stringz context s) the_module in
+                            L.const_gep l [|L.const_int i32_t 0|]
+          | A.FloatLit f -> L.const_float double_t f
+          | A.VecLit(f1, f2) -> L.const_vector [|(L.const_float double_t f1) ; (L.const_float double_t f2)|]
+          | _ -> raise(Failure("Attempt to initialize global variable with a non-const"))
+        in
+        let construct_initer t = function
+           A.Exprinit e -> lvalue_of_lit (fst(A.const_expr e))
+          | _ -> L.const_null(ltype_of_typ t)
+        in
         let global_var m (t,n,i) = (* map (type,name,initer) *)
-        (* Ignoring initer for now and just setting to zero *)
-          let init = L.const_null(ltype_of_typ t)
+          let init = construct_initer t i
           (* Define the llvm global and add to the map *)
           in StringMap.add n (L.define_global n init the_module, t) m in
         List.fold_left global_var StringMap.empty globals in
@@ -540,9 +554,7 @@ let translate prog =
                 in stmt_list,(locals, LocalScope)::scopes
             in
 
-            let string_create s builder =
-              let str = L.build_global_stringptr s "temp" builder in
-              L.build_in_bounds_gep str [|L.const_int i32_t 0|] "temps" builder
+            let string_create s builder = L.build_global_stringptr s "temp" builder
             in
             (* Return the value for a variable by going through the scope chain *)
             let rec _lookup n builder scopes =
