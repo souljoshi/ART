@@ -1,8 +1,7 @@
- void test(int a, int b)
+// no main function
+
+void test(int a, int b)
 {
 	a=5;
 	b=5;
-
 }
-
-

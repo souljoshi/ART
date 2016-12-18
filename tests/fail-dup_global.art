@@ -1,0 +1,8 @@
+// check duplicate global vars
+
+int x;
+double x;
+
+int main()
+{
+}
