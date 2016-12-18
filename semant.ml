@@ -21,14 +21,25 @@ let struct_build prog =
 
     in  
     (* A map of all struct/shape types *)
-    let structs = List.fold_left ( fun m st -> report_dup(fun n-> "Duplicate member variable named " ^n ^" in struct " ^ st.sname)(List.map (fun (t,n) ->  n)st.decls); StringMap.add st.sname st m)
+    let structs = List.fold_left ( 
+        fun m st -> report_dup(fun n-> "Duplicate member variable named " ^n ^" in "^(
+          string_of_stosh st.ss)^" "^st.sname)(List.map (fun (t,n) ->  n)st.decls);
+
+          (List.iter(fun (t,n)-> 
+            (match t with 
+                UserType(s,ss) -> if(st.sname = s) 
+                    then raise(Failure("Cannot nest "^(string_of_stosh st.ss)^" "^st.sname^" within itself")) 
+                    else let x= StringMap.mem s m in if x=false 
+                    then raise(Failure((string_of_stosh ss)^" "^s ^" must be defined before using in "^(string_of_stosh st.ss)^" "^st.sname))            
+                | _-> ()   
+            ))st.decls);
+          StringMap.add st.sname st m
+
+    )
 
                 StringMap.empty prog.s in
 
-                 List.iter(fun fd -> List.iter(fun (t,n)-> (match t with 
-                                                UserType(s,_) -> if(fd.sname = s) then raise(Failure("Cannot nest struct/shape "^fd.sname^" within itself")) else let x= StringMap.mem s structs in if x=false then raise(Failure("Struct "^s ^" must be defined before using it in struct "^fd.sname))            
-                                                | _-> ()   
-                                                ))fd.decls) prog.s;
+
     let (structs,funcs) = (* Refers to structs and non-member functions *)
         (* Puts methods and constructors with appropriate struct and returns tuple
             (map, bool) *)
