@@ -267,12 +267,12 @@ in
                     |Preinc when t1'= Int ->(match f with
                                             (Id(s1),Int) -> (Unop(op,(f)),Int)
                                             |(Index(e1,e2),Int) -> (Unop(op,(f)),Int)
-                                            |_ -> raise(Failure("Cannot apply PreInc or PreDec " ^ " to " ^ Ast.string_of_expr f))
+                                            |_ -> raise(Failure("Cannot apply PreInc or PreDec" ^ " to " ^ Ast.string_of_expr f))
                                             )
                     |Predec when t1'= Int -> (match f with
                                             (Id(s1),Int) -> (Unop(op,(f)),Int)
                                             |(Index(e1,e2),Int) -> (Unop(op,(f)),Int)
-                                            |_ -> raise(Failure("Cannot apply PreInc or PreDec " ^ " to " ^ Ast.string_of_expr f))
+                                            |_ -> raise(Failure("Cannot apply PreInc or PreDec" ^ " to " ^ Ast.string_of_expr f))
                                             )
                     | _ -> raise(Failure("No unary operator defined for "^ Ast.string_of_expr e1 ))
                 )
@@ -346,7 +346,7 @@ in
             in (match e2' with
                 (Id(s1),Int) -> (Posop(s,(e2')),Int)
                 |(Index(e1,e2),Int) -> (Posop(s,(e2')),Int)
-                |_ -> raise(Failure("Cannot apply PostInc or PostDec " ^ " to " ^ Ast.string_of_expr e2))
+                |_ -> raise(Failure("Cannot apply PostInc or PostDec" ^ " to " ^ Ast.string_of_expr e2))
             )
 
             |(Trop(sz,e1,e2,e3),_) -> let (e1',t1')=(expr_b e1) and (e2',t2')=(expr_b e2) and (e3',t3')=(expr_b e3)

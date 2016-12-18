@@ -4,17 +4,21 @@ int main()
 	int[10] a;
 	
 	b++;
+	++b;
 	printi(b);
 	printc('\n');
 	b--;
+	--b;
 	printi(b);
 	printc('\n');
 
 	a[0] = 5;
 	a[0]++;
+	++a[0];
 	printi(a[0]);
 	printc('\n');
 	a[0]--;
+	--a[0];
 	printi(a[0]);
 	printc('\n');
 }
