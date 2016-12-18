@@ -93,8 +93,7 @@ method_declarator:
 
 func_block:
   /* Function Block */
-    LBRACE stmt_list RBRACE                  { ([], List.rev $2) }
-  | LBRACE declaration_list stmt_list RBRACE { ($2, List.rev $3) } /* Already Reversed */
+    LBRACE decl_list_stmt_list RBRACE        {$2}
 
 parameter_list:
   /* No parameter case */  {[]}
@@ -186,7 +185,7 @@ init_list:
   | init_list COMMA init  { $3 :: $1}
 
 stmt_list: /* inverted list of the statements */
-    /* nothing */  { [] }
+    stmt  { [$1] }
   | stmt_list stmt { $2 :: $1 }
 
 stmt:
@@ -222,8 +221,20 @@ stmt_block:
   | LTLT decl_list_stmt_list GTGT             { Block(fst $2, snd $2, TriangleContext) }
 
 decl_list_stmt_list:
-    stmt_list                   {([], List.rev $1)} /* stmt_list needs to be reversed */
-  | declaration_list stmt_list  {($1, List.rev $2)} /* declaration doesn't need reversing */
+    /* Empty Block */                {([],[])}
+  | stmt_list                        {([], List.rev $1)} /* stmt_list needs to be reversed */
+  | dlist_slist_pair_list            {$1}
+  | stmt_list dlist_slist_pair_list  {( [],List.rev( (Block (fst $2, snd $2, PointContext))::($1) ))}
+
+dlist_slist_pair_list:
+    dlist_slist_pair                        {$1}
+  | declaration_list                        {($1,[])} 
+  | dlist_slist_pair dlist_slist_pair_list  
+      {(fst $1, List.rev( Block(fst $2, snd $2, PointContext)::(List.rev(snd $1)) ) )}
+
+  /* A pair of declaration List , statement List */
+dlist_slist_pair:
+    declaration_list stmt_list  {($1, List.rev $2)} /* declaration doesn't need reversing */
 
 
 /* Optional Expression */
