@@ -1,0 +1,21 @@
+int main() 
+{
+	int i;
+	double d;
+	char c;
+	string s;
+	vec v;
+
+
+	i = 42;
+	i = 10;
+	d = 42.0;
+	d = 10.0;
+	s = "I'm a string";
+	s = "are you sure, tho?";
+	v = <42,42.0>;
+	v = <42,42.0-1.0>; 
+	c = 'q';
+	c = 42;/* Fail case: assigning an integer to a char variable*/
+
+}

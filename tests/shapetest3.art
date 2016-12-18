@@ -1,0 +1,37 @@
+/* Simplest shape test with ony one shape*/
+shape circle
+{
+    int radius;
+    int px;
+    int py;
+}
+
+circle::circle(int r, int x, int y)
+{
+    radius=r;
+    px=x;
+    py=y;
+}
+
+// below is the required draw member function
+void circle::draw(int points)
+{  
+    int i,slice,angle,npx,npy;
+    slice=2*points;
+    for(i=0;i<points;i+=1)
+    {   
+        angle= slice *i;
+        npy = py+radius*angle;
+        npx = px+radius*angle;
+        printi(npx);
+        printi(npy);
+        
+    }
+}
+int main()
+{       shape circle cir,cir2;  
+        cir=circle(5,3,6);
+        cir2=circle(10,7,9);
+        cir.draw(4);
+        cir2.draw(5);
+}
