@@ -32,7 +32,7 @@
 %token ASSIGN PLUSASSIGN MINUSASSIGN TIMESASSIGN 
 %token DIVASSIGN MODASSIGN PLUSPLUS MINUSMINUS
 %token EQ NEQ LT LEQ GT GEQ AND OR NOT LTLT GTGT
-%token RETURN IF ELSE FOR WHILE BREAK CONTINUE
+%token RETURN IF ELSE FOR WHILE
 %token STRUCT SHAPE
 %token TLOOP FLOOP
 %token <int> INTLIT
@@ -46,7 +46,6 @@
 %nonassoc NOELSE
 %nonassoc ELSE
 %right ASSIGN PLUSASSIGN MINUSASSIGN TIMESASSIGN DIVASSIGN MODASSIGN
-%right CONDITIONAL  /* ? : */
 %left OR
 %left AND
 %left EQ NEQ
@@ -204,8 +203,6 @@ stmt:
     expr_opt SEMI                           { Expr $1 }
   | RETURN SEMI                             { Return (Noexpr,Void) }
   | RETURN expr SEMI                        { Return $2 }
-  | BREAK SEMI                              { Break }
-  | CONTINUE SEMI                           { Continue }
 
   /* Block */
   | stmt_block                               { $1 }   /* defined in stmt_block: */
@@ -259,10 +256,6 @@ expr_opt:
 
 expr:
   bexpr                     { $1 }
-
-  /* Conditional */
-  /* $1 = bexpr, $3 = expr, $5 = expr */
-  |bexpr QMARK expr COLON expr %prec CONDITIONAL { (Trop(Cond, $1, $3, $5),Void) }
 
   /* postfix expressions */
   /* Assignment */

@@ -466,7 +466,6 @@ let translate prog =
             | A.Asnop(e1,_,e2) -> StringSet.union (non_local_expr e1)  (non_local_expr e2)
             | A.Unop(_,e)      -> non_local_expr e
             | A.Posop(_,e)     -> non_local_expr e
-            | A.Trop(_,e1,e2,e3) -> StringSet.union (non_local_expr e1) (StringSet.union (non_local_expr e2)  (non_local_expr e3))
             | A.Call(e1,el)  -> StringSet.union (match e1 with (A.Id s,_) -> StringSet.empty | _ -> non_local_expr e1) 
                                  ( List.fold_left (fun set e-> StringSet.union set (non_local_expr e)) StringSet.empty el)
             | A.Index(e1, e2)-> StringSet.union (non_local_expr e1)  (non_local_expr e2)

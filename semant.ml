@@ -282,19 +282,6 @@ in
                 |Int -> Int
                 |_ -> raise(Failure("Cannot apply PostInc or PostDec " ^ " to " ^ Ast.string_of_expr e2))
             )
-            |Trop(_,e1,e2,e3) -> let e1'=expr_b e1 and e2'= expr_b e2 and e3'=expr_b e3
-                                 in if(e1'!=Int)
-                                    then raise(Failure("Need a Condtional statement"))
-                                else(
-                                    if(e1'=e2')
-                                        then e1'
-                                    else if(e1'=Float&&e2'=Int)
-                                        then e1'
-                                    else if(e1'=Int&&e2'=Float)
-                                            then e2'
-                                    else 
-                                        raise(Failure("Cannot return incompatiable types"))
-                                    )
             |Index(e1,e2) -> let e1' = expr_b e1 and e2' = expr_b e2 (* ALLOW VECTOR INDEXING *)
                             in let te1' = (match e1' with
                              Array(t,_) -> t
@@ -327,7 +314,6 @@ in
             |ForDec (vdecls,e2,e3,body) -> stmt  ( Block(vdecls, [For((Noexpr,Void) , e2, e3, body)],PointContext) )
             |Timeloop(s1,e1,s2,e2,st1) -> ()
             |Frameloop (s1,e1,s2,e2,st1)-> ()
-            | Break | Continue -> () (* COMPLICATED: CHECK If in Loop *)
         in 
         let check_ret () = match stmt_list with
             [Return _ ] -> ()

@@ -13,8 +13,6 @@ type uop = Neg | Not | Pos | Preinc | Predec
 (* postfix operation*)
 type pop = Postinc |Postdec
 
-(* trinary operation *)
-type trop = Cond
 
 (*type typ = Int | Char | Float | Vec | Void | Array of typ * expr | UserType of string*)
 
@@ -33,7 +31,6 @@ and baseexpr =
   | Asnop of expr * asnop * expr (* Assignment operation *)
   | Unop of uop * expr
   | Posop of pop * expr
-  | Trop of trop * expr * expr * expr
   | Call of expr * expr list (* expr list = list of arguments *)
   | Index of expr * expr (* more general than it needs to be, needs to be checked for symantec *)
   | Member of expr * string
@@ -63,8 +60,6 @@ type stmt =
     Block of vdecl list * stmt list * context
   | Expr of expr
   | Return of expr
-  | Break
-  | Continue
   | If of expr * stmt * stmt
   | For of expr * expr * expr * stmt 
   | ForDec of vdecl list* expr * expr * stmt
@@ -136,9 +131,6 @@ let string_of_pop = function
     Postinc -> "++"
   | Postdec -> "--"
 
-let strings_of_trop = function
-    Cond -> (" ? ", " :")
-
 let string_of_chr =  function
   '\b' | '\t' | '\n' | '\r' as c -> Char.escaped c
   | c when Char.code(c) > 31  && Char.code(c) < 127 -> Char.escaped c
@@ -162,8 +154,6 @@ paren_of_expr *) = function
       string_of_expr e1 ^ " " ^ string_of_asnop o ^ " " ^ string_of_expr e2
   | Unop(o, e) -> string_of_uop o ^ string_of_expr e
   | Posop(o, e) -> string_of_expr e ^ string_of_pop o
-  | Trop (o, e1, e2, e3) -> let t = strings_of_trop o in
-            string_of_expr e1 ^ fst t ^ string_of_expr e2 ^ snd t ^ string_of_expr e3
   | Call(f, el) ->
       string_of_expr f ^ "(" ^ String.concat ", " (List.map string_of_expr el) ^ ")"
   | Index(e1, e2) -> string_of_expr e1 ^ "[" ^ string_of_expr e2 ^ "]"
@@ -221,8 +211,6 @@ let rec string_of_stmt = function
       ^ String.concat "" (List.map string_of_stmt stmts) ^ closer ^ "\n"
   | Expr(expr) -> string_of_expr expr ^ ";\n";
   | Return(expr) -> "return " ^ string_of_expr expr ^ ";\n";
-  | Break      -> "break;\n"
-  | Continue   -> "continue;\n"
 
   | If(e, s, Block([],[],_)) -> "if (" ^ string_of_expr e ^ ")\n" ^ string_of_stmt s
   | If(e, s1, s2) ->  "if (" ^ string_of_expr e ^ ")\n" ^
@@ -394,13 +382,6 @@ let rec const_expr = function
     else raise(Failure("No operator "^(string_of_op op)^" defined for types "^(string_of_typ t1)^" and "^(string_of_typ t2)))
 
   | (Unop (op,e), _) -> do_uop op (const_expr e)
-  | (Trop(trop,e1,e2,e3),_) -> let (cond,ct) = const_expr e1 and (le,lt) = const_expr e2 and (re,rt) = const_expr e3 in
-    if ct = Int then
-    (match trop with
-     Cond -> if (rt = lt) then (if (get_int cond) = 0 then (re,rt) else (le,rt))
-        else raise(Failure ("Conditonal expression expects two identicaly typed expressions."))
-    )
-    else raise(Failure ("Conditonal expression expects an int for the condtion."))
   | (Index(le,re),_t) -> let (le',lt) = (const_expr le) and (re',rt) = (const_expr re) in
     if rt = Int then
       let i = (get_int re') in 
