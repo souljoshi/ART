@@ -30,4 +30,5 @@ int main()
 	struct rectangle r1;
 	addshape(d1);
 	addshape(r1); // error
+	//addshpae(10); // error
 }
