@@ -810,7 +810,19 @@ let translate prog =
 
     
             (* Construct code for an expression; return its value *)
-            and expr builder (e,_) = baseexpr builder e
+            and expr builder =  function
+                  (A.Promote (e,st), tt) ->
+                  (match (st,tt) with 
+                       (A.Int,A.Float) -> L.build_sitofp (baseexpr builder e) double_t "tmp" builder
+                     | (A.Int,A.Vec)   -> expr builder (A.Promote(A.Promote (e,st),A.Float), tt)
+                     | (A.Float,A.Vec) -> let e' = (baseexpr builder e) in
+                           let vec = L.const_vector [| L.const_float double_t 0.0 ; L.const_float double_t 0.0 |] in
+                           let i1 = L.build_insertelement vec e' (L.const_int i32_t 0) "tmp1" builder in
+                           L.build_insertelement i1 e' (L.const_int i32_t 1) "tmp2" builder
+
+                     | _ ->  raise (Failure ("Unsupported promotion from "^(A.string_of_typ st)^" to "^(A.string_of_typ tt)))
+                  )
+                | (e,_) -> baseexpr builder e
             and baseexpr builder = function (* Takes args builder and Ast.expr *)
                 A.IntLit i -> L.const_int i32_t i
               | A.CharLit c -> L.const_int i8_t (int_of_char c) (* 1 byte characters *)
@@ -975,7 +987,7 @@ let translate prog =
                  let result = (match fdecl.A.rettyp with A.Void -> "" (* don't name result for void llvm issue*)
                                                     | _ -> s^"_result") in
                  L.build_call fdef (Array.of_list actuals) result builder
-              |  e -> raise (Failure ("Unsupported expression: "^(A.string_of_baseexpr e)))(* Ignore other expressions *)
+              | _ ->  raise (Failure ("Promote should be handled in expr not bexpr"))
             in
 
             (* Build the code for the given statement; return the builder for
