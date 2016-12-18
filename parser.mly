@@ -11,6 +11,18 @@
      [] -> t
    | [i] -> Array(t, i)
    | i::l -> List.fold_left (fun at e -> Array(at,e)) (Array(t, i)) l
+   (*let handle_mixed_scoping *)
+   type mixed_decl = {l : vdecl list ; t : vdecl list * stmt list }
+  let handle_dup ml (dl,sl) = 
+    let rec helper = function 
+            (t,n1,i) :: (_,n2,_)::_ when n1=n2 -> [(t,n1,i)]
+            |_ :: tl -> helper tl
+            |[]->[] in
+    
+    let ml = (List.sort (fun (_,n1,_) (_,n2,_) -> compare n1 n2)ml) in
+    match (helper ml) with
+        [s] -> (s::dl,sl)
+      | _   -> (dl,sl)
 %}
 
 %token VOID INT CHAR DOUBLE VEC STRING
@@ -223,18 +235,21 @@ stmt_block:
 decl_list_stmt_list:
     /* Empty Block */                {([],[])}
   | stmt_list                        {([], List.rev $1)} /* stmt_list needs to be reversed */
-  | dlist_slist_pair_list            {$1}
-  | stmt_list dlist_slist_pair_list  {( [],List.rev( (Block (fst $2, snd $2, PointContext))::($1) ))}
+  | cdlist_slist_pair_list           {$1}
+  | stmt_list cdlist_slist_pair_list {( [],List.rev( (Block (fst $2, snd $2, PointContext))::($1) ))}
 
+cdlist_slist_pair_list:
+    dlist_slist_pair_list  {handle_dup $1.l $1.t}
+  
 dlist_slist_pair_list:
     dlist_slist_pair                        {$1}
-  | declaration_list                        {($1,[])} 
+  | declaration_list                        {{l=$1; t=($1,[])}} 
   | dlist_slist_pair dlist_slist_pair_list  
-      {(fst $1, List.rev( Block(fst $2, snd $2, PointContext)::(List.rev(snd $1)) ) )}
+      {{l=($1.l)@($2.l) ; t=(fst $1.t, List.rev( Block(fst $2.t, snd $2.t, PointContext)::(List.rev(snd $1.t)) ) )}}
 
   /* A pair of declaration List , statement List */
 dlist_slist_pair:
-    declaration_list stmt_list  {($1, List.rev $2)} /* declaration doesn't need reversing */
+    declaration_list stmt_list  {{l=$1; t=($1, List.rev $2)}} /* declaration doesn't need reversing */
 
 
 /* Optional Expression */
