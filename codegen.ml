@@ -40,12 +40,10 @@ let translate prog =
       | A.Float -> double_t
       | A.String -> string_t
       | A.Vec -> vec_t
-      | A.Array(t,e) -> (match e with 
+      | A.Array(t,e) -> (match (A.const_expr e) with 
             | (A.IntLit(i),_) -> L.array_type (_ltype_of_typ m t) i
-            | _ -> raise(Failure "Arrays declaration requires int literals for now"))
+            | _ -> raise(Failure "Arrays declaration requires int expression"))
       | A.UserType(s,_) -> StringMap.find s m
-        (* Currently supporting only void, int and struct types *)
-      | _   -> raise (Failure "Only valid types are int/char/void/string/double/vec")
 
     in
 
@@ -69,13 +67,44 @@ let translate prog =
     let ltype_of_typ t = _ltype_of_typ struct_ltypes t
 
     in
+
+        (* LLvm value of a literal expression *)
+    let lvalue_of_lit = function
+        A.IntLit i -> L.const_int i32_t i
+      | A.CharLit c -> L.const_int i8_t (int_of_char c) (* 1 byte characters *)
+      | A.Noexpr -> L.const_int i32_t 0  (* No expression is 0 *)
+      | A.StringLit s -> let l = L.define_global "unamed." (L.const_stringz context s) the_module in
+                        L.const_bitcast (L.const_gep l [|L.const_int i32_t 0|]) i8ptr_t
+      | A.FloatLit f -> L.const_float double_t f
+      | A.VecLit(f1, f2) -> L.const_vector [|(L.const_float double_t f1) ; (L.const_float double_t f2)|]
+      | _ -> raise(Failure("Attempt to initialize global variable with a non-const"))
+    in
+    let const_null t = if t = A.String then (lvalue_of_lit (A.StringLit "")) else L.const_null(ltype_of_typ t)
+        in
     (* Declaring each global variable and storing value in a map.
        global_vars is a map of var names to llvm global vars representation.
        Global decls are three tuples (typ, name, initer) *)
     let global_vars =
+        let expand_list i max l t = A._expand_list i max l t const_null
+        in
+        let rec construct_initer t = function
+            A.Exprinit e -> lvalue_of_lit (fst(A.const_expr e))
+          | A.Listinit il -> (match t with
+                A.Array(t2,e) -> let len = A.get_int(fst(A.const_expr e)) in
+                  let l =  List.map (construct_initer t2) il in 
+                  let (i,l) = List.fold_left (fun (c,ol) m -> if c < len then (c+1,m::ol) else (c,ol)) (0,[]) l in
+                  let l = expand_list i len (List.rev l) t2 in
+                  L.const_array (ltype_of_typ t2)(Array.of_list l)
+              | A.UserType(n,_) ->
+                (* type of members *)
+                let dtl = List.map (fun (t,_)-> t) ((List.find ( fun s -> s.A.sname = n) prog.A.s).A.decls ) in
+                L.const_named_struct (ltype_of_typ t) (Array.of_list(List.map2 construct_initer dtl il))
+              | _ -> raise(Failure("Nested initializer cannot be used with "^(A.string_of_typ t)))
+            ) 
+          | A.Noinit -> const_null t
+        in
         let global_var m (t,n,i) = (* map (type,name,initer) *)
-        (* Ignoring initer for now and just setting to zero *)
-          let init = L.const_null(ltype_of_typ t)
+          let init = construct_initer t i
           (* Define the llvm global and add to the map *)
           in StringMap.add n (L.define_global n init the_module, t) m in
         List.fold_left global_var StringMap.empty globals in
@@ -314,9 +343,11 @@ let translate prog =
           let named_struct = L.named_struct_type context "shape_struct."
           in  L.struct_set_body named_struct [| i8ptr_t ; L.pointer_type void_i8p_t |] false ; named_struct
         in
-        let shape_list = unique_global "shape_list." (L.const_array shape_struct ( Array.make 100 (L.const_null shape_struct)))
+        let shape_list = unique_global "shape_list." (L.const_array shape_struct ( Array.make 1000 (L.const_null shape_struct)))
         in
         let shape_list_ind = unique_global "shape_list_ind." (L.const_int i32_t 0)
+        in
+        let tloop_on = unique_global "tloop_on." (L.const_int i32_t 0)
         in
         let do_seconds_call builder =
           let secptr = ignore(L.build_call  get_tday_func [|time_value ; L.const_null i8ptr_t |] "" builder);
@@ -368,7 +399,7 @@ let translate prog =
               Some f -> f
             | None -> get_draw_func)
         in
-        let get_idle_func loop_func =
+        let get_idle_func looptp loop_func =
            let idle_stop_condition steps idle_func target_bb builder =
               let bool_val = L.build_icmp  L.Icmp.Sge steps (L.build_load g_maxiter "maxiter" builder) "idlestpcond" builder in
               let merge_bb = L.append_block context "merge" idle_func in (* Merge block *)
@@ -399,7 +430,8 @@ let translate prog =
            let merge_builder = L.builder_at_end context merge_bb in
            let then_bb = L.append_block context "then" idle_func in
            let then_builder = L.builder_at_end context then_bb in
-           let stepinc = L.build_fptoui (L.build_fdiv lag delay "finc" then_builder) i32_t "stepinc" then_builder in
+           let stepinc = if looptp <> 0 then L.const_int i32_t 1 else
+              L.build_fptoui (L.build_fdiv lag delay "finc" then_builder) i32_t "stepinc" then_builder in
            let newsteps = L.build_add (L.build_load g_steps "steps" then_builder) stepinc "newsteps" then_builder in
            ignore(L.build_store newsteps g_steps then_builder);
            ignore (L.build_call loop_func [| |] "" then_builder);
@@ -417,31 +449,32 @@ let translate prog =
         let rec non_block_locals local_decls stmt_list scopes =
           let scopes =
             let locals = List.fold_left (fun m (t, n,_) -> StringMap.add n (L.const_int i32_t 0,t) m ) StringMap.empty local_decls
-            in (locals, LocalScope)::scopes
+            in (locals, ClosureScope)::scopes (* use closure scope for closure locals*)
           in
           let rec scope_iter n scopes =
             let hd = List.hd scopes in 
                 (match hd with
-                    (globs, GlobalScope) -> fst(StringMap.find n globs)
-                  | (locls, LocalScope)  -> ( try fst(StringMap.find n locls)
-                                              with Not_found -> scope_iter n (List.tl scopes) )
+                    (globs, GlobalScope) -> ignore(StringMap.find n globs);GlobalScope
+                  | (locls, LocalScope)  -> ( try ignore(StringMap.find n locls);LocalScope
+                                              with Not_found -> scope_iter n (List.tl scopes))
                   | (_, StructScope) -> raise (Failure ("No struct scope in closure"))
-                  | (_, ClosureScope)  -> raise (Failure ("No nested closure"))
+                  | (locls, ClosureScope)  -> ( try ignore(StringMap.find n locls);ClosureScope
+                                              with Not_found -> scope_iter n (List.tl scopes))
                 )
           in
           let rec non_local_expr (e,_) = non_local_baseexpr e
           and non_local_baseexpr = function
-              A.Id s -> (try ignore(scope_iter s scopes); StringSet.empty with Not_found -> StringSet.singleton s)
+              A.Id s -> (try (if (scope_iter s scopes)<>LocalScope then StringSet.empty else StringSet.singleton s ) 
+                      with Not_found -> StringSet.singleton s)
             | A.Vecexpr(e1,e2) -> StringSet.union (non_local_expr e1)  (non_local_expr e2)
             | A.Binop(e1,_,e2) -> StringSet.union (non_local_expr e1)  (non_local_expr e2)
             | A.Asnop(e1,_,e2) -> StringSet.union (non_local_expr e1)  (non_local_expr e2)
             | A.Unop(_,e)      -> non_local_expr e
             | A.Posop(_,e)     -> non_local_expr e
-            | A.Trop(_,e1,e2,e3) -> StringSet.union (non_local_expr e1) (StringSet.union (non_local_expr e2)  (non_local_expr e3))
             | A.Call(e1,el)  -> StringSet.union (match e1 with (A.Id s,_) -> StringSet.empty | _ -> non_local_expr e1) 
                                  ( List.fold_left (fun set e-> StringSet.union set (non_local_expr e)) StringSet.empty el)
             | A.Index(e1, e2)-> StringSet.union (non_local_expr e1)  (non_local_expr e2)
-            | A.Member(e, _) -> non_local_expr e
+            | A.Member(e, _) | A.Promote(e) -> non_local_expr e
             | _  -> StringSet.empty
           in
           let rec non_local = function
@@ -519,7 +552,28 @@ let translate prog =
 
             (* Prepend the block local variables to the scopes list *)
             (* Prepend any initializers to the statment list *)
-            let (stmt_list, scopes) = 
+            let (stmt_list, scopes) =
+                let null_initer t = A._null_initer prog.A.s t in
+                (* takes the lvalue ast expression le to be evaluated and the initializer *)
+                let rec construct_initer (le,t) = function
+                    A.Exprinit e -> let e = (try A.const_expr e with Failure _ -> e) in
+                                  [A.Expr( A.Asnop((le,t),A.Asn, e),t)] 
+                  | A.Listinit il -> (match t with
+                        A.Array(t2,e) -> let arrlen = A.get_int(fst(A.const_expr e)) in
+                          (* Expand the initializer as appropriate *)
+                          let il = A._expand_list (List.length il) arrlen il t2 null_initer in
+                          (* Construct each initer upto the length of the array *)
+                          fst (List.fold_left (fun (il2,c) init -> if c < arrlen 
+                              then (il2@(construct_initer (A.Index((le,t),(A.IntLit(c),A.Int)),t2) init ) , c+1)
+                              else (il2,c)) ([],0) il)
+                      | A.UserType(n,_) ->
+                        (* decls list*)
+                        let ml = ((List.find ( fun s -> s.A.sname = n) prog.A.s).A.decls )  in
+                        List.fold_left2 (fun il2 (t2,n) init -> il2@(construct_initer (A.Member((le,t),n),t2) init )) [] ml il
+                      | _ -> raise(Failure("Nested initializer cannot be used with "^(A.string_of_typ t)))
+                    ) 
+                  | (*A.Noinit*)_ -> []
+                in 
                 let add_local m (t,n) =
                   (* Currently all block local variables are allocated at the entry block 
                      This prevents multiple allocas for loop local variables. The only issue with this
@@ -527,8 +581,11 @@ let translate prog =
                      (* NOTE this translation should be moved to the semantic part of the code *)
                   let builder = L.builder_at context (L.instr_begin(L.entry_block the_function)) in
                   let local_var = L.build_alloca (ltype_of_typ t) n builder (* allocate space for local *)
-                  in StringMap.add n (local_var,t) m in
-                let (stmt_list, local_decls) = List.fold_left
+                  in StringMap.add n (local_var,t) m 
+                in
+                let stmt_list = (List.fold_left (fun l (t,n,i) -> l@(construct_initer (A.Id(n),t) i)) [] local_decls)@stmt_list
+                and local_decls = List.map (fun (t,n,_) -> (t,n)) local_decls in
+                (*List.fold_left
                       (* Handle expression initers by adding them as assignment expression statments *)
                       (fun (sl, ld) (t,n,i) -> 
                             ( match i with A.Exprinit e -> A.Expr( A.Asnop((A.Id(n),t),A.Asn, e),t)::sl , (t,n)::ld  
@@ -537,14 +594,12 @@ let translate prog =
                       ) (stmt_list, [])
                     (* Need to reverse since we are pushing to top of stmt_list. Luckily, the fold unreversed local_decls *)
                     (List.rev local_decls)
-                in
+                in*)
                 let locals =  List.fold_left add_local StringMap.empty local_decls
                 in stmt_list,(locals, LocalScope)::scopes
             in
 
-            let string_create s builder =
-              let str = L.build_global_stringptr s "temp" builder in
-              L.build_in_bounds_gep str [|L.const_int i32_t 0|] "temps" builder
+            let string_create s builder = L.build_global_stringptr s "temp" builder
             in
             (* Return the value for a variable by going through the scope chain *)
             let rec _lookup n builder scopes =
@@ -606,6 +661,7 @@ let translate prog =
             let rec expr_type (e,_) = baseexpr_type e
             and baseexpr_type  = function
               A.IntLit i -> ("int", A.Int)
+            | A.CharLit _ -> ("char",A.Char)
             | A.FloatLit f -> ("double", A.Float)
             | A.Id s -> let t =  lookup_type s in (string_of_typ2 t, t)
             | A.VecLit(f1, f2) -> ("vec", A.Vec)
@@ -623,7 +679,7 @@ let translate prog =
                           in let t = fst(StringMap.find s varmap)
                           in (string_of_typ2 t, t)
             | A.StringLit s -> ("string",A.String)
-            |e -> raise (Failure ("Unsupported Expression for expr_type"^A.string_of_baseexpr e))
+            |e -> raise (Failure ("Unsupported Expression for expr_type "^A.string_of_baseexpr e))
 
             in
 
@@ -644,6 +700,18 @@ let translate prog =
 
             
             let match_type typ op =
+                  (* Adds an int_cast to the llvmop *)
+                  let bit_to_int llvmop v1 v2 s builder =
+                    let v = llvmop v1 v2 s builder in
+                    L.build_zext_or_bitcast v i32_t s builder
+                  in
+                  let vec_cmp vop iop v1 v2 s builder =
+                    let bv = vop v1 v2 s builder in
+                    let i1 = L.build_extractelement bv (L.const_int i32_t 0) "i1" builder
+                    and i2 = L.build_extractelement bv (L.const_int i32_t 1) "i2" builder in
+                    let ir = iop i1 i2 "ir" builder in
+                    L.build_zext_or_bitcast ir i32_t s builder
+                  in
                   let float_type = (L.type_of (L.const_float double_t 1.1))
                   and vec_type = L.type_of(L.const_vector [|L.const_float double_t 1.1 ; L.const_float double_t 1.1 |])
                 in 
@@ -653,24 +721,25 @@ let translate prog =
                     | A.Sub     -> L.build_fsub
                     | A.Mult    -> L.build_fmul
                     | A.Div     -> L.build_fdiv
-                    | _         -> raise (Failure "Unsupported binary operation for vectors")
+                    | A.Equal   -> vec_cmp (L.build_fcmp L.Fcmp.Oeq) L.build_and
+                    | A.Neq     -> vec_cmp (L.build_fcmp L.Fcmp.One) L.build_or
+                    | _         -> raise (Failure ("Unsupported binary operation for vec: "^A.string_of_op(op)))
 
                 else if typ=float_type
                   then match op with
-                    A.Add -> L.build_fadd
+                      A.Add -> L.build_fadd
                     | A.Sub     -> L.build_fsub
                     | A.Mult    -> L.build_fmul
                     | A.Div     -> L.build_fdiv
-                    | A.And     -> L.build_and
-                    | A.Or      -> L.build_or
                     | A.Mod     -> raise (Failure "Cannot mod a float")
                     (* Need to think about these ops *)
-                    | A.Equal   -> L.build_fcmp L.Fcmp.Oeq
-                    | A.Neq     -> L.build_fcmp L.Fcmp.One
-                    | A.Less    -> L.build_fcmp L.Fcmp.Olt
-                    | A.Leq     -> L.build_fcmp L.Fcmp.Ole
-                    | A.Greater -> L.build_fcmp L.Fcmp.Ogt
-                    | A.Geq     -> L.build_fcmp L.Fcmp.Oge
+                    | A.Equal   -> bit_to_int (L.build_fcmp L.Fcmp.Oeq)
+                    | A.Neq     -> bit_to_int (L.build_fcmp L.Fcmp.One)
+                    | A.Less    -> bit_to_int (L.build_fcmp L.Fcmp.Olt)
+                    | A.Leq     -> bit_to_int (L.build_fcmp L.Fcmp.Ole)
+                    | A.Greater -> bit_to_int (L.build_fcmp L.Fcmp.Ogt)
+                    | A.Geq     -> bit_to_int (L.build_fcmp L.Fcmp.Oge)
+                    | _         -> raise (Failure ("Unsupported binary operation for float: "^A.string_of_op(op)))
                     
                 else match op with
                     A.Add -> L.build_add
@@ -680,12 +749,12 @@ let translate prog =
                     | A.And     -> L.build_and
                     | A.Or      -> L.build_or
                     | A.Mod     -> L.build_srem
-                    | A.Equal   -> L.build_icmp L.Icmp.Eq
-                    | A.Neq     -> L.build_icmp L.Icmp.Ne
-                    | A.Less    -> L.build_icmp L.Icmp.Slt
-                    | A.Leq     -> L.build_icmp L.Icmp.Sle
-                    | A.Greater -> L.build_icmp L.Icmp.Sgt
-                    | A.Geq     -> L.build_icmp L.Icmp.Sge
+                    | A.Equal   -> bit_to_int (L.build_icmp L.Icmp.Eq)
+                    | A.Neq     -> bit_to_int (L.build_icmp L.Icmp.Ne)
+                    | A.Less    -> bit_to_int (L.build_icmp L.Icmp.Slt)
+                    | A.Leq     -> bit_to_int (L.build_icmp L.Icmp.Sle)
+                    | A.Greater -> bit_to_int (L.build_icmp L.Icmp.Sgt)
+                    | A.Geq     -> bit_to_int (L.build_icmp L.Icmp.Sge)
               
             in
             let vec_scalar_mult e1'' e2'' builder =
@@ -746,7 +815,19 @@ let translate prog =
 
     
             (* Construct code for an expression; return its value *)
-            and expr builder (e,_) = baseexpr builder e
+            and expr builder =  function
+                  (A.Promote (e,st), tt) ->
+                  (match (st,tt) with 
+                       (A.Int,A.Float) -> L.build_sitofp (baseexpr builder e) double_t "tmp" builder
+                     | (A.Int,A.Vec)   -> expr builder (A.Promote(A.Promote (e,st),A.Float), tt)
+                     | (A.Float,A.Vec) -> let e' = (baseexpr builder e) in
+                           let vec = L.const_vector [| L.const_float double_t 0.0 ; L.const_float double_t 0.0 |] in
+                           let i1 = L.build_insertelement vec e' (L.const_int i32_t 0) "tmp1" builder in
+                           L.build_insertelement i1 e' (L.const_int i32_t 1) "tmp2" builder
+
+                     | _ ->  raise (Failure ("Unsupported promotion from "^(A.string_of_typ st)^" to "^(A.string_of_typ tt)))
+                  )
+                | (e,_) -> baseexpr builder e
             and baseexpr builder = function (* Takes args builder and Ast.expr *)
                 A.IntLit i -> L.const_int i32_t i
               | A.CharLit c -> L.const_int i8_t (int_of_char c) (* 1 byte characters *)
@@ -789,26 +870,49 @@ let translate prog =
 
               | A.Asnop (el, op, er) ->
                    let el' = lexpr builder el in
-                   let (_,t) = el in
                    (match op with
                        A.Asn -> let e' = expr builder er in
                                  ignore (L.build_store e' el' builder); e'
                        (* The code here must change if supporting non-identifiers *)
-                     | A.CmpAsn bop -> let e' = expr builder (A.Binop(el, bop, er),t) in
-                                 ignore (L.build_store e' el' builder); e'
+                     | A.CmpAsn bop ->
+                            let e' = 
+                               let e1' = L.build_load el' "ltmp" builder
+                                and e2' = expr builder er
+                                and float_type = L.type_of(L.const_float double_t 1.1)
+                                and vec_type = L.type_of(L.const_vector [|L.const_float double_t 1.1 ; L.const_float double_t 1.1 |])
+                                in
+                                  let type_of_e1' = L.type_of(e1') and type_of_e2' = L.type_of(e2')
+                                in 
+                                if type_of_e1' <> type_of_e2'
+                                    then let ret= convert_type e1' e2' builder
+                                        in let x = fst ret and y = snd ret
+                                        in 
+                                        (if ((L.type_of x) = vec_type || (L.type_of y) = vec_type) && bop = A.Mult
+                                          then vec_scalar_mult x y builder (*Handle vector scalar multiplication *)
+                                          else match_type float_type bop x y "temp" builder
+                                        )
+                                    else
+                                      match_type type_of_e1' bop e1' e2' "tmp" builder
+                            in ignore(L.build_store e' el' builder); e'
                    )
 
               | A.Unop(op, e) ->
-                  let e' = expr builder e in
-                    let leftyp1=(L.type_of (L.const_int i32_t 1)) and leftyp2 = (L.type_of (L.const_float double_t 1.1))
-                     and leftyp3=(L.type_of e') in
                   (match op with
-                    A.Neg     -> (if leftyp1 = leftyp3 then (L.build_neg) else (L.build_fneg))
-                  | A.Not     -> L.build_not
-                  | _  -> raise (Failure "Unsupported unary op")(* Ignore other unary ops *)
-                    ) e' "tmp" builder
-
-
+                    A.Neg  ->
+                          (match snd(expr_type e) with A.Int -> L.build_neg
+                            | A.Float | A.Vec -> L.build_fneg | t -> raise (Failure ("Negation not supported for "^A.string_of_typ(t)))
+                          ) (expr builder e) "tmp" builder
+                  | A.Not     -> L.build_not (expr builder e) "tmp" builder
+                  | A.Pos     -> expr builder e
+                  | A.Preinc | A.Predec -> let e' = lexpr builder e in
+                                 let ev = L.build_load e' "tmp" builder in
+                                 let ev = (if op = A.Preinc then L.build_add else L.build_sub) ev (L.const_int i32_t 1) "tmp" builder in
+                                 ignore(L.build_store ev e' builder); ev
+                  ) 
+              | A.Posop(op,e) -> let e' = lexpr builder e in
+                                 let ev = L.build_load e' "tmp" builder in
+                                 let ev2 = (if op = A.Postinc then L.build_add else L.build_sub) ev (L.const_int i32_t 1) "tmp" builder in
+                                 ignore(L.build_store ev2 e' builder); ev
                 (* This ok only for few built_in functions *)
               | A.Call ((A.Id "printi", _),[e]) -> L.build_call printf_func [|int_format_str ; (expr builder e) |] "printf" builder
               | A.Call ((A.Id "printc", _),[e]) -> L.build_call printf_func [|char_format_str ; (expr builder e) |] "printf" builder
@@ -888,7 +992,7 @@ let translate prog =
                  let result = (match fdecl.A.rettyp with A.Void -> "" (* don't name result for void llvm issue*)
                                                     | _ -> s^"_result") in
                  L.build_call fdef (Array.of_list actuals) result builder
-              |  e -> raise (Failure ("Unsupported expression: "^(A.string_of_baseexpr e)))(* Ignore other expressions *)
+              | _ ->  raise (Failure ("Promote should be handled in expr not bexpr"))
             in
 
             (* Build the code for the given statement; return the builder for
@@ -918,7 +1022,7 @@ let translate prog =
                     A.Void -> build_custom_ret_void builder
                     | _ -> L.build_ret (expr builder e) builder); builder
                 | A.If (predicate, then_stmt, else_stmt) ->
-                    let bool_val = expr builder predicate in
+                    let bool_val = (L.build_icmp L.Icmp.Ne)(expr builder predicate) (L.const_int i32_t 0) "itob" builder in
                     let merge_bb = L.append_block context "merge" the_function in (* Merge block *)
                     let then_bb = L.append_block context "then" the_function in
                     (* Get the builder for the then block, emit then_stmt and then add branch statement to
@@ -944,7 +1048,7 @@ let translate prog =
                     (L.build_br pred_bb);
 
                     let pred_builder = L.builder_at_end context pred_bb in
-                    let bool_val = expr pred_builder predicate in
+                    let bool_val = (L.build_icmp L.Icmp.Ne) (expr pred_builder predicate) (L.const_int i32_t 0) "itob" pred_builder in
 
                     let merge_bb = L.append_block context "merge" the_function in
                     ignore (L.build_cond_br bool_val body_bb merge_bb pred_builder);
@@ -954,7 +1058,8 @@ let translate prog =
                 | A.For (e1, e2, e3, body) -> stmt builder
                     ( A.Block ( [], [  A.Expr e1; A.While (e2, A.Block ([], [body; A.Expr e3],A.PointContext) ) ] , A.PointContext) )
                 | A.ForDec (vdecls, e2, e3, body) -> stmt builder ( A.Block(vdecls, [A.For((A.Noexpr,A.Void) , e2, e3, body)], A.PointContext) )
-                | A.Timeloop(s1, e1, s2, e2, stmt) ->
+                | A.Timeloop(s1, e1, s2, e2, stmt) | A.Frameloop(s1, e1, s2, e2, stmt) as s->
+                    let loop = (match s with A.Timeloop(_,_,_,_,_) -> 0 | _ -> 1) in (* 0 for time and 1 for frame *)
                     let ftype = L.function_type void_t [| |] in
                     let fdef = L.define_function "timeloop." ftype the_module in
                     let loopdecl = {A.rettyp = A.Void ; A.fname = "timeloop." ; A.params = [];
@@ -962,9 +1067,29 @@ let translate prog =
                                     A.body = [stmt]; A.typ = A.Func ; A.owner=""} in
                     let fdecls = StringMap.add "timeloop." (fdef, loopdecl) function_decls in
                     let outnames = StringSet.elements ( non_block_locals loopdecl.A.locals 
-                                  loopdecl.A.body [(global_vars, GlobalScope)] )
+                                  loopdecl.A.body scopes )
                     in  
-                    let table = (*ignore(prerr_endline("[" ^ String.concat ", " outnames ^"]"));*)
+
+
+                    (* Check to see if the tloop_on flag is active *)
+                    let t_off = (L.build_icmp L.Icmp.Eq)(L.build_load tloop_on "tflag" builder) 
+                               (L.const_int i32_t 0) "t_on" builder in
+                    let merge_bb = L.append_block context "merge" the_function in (* Merge block *)
+                    let then_bb = L.append_block context "then" the_function in
+
+                    let else_bb = L.append_block context "else" the_function in
+                    add_terminal (L.builder_at_end context else_bb) (L.build_br merge_bb);
+                    (* add_terminal used to avoid insert two terminals to basic blocks *)
+
+                    (* builder is in block that contains if stmt *)
+                    ignore (L.build_cond_br t_off then_bb else_bb builder);
+
+                    let builder =  L.builder_at_end context then_bb in
+
+
+
+                    let table =  (* Mark timeloop active flag *)
+                                ignore(L.build_store (L.const_int i32_t 1) tloop_on builder);
                                 L.build_array_malloc i8ptr_t (L.const_int i32_t (List.length outnames)) "ctable" builder
                     in
                     let tablearr = L.build_bitcast table (L.pointer_type(L.array_type i8ptr_t (List.length outnames))) "ctablearr" builder in
@@ -983,15 +1108,18 @@ let translate prog =
                     (* Setup the timer and stepper values *)
                     ignore(L.build_store (do_seconds_call builder) g_last_time builder);
                     let e1' = expr builder e1 in let e2' = expr builder e2 in
-                    ignore(L.build_store e1' g_delay builder);
+                    let delayflt = if loop = 0 then e1' else L.build_fdiv (L.const_float double_t 1.0) e1' "dfstps" builder in
+                    ignore(L.build_store delayflt g_delay builder);
                     ignore(L.build_store (L.const_int i32_t 0) g_steps builder);
-                    let delayflt = L.build_fdiv e2' e1' "stepsflt" builder in
-                    ignore(L.build_store (L.build_fptoui delayflt i32_t "stepsflt" builder) g_maxiter builder);
-                    ignore(do_glut_init dummy_arg_1 (L.const_bitcast dummy_arg_2 i8ptrptr_t) glut_argv_0 (get_unique_draw_func())  (get_idle_func fdef)builder);
+                    let stepsflt = if loop = 0 then L.build_fdiv e2' e1' "stpft" builder else e2' in
+                    ignore(L.build_store (L.build_fptoui stepsflt i32_t "stepsint" builder) g_maxiter builder);
+                    ignore(do_glut_init dummy_arg_1 (L.const_bitcast dummy_arg_2 i8ptrptr_t) glut_argv_0 (get_unique_draw_func())  (get_idle_func loop fdef)builder);
                     ignore(L.build_free table builder); 
+                    ignore(L.build_store (L.const_int i32_t 0) tloop_on builder);
                     ignore(L.build_store (L.const_int i32_t 0) shape_list_ind builder);
-                    builder
-                | t -> raise (Failure ("Unsupported statement type "^A.string_of_stmt t))(* Ignore other statement type *)
+                    add_terminal builder (L.build_br merge_bb);
+
+                    L.builder_at_end context merge_bb (* Return builder at end of merge block *)
             in
             (* Build the code for each statement in the block 
               and return the builder *)
@@ -1017,7 +1145,7 @@ let translate prog =
         (* Add a return if the last block falls off the end *)
         add_terminal builder (match fdecl.A.rettyp with
             A.Void -> build_custom_ret_void
-          | t -> L.build_ret (L.const_int (ltype_of_typ t) 0))
+          | t -> L.build_ret (const_null t))
     in
     (* old build_function_body *)
     let build_function_body fdecl = _build_function_body fdecl function_decls []

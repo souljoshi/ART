@@ -90,8 +90,8 @@ rule token = parse
 | "while"     { WHILE }
 | "timeloop"  { TLOOP }
 | "frameloop" { FLOOP }
-| "break"     { BREAK }
-| "continue"  { CONTINUE }
+(*| "break"     { BREAK }
+| "continue"  { CONTINUE }*)
 | "return"    { RETURN }
 (* Builtin Types *)
 | "void"        { VOID }

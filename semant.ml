@@ -22,6 +22,7 @@ let struct_build prog =
     in  
     (* A map of all struct/shape types *)
     let structs = List.fold_left ( fun m st -> report_dup(fun n-> "Duplicate member variable named " ^n ^" in struct " ^ st.sname)(List.map (fun (t,n) ->  n)st.decls); StringMap.add st.sname st m)
+
                 StringMap.empty prog.s in
 
                  List.iter(fun fd -> List.iter(fun (t,n)-> (match t with 
@@ -228,6 +229,7 @@ in
             |(Id s, _) as s1 ->  (Id s, ret_type s)
             |(Promote s, _) -> (Promote s ,Float)
             |(Binop(e1,op,e2),_) -> let (e1',t1') = (expr_b e1) and (e2',t2')=(expr_b e2) in
+
             (match op with
                 Add|Sub|Mult|Div|Mod when t1'=Int && t2'=Int -> (Binop((e1',t1'),op,(e2',t2')),Int)
                 |Add|Sub|Mult|Div when t1'=Vec&&t2'=Vec -> (Binop((e1',t1'),op,(e2',t2')),Vec)
@@ -340,26 +342,12 @@ in
                 (Id(s1),Int) -> (Posop(s,(e2')),Int)
                 |(Index(e1,e2),Int) -> (Posop(s,(e2')),Int)
                 |_ -> raise(Failure("PostInc or PostDec cannot be applied to " ^ Ast.string_of_expr e2))
-            )
-
-            |(Trop(sz,e1,e2,e3),_) -> let (e1',t1')=(expr_b e1) and (e2',t2')=(expr_b e2) and (e3',t3')=(expr_b e3)
-                                 in if(t1'!=Int)
-                                    then raise(Failure("Need a Condtional statement"))
-                                else(
-                                    if(t1'=t2')
-                                        then (Trop(sz,(e1',t1'),(e2',t2'),(e3',t3')),t1')
-                                    else if(t1'=Float&&t2'=Int)
-                                        then (Trop(sz,(e1',t1'),(Promote((e2',t2')),Float),(e3',t3')),t1')
-                                    else if(t1'=Int&&t2'=Float)
-                                            then (Trop(sz,(Promote((e1',t1')),Float),(e2',t2'),(e3',t3')),t1')
-                                    else 
-                                        raise(Failure("Cannot return incompatiable types"))
-                                    )
+                )
             |(Index(e1,e2),_) -> let (e1',t1') = (expr_b e1) and (e2',t2') = (expr_b e2) (* ALLOW VECTOR INDEXING *)
                             in let te1' = (match t1' with
-                             Array(t,_) -> t
-                             |Vec -> Float
-                            | _-> raise(Failure("Indexing only supported for arrays and vectors"))
+                               Array(t,_) -> t
+                             | Vec -> Float
+                             | _-> raise(Failure("Indexing only supported for arrays and vectors"))
                                 )
                             in 
                             if t2'!= Int
@@ -427,7 +415,7 @@ in
                     if e1' = Float && e2' = Float 
                         then ()
                     else raise(Failure("Frameloop definition only accepts expressions of type double"))
-            | Break | Continue -> () (* COMPLICATED: CHECK If in Loop *)
+
         in 
         let check_ret () = match stmt_list with
             [Return _ ] -> ()

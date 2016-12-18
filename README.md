@@ -32,4 +32,9 @@ You can view the test log in ``` testall.log ```.
 
 Clean the test files with ``` make clean-tests ```.
 
+--> Before testing test files, first make sure they compile by doing the following inside the ART directory
+    - make clean
+    - make art
+    - bash ./compile .tests/name-of-your-test.art ./abc --> if this doesn't fail it compiles!
+    - ./abc --> this checks your output.
 
