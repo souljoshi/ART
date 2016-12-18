@@ -15,7 +15,12 @@ let report_dup  exceptf list =
 let check_ass lval rval err =
     if lval = rval then lval else 
     (match lval with 
-        UserType(s,ShapeType) when s=".shape" ->rval
+        UserType(s,ShapeType) when s=".shape" ->
+                                                (match rval with
+                                                UserType(_,s) -> if s=ShapeType then rval else raise(Failure("Cannot use structs in add shape"))
+                                                |_ -> raise(Failure("Trying to put non-Shape type into add shape"))
+
+                                                )
      (*Since addshape demands a string  for the name that it will use as a type I give it a String Dummy and will past semant*)
         |_-> raise err                        (*Since this is a special case I supsend the one to one checking and just use rval*)
     )
@@ -293,7 +298,7 @@ in
                 in 
                 let fd = e1' in
                     if List.length actuals != List.length fd.params then
-                            if fd.fname="addshape"&&(List.length actuals)>0 then () else raise (Failure ("Incorrect number of arguments in "^func.fname))
+                            if fd.fname="addshape"&&(List.length actuals=1) then () else raise (Failure ("Incorrect number of arguments in "^fd.fname))
                     else
                         List.iter2 (fun (t, s, p) e -> if p = Ref then 
                             let e = (expr_b e) in
@@ -371,12 +376,12 @@ in
                                     |_ -> ()
                                     )) globals;
 
-    List.iter(fun (t,n,e) -> ( match t with 
-                                  Array(_,e)  -> let (e1',t1') = (expr_b e)
+    List.iter(fun (t,n,e1) -> ( match t with 
+                                  Array(_,e)  -> let (e1',t1') = (expr_b e) 
                                                         in
                                                         (match e1' with
                                                         | IntLit _ -> ()
-                                                        |_->  raise(Failure("Cannot declare any array without a intger constant not variables ")))                  
+                                                        |_->  raise(Failure("Cannot declare any array without a intger constant not variables ")))           
                                     |_ -> ()
                                     )) func.locals;
 
