@@ -210,10 +210,10 @@ stmt:
   | IF LPAREN expr RPAREN stmt %prec NOELSE { If($3, $5, Block([],[],PointContext)) }
   | IF LPAREN expr RPAREN stmt ELSE stmt    { If($3, $5, $7) }
 
-  | FOR LPAREN expr_opt SEMI expr_opt SEMI expr_opt RPAREN stmt
+  | FOR LPAREN expr_opt SEMI for_cond SEMI expr_opt RPAREN stmt
      { For($3, $5, $7, $9) }
   /* Deal with for with declaration */
-  | FOR LPAREN declaration expr_opt SEMI expr_opt RPAREN stmt
+  | FOR LPAREN declaration for_cond SEMI expr_opt RPAREN stmt
      { ForDec($3, $4, $6, $8) }
   | WHILE LPAREN expr RPAREN stmt { While($3, $5) }
 
@@ -254,6 +254,9 @@ expr_opt:
   /* nothing */ { (Noexpr,Void) }
   | expr          { $1 }
 
+for_cond:
+  /* nothing */ { (IntLit 1,Int) }
+  | expr        { $1 }
 expr:
   bexpr                     { $1 }
 
