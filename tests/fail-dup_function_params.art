@@ -1,0 +1,9 @@
+// Check duplicate function arguments
+
+void foo(int x, double x)
+{
+}
+
+int main()
+{
+}

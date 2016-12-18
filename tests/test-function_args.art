@@ -1,0 +1,31 @@
+// checking arguments of function against global var
+
+int x;
+
+void foo(int x)
+{
+	printi(x);
+	printc('\n');
+
+	x = 10;
+
+	printi(x);
+	printc('\n');
+}
+
+int main()
+{
+	x = 5;
+	printi(x);
+	printc('\n');
+
+	foo(x);
+
+	printi(x);
+	printc('\n');
+
+	foo(20);
+}
+
+
+	

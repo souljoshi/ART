@@ -1,0 +1,20 @@
+// check duplicate constructors
+
+struct circle 
+{
+	int radius;
+}
+
+circle::circle()
+{
+	radius = 10;
+}
+
+circle::circle()
+{
+	radius = 20;
+}
+
+int main()
+{
+}
