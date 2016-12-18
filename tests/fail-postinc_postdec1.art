@@ -1,0 +1,8 @@
+// check postinc, postdec
+
+int main()
+{
+	int x = 10;
+	x++; // ok
+	15++; // error 
+}
