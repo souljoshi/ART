@@ -68,23 +68,23 @@ let translate prog =
 
     in
 
+        (* LLvm value of a literal expression *)
+    let lvalue_of_lit = function
+        A.IntLit i -> L.const_int i32_t i
+      | A.CharLit c -> L.const_int i8_t (int_of_char c) (* 1 byte characters *)
+      | A.Noexpr -> L.const_int i32_t 0  (* No expression is 0 *)
+      | A.StringLit s -> let l = L.define_global "unamed." (L.const_stringz context s) the_module in
+                        L.const_bitcast (L.const_gep l [|L.const_int i32_t 0|]) i8ptr_t
+      | A.FloatLit f -> L.const_float double_t f
+      | A.VecLit(f1, f2) -> L.const_vector [|(L.const_float double_t f1) ; (L.const_float double_t f2)|]
+      | _ -> raise(Failure("Attempt to initialize global variable with a non-const"))
+    in
+    let const_null t = if t = A.String then (lvalue_of_lit (A.StringLit "")) else L.const_null(ltype_of_typ t)
+        in
     (* Declaring each global variable and storing value in a map.
        global_vars is a map of var names to llvm global vars representation.
        Global decls are three tuples (typ, name, initer) *)
     let global_vars =
-            (* LLvm value of a literal expression *)
-        let lvalue_of_lit = function
-            A.IntLit i -> L.const_int i32_t i
-          | A.CharLit c -> L.const_int i8_t (int_of_char c) (* 1 byte characters *)
-          | A.Noexpr -> L.const_int i32_t 0  (* No expression is 0 *)
-          | A.StringLit s -> let l = L.define_global "unamed." (L.const_stringz context s) the_module in
-                            L.const_bitcast (L.const_gep l [|L.const_int i32_t 0|]) i8ptr_t
-          | A.FloatLit f -> L.const_float double_t f
-          | A.VecLit(f1, f2) -> L.const_vector [|(L.const_float double_t f1) ; (L.const_float double_t f2)|]
-          | _ -> raise(Failure("Attempt to initialize global variable with a non-const"))
-        in
-        let const_null t = if t = A.String then (lvalue_of_lit (A.StringLit "")) else L.const_null(ltype_of_typ t)
-        in
         let expand_list i max l t = A._expand_list i max l t const_null
         in
         let rec construct_initer t = function
@@ -853,13 +853,30 @@ let translate prog =
 
               | A.Asnop (el, op, er) ->
                    let el' = lexpr builder el in
-                   let (_,t) = el in
                    (match op with
                        A.Asn -> let e' = expr builder er in
                                  ignore (L.build_store e' el' builder); e'
                        (* The code here must change if supporting non-identifiers *)
-                     | A.CmpAsn bop -> let e' = expr builder (A.Binop(el, bop, er),t) in
-                                 ignore (L.build_store e' el' builder); e'
+                     | A.CmpAsn bop ->
+                            let e' = 
+                               let e1' = L.build_load el' "ltmp" builder
+                                and e2' = expr builder er
+                                and float_type = L.type_of(L.const_float double_t 1.1)
+                                and vec_type = L.type_of(L.const_vector [|L.const_float double_t 1.1 ; L.const_float double_t 1.1 |])
+                                in
+                                  let type_of_e1' = L.type_of(e1') and type_of_e2' = L.type_of(e2')
+                                in 
+                                if type_of_e1' <> type_of_e2'
+                                    then let ret= convert_type e1' e2' builder
+                                        in let x = fst ret and y = snd ret
+                                        in 
+                                        (if ((L.type_of x) = vec_type || (L.type_of y) = vec_type) && bop = A.Mult
+                                          then vec_scalar_mult x y builder (*Handle vector scalar multiplication *)
+                                          else match_type float_type bop x y "temp" builder
+                                        )
+                                    else
+                                      match_type type_of_e1' bop e1' e2' "tmp" builder
+                            in ignore(L.build_store e' el' builder); e'
                    )
 
               | A.Unop(op, e) ->
@@ -1087,7 +1104,7 @@ let translate prog =
         (* Add a return if the last block falls off the end *)
         add_terminal builder (match fdecl.A.rettyp with
             A.Void -> build_custom_ret_void
-          | t -> L.build_ret (L.const_int (ltype_of_typ t) 0))
+          | t -> L.build_ret (const_null t))
     in
     (* old build_function_body *)
     let build_function_body fdecl = _build_function_body fdecl function_decls []
