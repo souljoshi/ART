@@ -18,7 +18,6 @@ let translate prog =
     (* Set up Llvm module and context *)
     let context = L.global_context () in 
     let the_module = L.create_module context "ART"
-    and i1_t  = L.i1_type context
     and i32_t = L.i32_type context
     and i64_t = L.i64_type context
     and i8_t   = L.i8_type   context
@@ -658,6 +657,7 @@ let translate prog =
             let rec expr_type (e,_) = baseexpr_type e
             and baseexpr_type  = function
               A.IntLit i -> ("int", A.Int)
+            | A.CharLit _ -> ("char",A.Char)
             | A.FloatLit f -> ("double", A.Float)
             | A.Id s -> let t =  lookup_type s in (string_of_typ2 t, t)
             | A.VecLit(f1, f2) -> ("vec", A.Vec)
@@ -864,16 +864,22 @@ let translate prog =
                    )
 
               | A.Unop(op, e) ->
-                  let e' = expr builder e in
-                    let leftyp1=(L.type_of (L.const_int i32_t 1)) and leftyp2 = (L.type_of (L.const_float double_t 1.1))
-                     and leftyp3=(L.type_of e') in
                   (match op with
-                    A.Neg     -> (if leftyp1 = leftyp3 then (L.build_neg) else (L.build_fneg))
-                  | A.Not     -> L.build_not
-                  | _  -> raise (Failure "Unsupported unary op")(* Ignore other unary ops *)
-                    ) e' "tmp" builder
-
-
+                    A.Neg  ->
+                          (match snd(expr_type e) with A.Int -> L.build_neg
+                            | A.Float | A.Vec -> L.build_fneg | t -> raise (Failure ("Negation not supported for "^A.string_of_typ(t)))
+                          ) (expr builder e) "tmp" builder
+                  | A.Not     -> L.build_not (expr builder e) "tmp" builder
+                  | A.Pos     -> expr builder e
+                  | A.Preinc | A.Predec -> let e' = lexpr builder e in
+                                 let ev = L.build_load e' "tmp" builder in
+                                 let ev = (if op = A.Preinc then L.build_add else L.build_sub) ev (L.const_int i32_t 1) "tmp" builder in
+                                 ignore(L.build_store ev e' builder); ev
+                  ) 
+              | A.Posop(op,e) -> let e' = lexpr builder e in
+                                 let ev = L.build_load e' "tmp" builder in
+                                 let ev2 = (if op = A.Postinc then L.build_add else L.build_sub) ev (L.const_int i32_t 1) "tmp" builder in
+                                 ignore(L.build_store ev2 e' builder); ev
                 (* This ok only for few built_in functions *)
               | A.Call ((A.Id "printi", _),[e]) -> L.build_call printf_func [|int_format_str ; (expr builder e) |] "printf" builder
               | A.Call ((A.Id "printc", _),[e]) -> L.build_call printf_func [|char_format_str ; (expr builder e) |] "printf" builder
@@ -983,7 +989,7 @@ let translate prog =
                     A.Void -> build_custom_ret_void builder
                     | _ -> L.build_ret (expr builder e) builder); builder
                 | A.If (predicate, then_stmt, else_stmt) ->
-                    let bool_val = L.build_intcast (expr builder predicate) i1_t "itob" builder in
+                    let bool_val = (L.build_icmp L.Icmp.Ne)(expr builder predicate) (L.const_int i32_t 0) "itob" builder in
                     let merge_bb = L.append_block context "merge" the_function in (* Merge block *)
                     let then_bb = L.append_block context "then" the_function in
                     (* Get the builder for the then block, emit then_stmt and then add branch statement to
@@ -1009,7 +1015,7 @@ let translate prog =
                     (L.build_br pred_bb);
 
                     let pred_builder = L.builder_at_end context pred_bb in
-                    let bool_val = L.build_intcast (expr pred_builder predicate) i1_t "itob" pred_builder in
+                    let bool_val = (L.build_icmp L.Icmp.Ne) (expr pred_builder predicate) (L.const_int i32_t 0) "itob" pred_builder in
 
                     let merge_bb = L.append_block context "merge" the_function in
                     ignore (L.build_cond_br bool_val body_bb merge_bb pred_builder);
