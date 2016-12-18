@@ -324,7 +324,7 @@ in
 
                             List.iter2 (fun (ft, _,_) e -> let et = snd(expr_b e) in
                                 ignore (check_ass ft et
-                                (Failure ("Illegal argument " ^ Ast.string_of_typ ft ^ " "^Ast.string_of_typ et^ " in call to function "^fd.fname)))
+                                (Failure ("Illegal argument of type "^Ast.string_of_typ et^ " in call to function "^fd.fname^ " which expects argument of type " ^ Ast.string_of_typ ft)))
                             ) fd.params actuals;
                         )
                         else ();        
