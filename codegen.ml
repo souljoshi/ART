@@ -18,6 +18,7 @@ let translate prog =
     (* Set up Llvm module and context *)
     let context = L.global_context () in 
     let the_module = L.create_module context "ART"
+    and i1_t  = L.i1_type context
     and i32_t = L.i32_type context
     and i64_t = L.i64_type context
     and i8_t   = L.i8_type   context
@@ -674,7 +675,7 @@ let translate prog =
                           in let t = fst(StringMap.find s varmap)
                           in (string_of_typ2 t, t)
             | A.StringLit s -> ("string",A.String)
-            |e -> raise (Failure ("Unsupported Expression for expr_type"^A.string_of_baseexpr e))
+            |e -> raise (Failure ("Unsupported Expression for expr_type "^A.string_of_baseexpr e))
 
             in
 
@@ -695,6 +696,18 @@ let translate prog =
 
             
             let match_type typ op =
+                  (* Adds an int_cast to the llvmop *)
+                  let bit_to_int llvmop v1 v2 s builder =
+                    let v = llvmop v1 v2 s builder in
+                    L.build_zext_or_bitcast v i32_t s builder
+                  in
+                  let vec_cmp vop iop v1 v2 s builder =
+                    let bv = vop v1 v2 s builder in
+                    let i1 = L.build_extractelement bv (L.const_int i32_t 0) "i1" builder
+                    and i2 = L.build_extractelement bv (L.const_int i32_t 1) "i2" builder in
+                    let ir = iop i1 i2 "ir" builder in
+                    L.build_zext_or_bitcast ir i32_t s builder
+                  in
                   let float_type = (L.type_of (L.const_float double_t 1.1))
                   and vec_type = L.type_of(L.const_vector [|L.const_float double_t 1.1 ; L.const_float double_t 1.1 |])
                 in 
@@ -704,24 +717,25 @@ let translate prog =
                     | A.Sub     -> L.build_fsub
                     | A.Mult    -> L.build_fmul
                     | A.Div     -> L.build_fdiv
-                    | _         -> raise (Failure "Unsupported binary operation for vectors")
+                    | A.Equal   -> vec_cmp (L.build_fcmp L.Fcmp.Oeq) L.build_and
+                    | A.Neq     -> vec_cmp (L.build_fcmp L.Fcmp.One) L.build_or
+                    | _         -> raise (Failure ("Unsupported binary operation for vec: "^A.string_of_op(op)))
 
                 else if typ=float_type
                   then match op with
-                    A.Add -> L.build_fadd
+                      A.Add -> L.build_fadd
                     | A.Sub     -> L.build_fsub
                     | A.Mult    -> L.build_fmul
                     | A.Div     -> L.build_fdiv
-                    | A.And     -> L.build_and
-                    | A.Or      -> L.build_or
                     | A.Mod     -> raise (Failure "Cannot mod a float")
                     (* Need to think about these ops *)
-                    | A.Equal   -> L.build_fcmp L.Fcmp.Oeq
-                    | A.Neq     -> L.build_fcmp L.Fcmp.One
-                    | A.Less    -> L.build_fcmp L.Fcmp.Olt
-                    | A.Leq     -> L.build_fcmp L.Fcmp.Ole
-                    | A.Greater -> L.build_fcmp L.Fcmp.Ogt
-                    | A.Geq     -> L.build_fcmp L.Fcmp.Oge
+                    | A.Equal   -> bit_to_int (L.build_fcmp L.Fcmp.Oeq)
+                    | A.Neq     -> bit_to_int (L.build_fcmp L.Fcmp.One)
+                    | A.Less    -> bit_to_int (L.build_fcmp L.Fcmp.Olt)
+                    | A.Leq     -> bit_to_int (L.build_fcmp L.Fcmp.Ole)
+                    | A.Greater -> bit_to_int (L.build_fcmp L.Fcmp.Ogt)
+                    | A.Geq     -> bit_to_int (L.build_fcmp L.Fcmp.Oge)
+                    | _         -> raise (Failure ("Unsupported binary operation for float: "^A.string_of_op(op)))
                     
                 else match op with
                     A.Add -> L.build_add
@@ -731,12 +745,12 @@ let translate prog =
                     | A.And     -> L.build_and
                     | A.Or      -> L.build_or
                     | A.Mod     -> L.build_srem
-                    | A.Equal   -> L.build_icmp L.Icmp.Eq
-                    | A.Neq     -> L.build_icmp L.Icmp.Ne
-                    | A.Less    -> L.build_icmp L.Icmp.Slt
-                    | A.Leq     -> L.build_icmp L.Icmp.Sle
-                    | A.Greater -> L.build_icmp L.Icmp.Sgt
-                    | A.Geq     -> L.build_icmp L.Icmp.Sge
+                    | A.Equal   -> bit_to_int (L.build_icmp L.Icmp.Eq)
+                    | A.Neq     -> bit_to_int (L.build_icmp L.Icmp.Ne)
+                    | A.Less    -> bit_to_int (L.build_icmp L.Icmp.Slt)
+                    | A.Leq     -> bit_to_int (L.build_icmp L.Icmp.Sle)
+                    | A.Greater -> bit_to_int (L.build_icmp L.Icmp.Sgt)
+                    | A.Geq     -> bit_to_int (L.build_icmp L.Icmp.Sge)
               
             in
             let vec_scalar_mult e1'' e2'' builder =
@@ -969,7 +983,7 @@ let translate prog =
                     A.Void -> build_custom_ret_void builder
                     | _ -> L.build_ret (expr builder e) builder); builder
                 | A.If (predicate, then_stmt, else_stmt) ->
-                    let bool_val = expr builder predicate in
+                    let bool_val = L.build_intcast (expr builder predicate) i1_t "itob" builder in
                     let merge_bb = L.append_block context "merge" the_function in (* Merge block *)
                     let then_bb = L.append_block context "then" the_function in
                     (* Get the builder for the then block, emit then_stmt and then add branch statement to
@@ -995,7 +1009,7 @@ let translate prog =
                     (L.build_br pred_bb);
 
                     let pred_builder = L.builder_at_end context pred_bb in
-                    let bool_val = expr pred_builder predicate in
+                    let bool_val = L.build_intcast (expr pred_builder predicate) i1_t "itob" pred_builder in
 
                     let merge_bb = L.append_block context "merge" the_function in
                     ignore (L.build_cond_br bool_val body_bb merge_bb pred_builder);
