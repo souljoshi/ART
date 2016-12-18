@@ -1,1 +1,1 @@
-Fatal error: exception Failure("Draw method must have return type Void and no parameters")
+Fatal error: exception Failure("draw method must have return type void, and no parameters")

@@ -1,1 +1,1 @@
-Fatal error: exception Failure("Cannot apply PreInc or PreDec to 15")
+Fatal error: exception Failure("PrecInc or PreDec cannot be applied to 15")

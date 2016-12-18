@@ -1,1 +1,1 @@
-Fatal error: exception Failure("Only float expressions are accepted in frameloop definition.")
+Fatal error: exception Failure("Frameloop definition only accepts expressions of type double")

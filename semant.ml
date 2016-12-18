@@ -15,13 +15,6 @@ let report_dup  exceptf list =
 let check_ass lval rval err =
     if lval = rval then lval else raise err                        (*Since this is a special case I supsend the one to one checking and just use rval*)
 
-
-    let check_add_shape actuals =
-        List.iter(fun (t,_,_) -> (match t with
-                    UserType(_,ShapeType) -> ()
-                    | _ -> raise(Failure("Must be a shape type"))
-                  )) actuals
-
 let struct_build prog =
     let globals = prog.v
     and functions = prog.f
@@ -32,7 +25,7 @@ let struct_build prog =
                 StringMap.empty prog.s in
 
                  List.iter(fun fd -> List.iter(fun (t,n)-> (match t with 
-                                                UserType(s,_) -> if(fd.sname = s) then raise(Failure("Cannot nest struct/shape "^fd.sname^" within itself ")) else let x= StringMap.mem s structs in if x=false then raise(Failure("Must define struct "^s ^" before using it in struct "^fd.sname))            
+                                                UserType(s,_) -> if(fd.sname = s) then raise(Failure("Cannot nest struct/shape "^fd.sname^" within itself")) else let x= StringMap.mem s structs in if x=false then raise(Failure("Struct "^s ^" must be defined before using it in struct "^fd.sname))            
                                                 | _-> ()   
                                                 ))fd.decls) prog.s;
     let (structs,funcs) = (* Refers to structs and non-member functions *)
@@ -42,15 +35,15 @@ let struct_build prog =
           match f.typ with
             Func -> (m, true) (* true means keep function *)
           | Constructor -> let s = try StringMap.find f.owner m
-                    with Not_found -> raise (Failure ("constructor of undefined struct: " ^ f.owner^"::"^f.fname))
+                    with Not_found -> raise (Failure ("Constructor of undefined struct: " ^ f.owner^"::"^f.fname))
                 in if (s.ctor.fname="") then (StringMap.add s.sname
                             {ss = s.ss;sname = s.sname; decls = s.decls; ctor = f; methods = s.methods} m , false)
                         else
-                            raise(Failure("There already exists a constructor called " ^f.fname ^" in struct " ^s.sname))
+                            raise(Failure("A constructor called " ^f.fname ^" already exists in struct " ^s.sname))
           | Method -> let s = try StringMap.find f.owner m
-                    with Not_found -> raise (Failure ("method of undefined struct: " ^ f.owner^"::"^f.fname))
+                    with Not_found -> raise (Failure ("Method of undefined struct: " ^ f.owner^"::"^f.fname))
                 in try ignore( List.find (fun f2 -> f2.fname = f.fname) s.methods);
-                       raise(Failure("There already exists a method called " ^f.fname ^" in struct " ^s.sname))   
+                       raise(Failure("A method called " ^f.fname ^" already exists in struct " ^s.sname))   
                     with Not_found -> (StringMap.add s.sname
                                 {ss = s.ss;sname = s.sname; decls = s.decls; ctor = s.ctor; methods = f::s.methods} m , false)
         in
@@ -64,10 +57,10 @@ let struct_build prog =
                 if s.ss = ShapeType
                     then 
                         let draw = try List.find (fun f2 -> f2.fname = "draw") s.methods
-                        with Not_found -> raise (Failure ("No draw method in Shape")) s.methods
+                        with Not_found -> raise (Failure ("draw method not defined in shape "^s.sname)) s.methods
                         in 
                             if (draw.rettyp!=Void||draw.params!=[])
-                            then raise(Failure("Draw method must have return type Void and no parameters"))
+                            then raise(Failure("draw method must have return type void, and no parameters"))
                             else s.methods       
                 else s.methods}
         ) prog.s;
@@ -80,11 +73,11 @@ let check prog =
     and structs = prog.s
     in
     
-        report_dup(fun n-> "Duplicate Function Name " ^n)(List.map (fun fd -> fd.fname)functions); (*Does pretty basic superfical checking if there exists duplicate function names, global or structs*)
+        report_dup(fun n-> "Duplicate function name " ^n)(List.map (fun fd -> fd.fname)functions); (*Does pretty basic superfical checking if there exists duplicate function names, global or structs*)
 
-        report_dup(fun n-> "Duplicate Global Name " ^n)(List.map (fun (_,a,_) ->  a)globals);
+        report_dup(fun n-> "Duplicate global variable " ^n)(List.map (fun (_,a,_) ->  a)globals);
 
-        report_dup(fun n-> "Duplicate Struct Name " ^n)(List.map(fun st -> st.sname)structs); 
+        report_dup(fun n-> "Duplicate struct name " ^n)(List.map(fun st -> st.sname)structs); 
 
 let built_in_fun = StringMap.add "printi"
 {rettyp=Void; fname="printi";params=[(Int, "x",Value)];locals=[];body=[];typ=Func;owner="None"}
@@ -99,19 +92,19 @@ let built_in_fun = StringMap.add "printi"
 (*let function_decls =
     List.map(fun fd -> fd.fname) functions*)
 in 
-List.iter(fun fd -> let x= StringMap.mem fd.fname built_in_fun in if x=true then raise(Failure("Cannot redefine built in function " ^fd.fname)) else ())functions;        
+List.iter(fun fd -> let x= StringMap.mem fd.fname built_in_fun in if x=true then raise(Failure("Built-in function " ^fd.fname^ " cannot be redefined")) else ())functions;        
 let function_decls = List.fold_left (fun m fd -> StringMap.add fd.fname fd m)
                         built_in_fun functions
 
 
 in
 let function_decl s = try StringMap.find s function_decls       (*Builds a string map of name of func to function recored*)
-    with Not_found -> raise (Failure ("Unrecognized function " ^ s ^" did you forget to define it ?"))
+    with Not_found -> raise (Failure ("Unrecognized function " ^ s ^". Did you forget to define it?"))
 in
 
 let  main_check = let mn = function_decl "main" 
         in if(mn.rettyp!=Int)
-            then raise(Failure("Main must be defined as return type int"))
+            then raise(Failure("main function must have return type int"))
            else ()(*Makes sure that main is defined*)        
 in
     main_check;
@@ -126,7 +119,7 @@ let function_check func =
 
 (* Given struct give map of method names to method *)
     let get_member_funcs name = let st = try StringMap.find name struct_name_list (*creates a struct member funciontlist*)
-        with  Not_found -> raise(Failure("Could not find struct "^name))
+        with  Not_found -> raise(Failure("Undefined struct "^name))
         in List.fold_left(fun m s -> StringMap.add s.fname s m)
             StringMap.empty st.methods
     in 
@@ -137,7 +130,7 @@ let function_check func =
     
     (* Get map of memb_variables to their type *)
     let get_struct_member_var name = let st = try StringMap.find name struct_name_list
-        with  Not_found -> raise(Failure("Could not find struct "^name))
+        with  Not_found -> raise(Failure("Undefined struct "^name))
         in List.fold_left(fun m (t,n) -> StringMap.add n t m)
             StringMap.empty st.decls
     in
@@ -153,7 +146,7 @@ let function_check func =
     let get_mem_func_name name func =
         let temp = get_member_funcs name 
     in try StringMap.find func temp
-            with Not_found -> raise(Failure(func ^ " is not a member function of " ^name))
+            with Not_found -> raise(Failure(func ^ " is not a method of " ^name))
     in
 
     let formal_vars = List.fold_left(fun m(t,n,_)->StringMap.add n t m) StringMap.empty (func.params)
@@ -164,8 +157,8 @@ let function_check func =
                                                     | _ -> StringMap.add n t m
                                                     ))formal_vars (func.locals)
     in
-        report_dup(fun n-> "Duplicate Parameter Named " ^n ^" in " ^ func.fname)(List.map (fun (_,a,_) ->  a)func.params);    (*Checks is there exists duplicate parameter names and function local name*)
-        report_dup(fun n-> "Duplicate local Named " ^n ^ " in " ^ func.fname)
+        report_dup(fun n-> "Duplicate parameter " ^n ^" in " ^ func.fname)(List.map (fun (_,a,_) ->  a)func.params);    (*Checks is there exists duplicate parameter names and function local name*)
+        report_dup(fun n-> "Duplicate local variable " ^n ^ " in " ^ func.fname)
             ((List.map (fun (_,a,_) ->  a)func.params)@(List.map (fun (_,a,_) ->  a)func.locals));  
     
     
@@ -183,7 +176,7 @@ let function_check func =
         (* Prepend the block local variables to the scopes list *)
         (* Prepend any initializers to the statment list *)
         let (stmt_list, scopes) = 
-            report_dup(fun n-> "Duplicate local Name " ^n ^ " in " ^ func.fname)(List.map (fun (_,a,_) ->  a)local_decls);
+            report_dup(fun n-> "Duplicate local variable " ^n ^ " in " ^ func.fname)(List.map (fun (_,a,_) ->  a)local_decls);
             let add_local m (t,n) =  StringMap.add n t m in
                  (* NOTE this translation should be moved to the semantic part of the code *)
             let (stmt_list, local_decls) = List.fold_left
@@ -253,7 +246,7 @@ in
                 |Less|Leq|Greater|Geq when t1'=Int && t2'=Float -> (Binop((Promote(e1',t1'),Float),op,(e2',t2')),Int)
                 |Less|Leq|Greater|Geq when t1'=Float && t2'=Int-> (Binop((e1',t1'),op,(Promote((e2',t2')),Float)),Int)
                 |And|Or when t1'=Int && t2'=Int -> (Binop((e1',t1'),op,(e2',t2')),Int)
-                | _-> raise(Failure ("Unsupported operands"^ Ast.string_of_expr e1 ^ " "^Ast.string_of_expr e2^" for "
+                | _-> raise(Failure ("Unsupported operands "^ Ast.string_of_expr e1 ^ " and "^Ast.string_of_expr e2^" for "
                                      ^(string_of_op op)))
             )
             |(Unop(op,e1),_) -> let (e1',t1') as f = (expr_b e1) in
@@ -267,14 +260,14 @@ in
                     |Preinc when t1'= Int ->(match f with
                                             (Id(s1),Int) -> (Unop(op,(f)),Int)
                                             |(Index(e1,e2),Int) -> (Unop(op,(f)),Int)
-                                            |_ -> raise(Failure("Cannot apply PreInc or PreDec" ^ " to " ^ Ast.string_of_expr f))
+                                            |_ -> raise(Failure("PreInc or PreDec cannot be applied to " ^ Ast.string_of_expr f))
                                             )
                     |Predec when t1'= Int -> (match f with
                                             (Id(s1),Int) -> (Unop(op,(f)),Int)
                                             |(Index(e1,e2),Int) -> (Unop(op,(f)),Int)
-                                            |_ -> raise(Failure("Cannot apply PreInc or PreDec" ^ " to " ^ Ast.string_of_expr f))
+                                            |_ -> raise(Failure("PrecInc or PreDec cannot be applied to " ^ Ast.string_of_expr f))
                                             )
-                    | _ -> raise(Failure("No unary operator defined for "^ Ast.string_of_expr e1 ))
+                    | _ -> raise(Failure("Unsupported unary operation for "^ Ast.string_of_expr e1 ))
                 )
             |(Noexpr,_) -> (Noexpr,Void)
             |(Asnop(e1,asnp,e2),_)  -> let (e1',t1') = (expr_b e1) and  (e2',t2')=(expr_b e2) in 
@@ -293,11 +286,11 @@ in
                 |(Member (e,s),_)-> let e'= snd(expr_b e) in let
                                      sname= (match e' with
                                             UserType(s,e1) -> s
-                                            | _-> raise(Failure("Dot operator on a non-user type"))
+                                            | _-> raise(Failure("Member operator (dot) can only be applied to struct or shape"))
                                             )
                                      in get_mem_func_name sname s 
         
-                |_-> raise(Failure("here"))
+                |_-> raise(Failure("Invalid function call: " ^ string_of_expr e1))
                 )
                 in 
                 let fd = e1' in
@@ -308,7 +301,7 @@ in
                             List.iter(fun e -> let (e1',t1')=(expr_b e) in 
                                 (match t1' with
                                 UserType(_,ShapeType) -> ()
-                                | _-> raise(Failure("Can only add shapes to addshape")) 
+                                | _-> raise(Failure("Arguments of addshape function must be of type shape")) 
                                 )
                             ) actuals
                         else raise (Failure ("Incorrect number of arguments in "^fd.fname))
@@ -324,14 +317,14 @@ in
                                     | (Index(e,_),_) -> 
                                         (match e with  
                                         | (Id _, Vec) | (_,Array(_,_)) -> ()
-                                        | (_,t) as e-> raise(Failure("Illegal pass by reference."))
+                                        | (_,t) as e-> raise(Failure("Argument passed by reference must be an lvalue"))
                                         ) 
-                                    | _ -> raise(Failure("Illegal pass by reference."))  
+                                    | _ -> raise(Failure("Argument passed by reference must be an lvalue"))  
                             ) fd.params actuals;
 
                             List.iter2 (fun (ft, _,_) e -> let et = snd(expr_b e) in
                                 ignore (check_ass ft et
-                                (Failure ("Illegal actual argument found " ^ Ast.string_of_typ ft ^ " "^Ast.string_of_typ et^ " in function "^fd.fname)))
+                                (Failure ("Illegal argument " ^ Ast.string_of_typ ft ^ " "^Ast.string_of_typ et^ " in call to function "^fd.fname)))
                             ) fd.params actuals;
                         )
                         else ();        
@@ -340,13 +333,13 @@ in
                 let (e1',t1') = (expr_b e1) and (e2',t2') = (expr_b e2)
                 in
                 if (t1' != Float || t2' != Float)
-                    then raise(Failure("Elements of Vector must be floats."))
+                    then raise(Failure("Elements of vector must be of type double"))
                 else (Vecexpr((e1',t1'),(e2',t2')),Vec)
             |(Posop (s,e2),_)-> let e2'=(expr_b e2)
             in (match e2' with
                 (Id(s1),Int) -> (Posop(s,(e2')),Int)
                 |(Index(e1,e2),Int) -> (Posop(s,(e2')),Int)
-                |_ -> raise(Failure("Cannot apply PostInc or PostDec" ^ " to " ^ Ast.string_of_expr e2))
+                |_ -> raise(Failure("PostInc or PostDec cannot be applied to " ^ Ast.string_of_expr e2))
             )
 
             |(Trop(sz,e1,e2,e3),_) -> let (e1',t1')=(expr_b e1) and (e2',t2')=(expr_b e2) and (e3',t3')=(expr_b e3)
@@ -366,17 +359,17 @@ in
                             in let te1' = (match t1' with
                              Array(t,_) -> t
                              |Vec -> Float
-                            | _-> raise(Failure("Indexing a non-array/vector"))
+                            | _-> raise(Failure("Indexing only supported for arrays and vectors"))
                                 )
                             in 
                             if t2'!= Int
-                                then raise(Failure ("Must index with an integer "))
+                                then raise(Failure ("Must index with an integer"))
                                  else (Index((e1',t1'),(e2',t2')),te1')  
 
             |(Member(e1,s),_) -> let (e1',t1') = (expr_b e1)
                 in let te1'= (match t1' with
                         UserType(s1,_) -> s1
-                        |_ -> raise(Failure("Dot operator on a non-user type"))
+                        |_ -> raise(Failure("Member operator (dot) can only be applied to struct or shape"))
                         )
                     in
                     ( try (Member((e1',t1'),s),member_var_type te1' s) with Not_found -> raise(Failure(s^" is not a member of "^(string_of_typ t1'))))  
@@ -385,13 +378,13 @@ in
         in 
     
     let check_bool_expr e = if snd(expr_b e) != Int (*Could take in any number need to force check 1 or 0*)
-            then raise(Failure((string_of_expr e)^" is not a boolean value."))
+            then raise(Failure((string_of_expr e)^" is not a boolean value"))
             else() in
     List.iter(fun (t,n,e) -> ( match e with 
                                     Exprinit e -> let (e1',t1') = (expr_b e)
                                                         in if(t1'=t)
                                                             then ()
-                                                        else raise(Failure("Global var "^n^" needs to be assigned to type "^string_of_typ t^ " not "^string_of_typ t1'))
+                                                        else raise(Failure("Global variable "^n^" needs to be assigned to type "^string_of_typ t^ ", not "^string_of_typ t1'))
                                     |_ -> ()
                                     )) globals;
 
@@ -400,7 +393,7 @@ in
                                                         in
                                                         (match e1' with
                                                         | IntLit _ -> ()
-                                                        |_->  raise(Failure("Cannot declare any array without a intger constant not variables ")))           
+                                                        |_->  raise(Failure("Array declaration requires an integer constant index")))           
                                     |_ -> ()
                                     )) func.locals;
 
@@ -416,29 +409,29 @@ in
             |ForDec (vdecls,e2,e3,body) -> stmt  ( Block(vdecls, [For((Noexpr,Void) , e2, e3, body)],PointContext) )
             |Timeloop(s1,e1,s2,e2,st1) -> 
                 (* Need to check statements also ? *)
-                if s1 = s2 then raise(Failure("Duplicate variable name in timeloop definition."))
+                if s1 = s2 then raise(Failure("Duplicate variable "^s1^" in timeloop definition"))
                 else
                     let e1' = snd(expr_b e1) 
                     and e2' = snd(expr_b e2)
                     in 
                     if e1' = Float && e2' = Float 
                         then ()
-                    else raise(Failure("Only float expressions are accepted in timeloop definition."))
+                    else raise(Failure("Timeloop definition only accepts expressions of type double"))
             |Frameloop (s1,e1,s2,e2,st1)-> 
                 (* Need to check statements also ? *)
-                if s1 = s2 then raise(Failure("Duplicate variable name in frameloop definition."))
+                if s1 = s2 then raise(Failure("Duplicate variable "^s1^" in frameloop definition"))
                 else
                     let e1' = snd(expr_b e1) 
                     and e2' = snd(expr_b e2)
                     in 
                     if e1' = Float && e2' = Float 
                         then ()
-                    else raise(Failure("Only float expressions are accepted in frameloop definition."))
+                    else raise(Failure("Frameloop definition only accepts expressions of type double"))
             | Break | Continue -> () (* COMPLICATED: CHECK If in Loop *)
         in 
         let check_ret () = match stmt_list with
             [Return _ ] -> ()
-            |Return _ :: _ -> raise(Failure("Can't put more code after return"))
+            |Return _ :: _ -> raise(Failure("Cannot have any code after a return statement"))
             |_ -> ()
         in
 

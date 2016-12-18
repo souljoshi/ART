@@ -1,1 +1,1 @@
-Fatal error: exception Failure("Elements of Vector must be floats.")
+Fatal error: exception Failure("Elements of vector must be of type double")

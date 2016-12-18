@@ -1,1 +1,1 @@
-Fatal error: exception Failure("Can only add shapes to addshape")
+Fatal error: exception Failure("Arguments of addshape function must be of type shape")

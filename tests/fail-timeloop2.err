@@ -1,1 +1,1 @@
-Fatal error: exception Failure("Duplicate variable name in timeloop definition.")
+Fatal error: exception Failure("Duplicate variable dt in timeloop definition")

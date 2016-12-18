@@ -1,1 +1,1 @@
-Fatal error: exception Failure("There already exists a method called size in struct circle")
+Fatal error: exception Failure("A method called size already exists in struct circle")

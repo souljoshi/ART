@@ -1,1 +1,1 @@
-Fatal error: exception Failure("Duplicate variable name in frameloop definition.")
+Fatal error: exception Failure("Duplicate variable fps in frameloop definition")

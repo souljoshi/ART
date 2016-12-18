@@ -1,1 +1,1 @@
-Fatal error: exception Failure("No draw method in Shape")
+Fatal error: exception Failure("draw method not defined in shape circle")

@@ -1,1 +1,1 @@
-Fatal error: exception Failure("Cannot apply PostInc or PostDec to < 10.5 , 5.5 >")
+Fatal error: exception Failure("PostInc or PostDec cannot be applied to < 10.5 , 5.5 >")

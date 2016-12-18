@@ -1,1 +1,1 @@
-Fatal error: exception Failure("Global var y needs to be assigned to type int not double")
+Fatal error: exception Failure("Global variable y needs to be assigned to type int, not double")

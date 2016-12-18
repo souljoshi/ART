@@ -1,1 +1,1 @@
-Fatal error: exception Failure("No unary operator defined for a2[0]")
+Fatal error: exception Failure("Unsupported unary operation for a2[0]")

@@ -1,1 +1,1 @@
-Fatal error: exception Failure("There already exists a constructor called circle in struct circle")
+Fatal error: exception Failure("A constructor called circle already exists in struct circle")

@@ -1,1 +1,1 @@
-Fatal error: exception Failure("Duplicate Global Name x")
+Fatal error: exception Failure("Duplicate global variable x")

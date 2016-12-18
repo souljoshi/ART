@@ -1,1 +1,1 @@
-Fatal error: exception Failure("Illegal pass by reference.")
+Fatal error: exception Failure("Argument passed by reference must be an lvalue")
