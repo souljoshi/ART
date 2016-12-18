@@ -343,7 +343,7 @@ let translate prog =
           let named_struct = L.named_struct_type context "shape_struct."
           in  L.struct_set_body named_struct [| i8ptr_t ; L.pointer_type void_i8p_t |] false ; named_struct
         in
-        let shape_list = unique_global "shape_list." (L.const_array shape_struct ( Array.make 100 (L.const_null shape_struct)))
+        let shape_list = unique_global "shape_list." (L.const_array shape_struct ( Array.make 1000 (L.const_null shape_struct)))
         in
         let shape_list_ind = unique_global "shape_list_ind." (L.const_int i32_t 0)
         in
@@ -397,7 +397,7 @@ let translate prog =
               Some f -> f
             | None -> get_draw_func)
         in
-        let get_idle_func loop_func =
+        let get_idle_func looptp loop_func =
            let idle_stop_condition steps idle_func target_bb builder =
               let bool_val = L.build_icmp  L.Icmp.Sge steps (L.build_load g_maxiter "maxiter" builder) "idlestpcond" builder in
               let merge_bb = L.append_block context "merge" idle_func in (* Merge block *)
@@ -428,7 +428,8 @@ let translate prog =
            let merge_builder = L.builder_at_end context merge_bb in
            let then_bb = L.append_block context "then" idle_func in
            let then_builder = L.builder_at_end context then_bb in
-           let stepinc = L.build_fptoui (L.build_fdiv lag delay "finc" then_builder) i32_t "stepinc" then_builder in
+           let stepinc = if looptp <> 0 then L.const_int i32_t 1 else
+              L.build_fptoui (L.build_fdiv lag delay "finc" then_builder) i32_t "stepinc" then_builder in
            let newsteps = L.build_add (L.build_load g_steps "steps" then_builder) stepinc "newsteps" then_builder in
            ignore(L.build_store newsteps g_steps then_builder);
            ignore (L.build_call loop_func [| |] "" then_builder);
@@ -446,21 +447,23 @@ let translate prog =
         let rec non_block_locals local_decls stmt_list scopes =
           let scopes =
             let locals = List.fold_left (fun m (t, n,_) -> StringMap.add n (L.const_int i32_t 0,t) m ) StringMap.empty local_decls
-            in (locals, LocalScope)::scopes
+            in (locals, ClosureScope)::scopes (* use closure scope for closure locals*)
           in
           let rec scope_iter n scopes =
             let hd = List.hd scopes in 
                 (match hd with
-                    (globs, GlobalScope) -> fst(StringMap.find n globs)
-                  | (locls, LocalScope)  -> ( try fst(StringMap.find n locls)
-                                              with Not_found -> scope_iter n (List.tl scopes) )
+                    (globs, GlobalScope) -> ignore(StringMap.find n globs);GlobalScope
+                  | (locls, LocalScope)  -> ( try ignore(StringMap.find n locls);LocalScope
+                                              with Not_found -> scope_iter n (List.tl scopes))
                   | (_, StructScope) -> raise (Failure ("No struct scope in closure"))
-                  | (_, ClosureScope)  -> raise (Failure ("No nested closure"))
+                  | (locls, ClosureScope)  -> ( try ignore(StringMap.find n locls);ClosureScope
+                                              with Not_found -> scope_iter n (List.tl scopes))
                 )
           in
           let rec non_local_expr (e,_) = non_local_baseexpr e
           and non_local_baseexpr = function
-              A.Id s -> (try ignore(scope_iter s scopes); StringSet.empty with Not_found -> StringSet.singleton s)
+              A.Id s -> (try (if (scope_iter s scopes)<>LocalScope then StringSet.empty else StringSet.singleton s ) 
+                      with Not_found -> StringSet.singleton s)
             | A.Vecexpr(e1,e2) -> StringSet.union (non_local_expr e1)  (non_local_expr e2)
             | A.Binop(e1,_,e2) -> StringSet.union (non_local_expr e1)  (non_local_expr e2)
             | A.Asnop(e1,_,e2) -> StringSet.union (non_local_expr e1)  (non_local_expr e2)
@@ -1053,7 +1056,8 @@ let translate prog =
                 | A.For (e1, e2, e3, body) -> stmt builder
                     ( A.Block ( [], [  A.Expr e1; A.While (e2, A.Block ([], [body; A.Expr e3],A.PointContext) ) ] , A.PointContext) )
                 | A.ForDec (vdecls, e2, e3, body) -> stmt builder ( A.Block(vdecls, [A.For((A.Noexpr,A.Void) , e2, e3, body)], A.PointContext) )
-                | A.Timeloop(s1, e1, s2, e2, stmt) ->
+                | A.Timeloop(s1, e1, s2, e2, stmt) | A.Frameloop(s1, e1, s2, e2, stmt) as s->
+                    let loop = (match s with A.Timeloop(_,_,_,_,_) -> 0 | _ -> 1) in (* 0 for time and 1 for frame *)
                     let ftype = L.function_type void_t [| |] in
                     let fdef = L.define_function "timeloop." ftype the_module in
                     let loopdecl = {A.rettyp = A.Void ; A.fname = "timeloop." ; A.params = [];
@@ -1061,7 +1065,7 @@ let translate prog =
                                     A.body = [stmt]; A.typ = A.Func ; A.owner=""} in
                     let fdecls = StringMap.add "timeloop." (fdef, loopdecl) function_decls in
                     let outnames = StringSet.elements ( non_block_locals loopdecl.A.locals 
-                                  loopdecl.A.body [(global_vars, GlobalScope)] )
+                                  loopdecl.A.body scopes )
                     in  
                     let table = (*ignore(prerr_endline("[" ^ String.concat ", " outnames ^"]"));*)
                                 L.build_array_malloc i8ptr_t (L.const_int i32_t (List.length outnames)) "ctable" builder
@@ -1082,15 +1086,15 @@ let translate prog =
                     (* Setup the timer and stepper values *)
                     ignore(L.build_store (do_seconds_call builder) g_last_time builder);
                     let e1' = expr builder e1 in let e2' = expr builder e2 in
-                    ignore(L.build_store e1' g_delay builder);
+                    let delayflt = if loop = 0 then e1' else L.build_fdiv (L.const_float double_t 1.0) e1' "dfstps" builder in
+                    ignore(L.build_store delayflt g_delay builder);
                     ignore(L.build_store (L.const_int i32_t 0) g_steps builder);
-                    let delayflt = L.build_fdiv e2' e1' "stepsflt" builder in
-                    ignore(L.build_store (L.build_fptoui delayflt i32_t "stepsflt" builder) g_maxiter builder);
-                    ignore(do_glut_init dummy_arg_1 (L.const_bitcast dummy_arg_2 i8ptrptr_t) glut_argv_0 (get_unique_draw_func())  (get_idle_func fdef)builder);
+                    let stepsflt = if loop = 0 then L.build_fdiv e2' e1' "stpft" builder else e2' in
+                    ignore(L.build_store (L.build_fptoui stepsflt i32_t "stepsint" builder) g_maxiter builder);
+                    ignore(do_glut_init dummy_arg_1 (L.const_bitcast dummy_arg_2 i8ptrptr_t) glut_argv_0 (get_unique_draw_func())  (get_idle_func loop fdef)builder);
                     ignore(L.build_free table builder); 
                     ignore(L.build_store (L.const_int i32_t 0) shape_list_ind builder);
                     builder
-                | t -> raise (Failure ("Unsupported statement type "^A.string_of_stmt t))(* Ignore other statement type *)
             in
             (* Build the code for each statement in the block 
               and return the builder *)
