@@ -256,7 +256,7 @@ in
                 | _-> raise(Failure ("Unsupported operands"^ Ast.string_of_expr e1 ^ " "^Ast.string_of_expr e2^" for "
                                      ^(string_of_op op)))
             )
-            |(Unop(op,e1),_) -> let (e1',t1') = (expr_b e1) in
+            |(Unop(op,e1),_) -> let (e1',t1') as f = (expr_b e1) in
                 (match op with
                     Neg when t1'=Int -> (Unop(op,(e1',t1')),Int)
                     |Neg when t1'=Float -> (Unop(op,(e1',t1')),Float)
@@ -264,10 +264,16 @@ in
                     |Pos when t1'=Int -> (Unop(op,(e1',t1')),Int)
                     |Pos when t1'=Float -> (Unop(op,(e1',t1')),Float) 
                     |Pos when t1'=Vec -> (Unop(op,(e1',t1')),Vec)
-                    |Preinc when t1'= Int -> (Unop(op,(e1',t1')),Int)
-                    |Preinc when t1'= Float -> (Unop(op,(e1',t1')),Float)
-                    |Predec when t1'= Int -> (Unop(op,(e1',t1')),Int)
-                    |Predec when t1'= Float -> (Unop(op,(e1',t1')),Float) 
+                    |Preinc when t1'= Int ->(match f with
+                                            (Id(s1),Int) -> (Unop(op,(f)),Int)
+                                            |(Index(e1,e2),Int) -> (Unop(op,(f)),Int)
+                                            |_ -> raise(Failure("Cannot apply PreInc or PreDec " ^ " to " ^ Ast.string_of_expr f))
+                                            )
+                    |Predec when t1'= Int -> (match f with
+                                            (Id(s1),Int) -> (Unop(op,(f)),Int)
+                                            |(Index(e1,e2),Int) -> (Unop(op,(f)),Int)
+                                            |_ -> raise(Failure("Cannot apply PreInc or PreDec " ^ " to " ^ Ast.string_of_expr f))
+                                            )
                     | _ -> raise(Failure("No unary operator defined for "^ Ast.string_of_expr e1 ))
                 )
             |(Noexpr,_) -> (Noexpr,Void)
@@ -336,11 +342,13 @@ in
                 if (t1' != Float || t2' != Float)
                     then raise(Failure("Elements of Vector must be floats."))
                 else (Vecexpr((e1',t1'),(e2',t2')),Vec)
-            |(Posop (s,e2),_)-> let (e2',t2')=(expr_b e2)
-            in (match t2' with
-                |Int -> (Posop(s,(e2',t2')),Int)
+            |(Posop (s,e2),_)-> let e2'=(expr_b e2)
+            in (match e2' with
+                (Id(s1),Int) -> (Posop(s,(e2')),Int)
+                |(Index(e1,e2),Int) -> (Posop(s,(e2')),Int)
                 |_ -> raise(Failure("Cannot apply PostInc or PostDec " ^ " to " ^ Ast.string_of_expr e2))
             )
+
             |(Trop(sz,e1,e2,e3),_) -> let (e1',t1')=(expr_b e1) and (e2',t2')=(expr_b e2) and (e3',t3')=(expr_b e3)
                                  in if(t1'!=Int)
                                     then raise(Failure("Need a Condtional statement"))
