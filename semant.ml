@@ -47,15 +47,15 @@ let struct_build prog =
           match f.typ with
             Func -> (m, true) (* true means keep function *)
           | Constructor -> let s = try StringMap.find f.owner m
-                    with Not_found -> raise (Failure ("Constructor of undefined struct: " ^ f.owner^"::"^f.fname))
+                    with Not_found -> raise (Failure ("Constructor of undefined struct/shape: " ^ f.owner^"::"^f.fname))
                 in if (s.ctor.fname="") then (StringMap.add s.sname
                             {ss = s.ss;sname = s.sname; decls = s.decls; ctor = f; methods = s.methods} m , false)
                         else
-                            raise(Failure("A constructor called " ^f.fname ^" already exists in struct " ^s.sname))
+                            raise(Failure("Multiple constructor definitions for "^(string_of_stosh s.ss)^ " "^s.sname))
           | Method -> let s = try StringMap.find f.owner m
-                    with Not_found -> raise (Failure ("Method of undefined struct: " ^ f.owner^"::"^f.fname))
+                    with Not_found -> raise (Failure ("Method of undefined struct/shape: " ^ f.owner^"::"^f.fname))
                 in try ignore( List.find (fun f2 -> f2.fname = f.fname) s.methods);
-                       raise(Failure("A method called " ^f.fname ^" already exists in struct " ^s.sname))   
+                       raise(Failure("Multiple definitions for method " ^f.owner^"::"^f.fname))  
                     with Not_found -> (StringMap.add s.sname
                                 {ss = s.ss;sname = s.sname; decls = s.decls; ctor = s.ctor; methods = f::s.methods} m , false)
         in
@@ -114,7 +114,7 @@ let function_decl s = try StringMap.find s function_decls       (*Builds a strin
     with Not_found -> raise (Failure ("Unrecognized function " ^ s ^". Did you forget to define it?"))
 in
 
-let  main_check = let mn = function_decl "main" 
+let  main_check = let mn = (try function_decl "main" with Failure _ -> raise( Failure "Must define main"))
         in if(mn.rettyp!=Int)
             then raise(Failure("main function must have return type int"))
            else ()(*Makes sure that main is defined*)        
@@ -131,7 +131,7 @@ let function_check func =
 
 (* Given struct give map of method names to method *)
     let get_member_funcs name = let st = try StringMap.find name struct_name_list (*creates a struct member funciontlist*)
-        with  Not_found -> raise(Failure("Undefined struct "^name))
+        with  Not_found -> raise(Failure("Undefined struct/shape "^name))
         in List.fold_left(fun m s -> StringMap.add s.fname s m)
             StringMap.empty st.methods
     in 
@@ -142,7 +142,7 @@ let function_check func =
     
     (* Get map of memb_variables to their type *)
     let get_struct_member_var name = let st = try StringMap.find name struct_name_list
-        with  Not_found -> raise(Failure("Undefined struct "^name))
+        with  Not_found -> raise(Failure("Undefined struct/shape "^name))
         in List.fold_left(fun m (t,n) -> StringMap.add n t m)
             StringMap.empty st.decls
     in
