@@ -347,6 +347,8 @@ let translate prog =
         in
         let shape_list_ind = unique_global "shape_list_ind." (L.const_int i32_t 0)
         in
+        let tloop_on = unique_global "tloop_on." (L.const_int i32_t 0)
+        in
         let do_seconds_call builder =
           let secptr = ignore(L.build_call  get_tday_func [|time_value ; L.const_null i8ptr_t |] "" builder);
           L.build_gep time_value [|L.const_int i32_t 0; L.const_int i32_t 0 |] "sec" builder in
@@ -1067,7 +1069,27 @@ let translate prog =
                     let outnames = StringSet.elements ( non_block_locals loopdecl.A.locals 
                                   loopdecl.A.body scopes )
                     in  
-                    let table = (*ignore(prerr_endline("[" ^ String.concat ", " outnames ^"]"));*)
+
+
+                    (* Check to see if the tloop_on flag is active *)
+                    let t_off = (L.build_icmp L.Icmp.Eq)(L.build_load tloop_on "tflag" builder) 
+                               (L.const_int i32_t 0) "t_on" builder in
+                    let merge_bb = L.append_block context "merge" the_function in (* Merge block *)
+                    let then_bb = L.append_block context "then" the_function in
+
+                    let else_bb = L.append_block context "else" the_function in
+                    add_terminal (L.builder_at_end context else_bb) (L.build_br merge_bb);
+                    (* add_terminal used to avoid insert two terminals to basic blocks *)
+
+                    (* builder is in block that contains if stmt *)
+                    ignore (L.build_cond_br t_off then_bb else_bb builder);
+
+                    let builder =  L.builder_at_end context then_bb in
+
+
+
+                    let table =  (* Mark timeloop active flag *)
+                                ignore(L.build_store (L.const_int i32_t 1) tloop_on builder);
                                 L.build_array_malloc i8ptr_t (L.const_int i32_t (List.length outnames)) "ctable" builder
                     in
                     let tablearr = L.build_bitcast table (L.pointer_type(L.array_type i8ptr_t (List.length outnames))) "ctablearr" builder in
@@ -1093,8 +1115,11 @@ let translate prog =
                     ignore(L.build_store (L.build_fptoui stepsflt i32_t "stepsint" builder) g_maxiter builder);
                     ignore(do_glut_init dummy_arg_1 (L.const_bitcast dummy_arg_2 i8ptrptr_t) glut_argv_0 (get_unique_draw_func())  (get_idle_func loop fdef)builder);
                     ignore(L.build_free table builder); 
+                    ignore(L.build_store (L.const_int i32_t 0) tloop_on builder);
                     ignore(L.build_store (L.const_int i32_t 0) shape_list_ind builder);
-                    builder
+                    add_terminal builder (L.build_br merge_bb);
+
+                    L.builder_at_end context merge_bb (* Return builder at end of merge block *)
             in
             (* Build the code for each statement in the block 
               and return the builder *)
