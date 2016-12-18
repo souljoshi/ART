@@ -82,13 +82,13 @@ let check prog =
 let built_in_fun = StringMap.add "printi"
 {rettyp=Void; fname="printi";params=[(Int, "x",Value)];locals=[];body=[];typ=Func;owner="None"}
 (StringMap.add"printf" {rettyp=Void; fname="printf";params=[(Float, "x",Value)];locals=[];body=[];typ=Func;owner="None";}       (*Builds a list of the predefined functions special note about add shape it demands a name to contstruct the type *)
-(StringMap.add "prints" {rettyp=Void; fname="printf";params=[(String, "x",Value)];locals=[];body=[];typ=Func;owner="None";}
+(StringMap.add "prints" {rettyp=Void; fname="prints";params=[(String, "x",Value)];locals=[];body=[];typ=Func;owner="None";}
 (StringMap.add "addshape"{rettyp=Void;fname="addshape";params=[(UserType(".shape",ShapeType),"x",Value)];locals=[];body=[];typ=Func;owner="None";}
 (StringMap.add "cos"{rettyp=Float;fname="cos";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None";}
 (StringMap.add "sin"{rettyp=Float;fname="sin";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None";}
 (StringMap.add "setcolor"{rettyp=Void;fname="setcolor";params=[(Float,"x",Value);(Float,"x",Value);(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None";}
 (StringMap.add "drawpoint"{rettyp=Void;fname="drawpoint";params=[(Vec,"x",Value)];locals=[];body=[];typ=Func;owner="None";}
-(StringMap.singleton "printc" {rettyp=Void; fname="printf";params=[(Char, "x",Value)];locals=[];body=[];typ=Func;owner="None";}))))))))
+(StringMap.singleton "printc" {rettyp=Void; fname="printc";params=[(Char, "x",Value)];locals=[];body=[];typ=Func;owner="None";}))))))))
 (*let function_decls =
     List.map(fun fd -> fd.fname) functions*)
 in 
