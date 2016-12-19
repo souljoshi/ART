@@ -136,32 +136,6 @@ let string_of_chr =  function
   | c when Char.code(c) > 31  && Char.code(c) < 127 -> Char.escaped c
   | c -> "\\" ^ Printf.sprintf "%o" (Char.code c)
 
-
-(* Uncomment the next comment for full parenthesized *)
-let rec string_of_baseexpr (*e = "( "^ paren_of_expr e ^ " )"
-and 
-paren_of_expr *) = function
-    IntLit(l) -> string_of_int l
-  | CharLit(l) -> "'" ^ (string_of_chr l) ^ "'"
-  | FloatLit(l) -> string_of_float l
-  | StringLit(s) -> "" ^ s
-  | VecLit(a,b)  -> "< " ^ (string_of_float a) ^ " , " ^ (string_of_float b) ^ " >"
-  | Id(s) -> s
-  | Vecexpr(e1,e2) -> " < "^ string_of_expr e1 ^ " , " ^ string_of_expr e2 ^ " >"
-  | Binop(e1, o, e2) ->
-      string_of_expr e1 ^ " " ^ string_of_op o ^ " " ^ string_of_expr e2
-  | Asnop(e1, o, e2) ->
-      string_of_expr e1 ^ " " ^ string_of_asnop o ^ " " ^ string_of_expr e2
-  | Unop(o, e) -> string_of_uop o ^ string_of_expr e
-  | Posop(o, e) -> string_of_expr e ^ string_of_pop o
-  | Call(f, el) ->
-      string_of_expr f ^ "(" ^ String.concat ", " (List.map string_of_expr el) ^ ")"
-  | Index(e1, e2) -> string_of_expr e1 ^ "[" ^ string_of_expr e2 ^ "]"
-  | Member(e1, s) -> string_of_expr e1 ^ "." ^ s
-  | Promote e -> "double_of("^(string_of_expr e)^")"
-  | Noexpr -> ""
-and string_of_expr (e,_) = string_of_baseexpr e
-
 let rec list_of_arr = function
     Array(Array(_,_) as a , i) ->  let (t,l) = list_of_arr a in (t, i::l)
   | Array(t, i) -> (t, [i])
@@ -182,6 +156,34 @@ let rec string_of_typ = function
   | Array(_, _) as a -> let (t,l) = list_of_arr a
      in string_of_typ t ^ String.concat "" (List.map (fun e -> "[" ^ string_of_expr e ^ "]") l)
  
+
+(* Uncomment the next comment for full parenthesized *)
+and string_of_baseexpr (*e = "( "^ paren_of_expr e ^ " )"
+and 
+paren_of_expr *) = function
+    IntLit(l) -> string_of_int l
+  | CharLit(l) -> "'" ^ (string_of_chr l) ^ "'"
+  | FloatLit(l) -> string_of_float l
+  | StringLit(s) -> "" ^ s
+  | VecLit(a,b)  -> "< " ^ (string_of_float a) ^ " , " ^ (string_of_float b) ^ " >"
+  | Id(s) -> s
+  | Vecexpr(e1,e2) -> " < "^ string_of_expr e1 ^ " , " ^ string_of_expr e2 ^ " >"
+  | Binop(e1, o, e2) ->
+      string_of_expr e1 ^ " " ^ string_of_op o ^ " " ^ string_of_expr e2
+  | Asnop(e1, o, e2) ->
+      string_of_expr e1 ^ " " ^ string_of_asnop o ^ " " ^ string_of_expr e2
+  | Unop(o, e) -> string_of_uop o ^ string_of_expr e
+  | Posop(o, e) -> string_of_expr e ^ string_of_pop o
+  | Call(f, el) ->
+      string_of_expr f ^ "(" ^ String.concat ", " (List.map string_of_expr el) ^ ")"
+  | Index(e1, e2) -> string_of_expr e1 ^ "[" ^ string_of_expr e2 ^ "]"
+  | Member(e1, s) -> string_of_expr e1 ^ "." ^ s
+  | Promote e-> string_of_expr e
+  | Noexpr -> ""
+and string_of_expr  = function
+    (Promote (e,t1), t) when t1<>t -> (string_of_typ t)^"_of("^(string_of_baseexpr e)^")"
+  | (e,_) -> string_of_baseexpr e
+
 
 let string_of_bind (t,s) = 
     string_of_typ t ^" "^ s

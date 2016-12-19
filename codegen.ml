@@ -486,12 +486,19 @@ let translate prog =
                                     (StringSet.union (non_local_expr e3)  (non_local s))
             | A.ForDec(decls,e2,e3,s)-> non_local ( A.Block(decls, [A.For((A.Noexpr,A.Void), e2, e3, s)],A.PointContext))
             | A.While(e,s) -> StringSet.union (non_local_expr e) (non_local s)
-            | _ -> StringSet.empty
-            (*| A.Timeloop of string * expr * string * expr * stmt
-            | A.Frameloop of string * expr * string * expr * stmt *) (* No nested timelops *)
+            | A.Timeloop (_ ,e1 ,_,e2,s) ->  StringSet.union (non_local_expr e1)
+                                    (StringSet.union (non_local_expr e2)  (non_local s))
+            | A.Frameloop (_ ,e1 ,_,e2,s) ->  StringSet.union (non_local_expr e1)
+                                    (StringSet.union (non_local_expr e2)  (non_local s))
           in
-          List.fold_left (fun set s-> StringSet.union set (non_local s)) StringSet.empty stmt_list
-              
+          let rec non_local_initer  = function
+              A.Exprinit e -> non_local_expr e
+            | A.Listinit il -> List.fold_left (fun set i-> StringSet.union set (non_local_initer i)) StringSet.empty il
+            | A.Noinit -> StringSet.empty
+          in
+          StringSet.union
+          (List.fold_left (fun set s-> StringSet.union set (non_local s)) StringSet.empty stmt_list)
+          (List.fold_left (fun set (_,_,i) -> StringSet.union set (non_local_initer i)) StringSet.empty local_decls)  
         in
         (* Returns (fdef, fdecl) for a function call in method/function *)
         (* Handles case of constructor call, a method call without dot operator and
@@ -966,13 +973,13 @@ let translate prog =
                     let ftype = L.function_type void_t [| |] in
                     let fdef = L.define_function "timeloop." ftype the_module in
                     let loopdecl = {A.rettyp = A.Void ; A.fname = "timeloop." ; A.params = [];
-                                    A.locals = [(A.Float, s1,A.Exprinit(e1)) ; (A.Float, s2, A.Exprinit(e2))];
+                                    A.locals = [](*[(A.Float, s1,A.Exprinit(e1)) ; (A.Float, s2, A.Exprinit(e2))] : this is done in semant*);
                                     A.body = [stmt]; A.typ = A.Func ; A.owner=""} in
                     let fdecls = StringMap.add "timeloop." (fdef, loopdecl) function_decls in
-                    let outnames = StringSet.elements ( non_block_locals loopdecl.A.locals 
+                    let outnames =
+                    StringSet.elements ( non_block_locals loopdecl.A.locals 
                                   loopdecl.A.body scopes )
                     in  
-
 
                     (* Check to see if the tloop_on flag is active *)
                     let t_off = (L.build_icmp L.Icmp.Eq)(L.build_load tloop_on "tflag" builder) 
