@@ -329,15 +329,15 @@ let function_check func =
                     |CmpAsn b when e1'=Int && e2'=Float ->  Float*)
                     | _ -> raise (Failure ("Invalid assigment of " ^ Ast.string_of_typ t2' ^ " to "^Ast.string_of_typ t1'))
                 )
-            |(Call(e1, actuals),_) -> let fd = (match e1 with 
-                ((Id s),_) -> (try lookup_function s 
-                         with Not_found -> function_decl s)
-                |(Member (e,s),_)-> let e'= snd(expr_b e) in let
-                                     sname= (match e' with
+            |(Call(e1, actuals),_) -> let (e',fd) = (match e1 with 
+                ((Id s),_) as f -> (f, (try lookup_function s 
+                                with Not_found -> function_decl s))
+                |(Member (e,s),_)-> let (_,t') as f = expr_b e in
+                                let sname= (match t' with
                                             UserType(s,e1) -> s
                                             | _-> raise(Failure("Member operator (dot) can only be applied to struct or shape"))
                                             )
-                                     in get_mem_func_name sname s 
+                                     in ((Member(f,s), Void), get_mem_func_name sname s)
         
                 |_-> raise(Failure("Invalid function call: " ^ string_of_expr e1))
                 )
@@ -368,7 +368,7 @@ let function_check func =
                         actuals
                         
                     )   in    
-                (Call(e1,actuals'), if fd.typ <> Constructor then fd.rettyp
+                (Call(e',actuals'), if fd.typ <> Constructor then fd.rettyp
                                 else UserType(fd.owner,(StringMap.find fd.owner struct_name_list).ss) )
             |(Vecexpr (e1,e2),_) -> 
                 let (e1',t1') as f1 = (expr_b e1) and (e2',t2') as f2= (expr_b e2)
