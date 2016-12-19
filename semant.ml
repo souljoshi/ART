@@ -282,7 +282,7 @@ let function_check func =
                     | _ -> raise(Failure("Unsupported unary operation for "^ Ast.string_of_expr e1 ))
                 )
             |(Noexpr,_) -> (Noexpr,Void)
-            |(Asnop(e1,asnp,e2),_)  -> let (e1',t1') = (expr_b e1) and  (e2',t2')=(expr_b e2) in 
+            |(Asnop(e1,asnp,e2),_)  -> let (e1',t1') = (lexpr_b e1) and  (e2',t2')=(expr_b e2) in 
                 (match asnp with
                      Asn when t1'=t2' -> (Asnop((e1',t1'),asnp,(e2',t2')),t1')
                     |Asn when t1'=Float && t2'=Int ->  (Asnop((e1',t1'),asnp,(Promote(e2',t2'),Float)),Float)
@@ -291,7 +291,7 @@ let function_check func =
                     |CmpAsn b when e1'=Int && e2'=Float ->  Float*)
                     | _ -> raise (Failure ("Invalid assigment of " ^ Ast.string_of_typ t2' ^ " to "^Ast.string_of_typ t1'))
                 )
-            |(Call(e1, actuals),_) -> let e1' = (match e1 with 
+            |(Call(e1, actuals),_) -> let fd = (match e1 with 
                 ((Id s),_) -> (try lookup_function s 
                          with Not_found -> function_decl s)
                 |(Member (e,s),_)-> let e'= snd(expr_b e) in let
@@ -304,48 +304,40 @@ let function_check func =
                 |_-> raise(Failure("Invalid function call: " ^ string_of_expr e1))
                 )
                 in 
-                let fd = e1' in
+
+                let  actuals' = 
+                    (
                     if (List.length actuals != List.length fd.params) || (fd.fname="addshape") 
                     then
                         if fd.fname="addshape"&&(List.length actuals>0) 
                         then 
-                            List.iter(fun e -> let (e1',t1')=(expr_b e) in 
+                            List.map(fun e -> let (e1',t1') as f=(expr_b e) in 
                                 (match t1' with
-                                UserType(_,ShapeType) -> ()
+                                UserType(_,ShapeType) -> f
                                 | _-> raise(Failure("Arguments of addshape function must be of type shape")) 
                                 )
                             ) actuals
                         else raise (Failure ("Incorrect number of arguments in "^fd.fname))
                     else 
-                        if fd.fname <>"addshape" 
-                        then
-                        (
-                            List.iter2 (fun (t, s, p) e -> if p = Ref then 
-                            let e = (expr_b e) in
-                                match e with 
-                                    (Id(s),_) -> ()
-                                    | (Member(e,s),_) -> ()
-                                    | (Index(e,_),_) -> 
-                                        (match e with  
-                                        | (Id _, Vec) | (_,Array(_,_)) -> ()
-                                        | (_,t) as e-> raise(Failure("Argument passed by reference must be an lvalue"))
-                                        ) 
-                                    | _ -> raise(Failure("Argument passed by reference must be an lvalue"))  
-                            ) fd.params actuals;
+                        
+                        let actuals = List.map2 (fun (t, s, p) e -> if p = Ref then  (lexpr_b e) else (expr_b e)
+                        ) fd.params actuals in
 
-                            List.iter2 (fun (ft, _,_) e -> let et = snd(expr_b e) in
-                                ignore (check_ass ft et
-                                (Failure ("Illegal argument of type "^Ast.string_of_typ et^ " in call to function "^fd.fname^ " which expects argument of type " ^ Ast.string_of_typ ft)))
-                            ) fd.params actuals;
-                        )
-                        else ();        
-                (Call(e1,actuals),fd.rettyp)
+                        List.iter2 (fun (ft, _,_) e -> let et = snd(e) in
+                            ignore (check_ass ft et
+                            (Failure ("Illegal argument of type "^Ast.string_of_typ et^ " in call to function "^fd.fname^ " which expects argument of type " ^ Ast.string_of_typ ft)))
+                        ) fd.params actuals;
+                        actuals
+                        
+                    )   in    
+                (Call(e1,actuals'), if fd.typ <> Constructor then fd.rettyp
+                                else UserType(fd.owner,(StringMap.find fd.owner struct_name_list).ss) )
             |(Vecexpr (e1,e2),_) -> 
-                let (e1',t1') = (expr_b e1) and (e2',t2') = (expr_b e2)
+                let (e1',t1') as f1 = (expr_b e1) and (e2',t2') as f2= (expr_b e2)
                 in
-                if (t1' != Float || t2' != Float)
-                    then raise(Failure("Elements of vector must be of type double"))
-                else (Vecexpr((e1',t1'),(e2',t2')),Vec)
+                let f1 = if (t1' = Float) then f1 else if t1'=Int then (Promote f1,Float) else raise(Failure("Elements of vector must be of type double"))
+                and f2 = if (t2' = Float) then f2 else if t2'=Int then (Promote f2,Float) else raise(Failure("Elements of vector must be of type double"))
+                in (Vecexpr(f1,f2),Vec)
             |(Posop (s,e2),_)-> let e2'=(expr_b e2)
             in (match e2' with
                  (Id(s1),Int) -> (Posop(s,(e2')),Int)
@@ -372,7 +364,29 @@ let function_check func =
                     in
                     ( try (Member((e1',t1'),s),member_var_type te1' s) with Not_found -> raise(Failure(s^" is not a member of "^(string_of_typ t1'))))  
                 
-        | _ -> (Noexpr,Void)        
+        | _ -> (Noexpr,Void)
+        (* Special handling for lvalue expressions *)
+        and lexpr_b  = function
+                (Id s,_) -> (Id s, ret_type s)
+              | (Index(e1,e2),_) ->  let (e1',t1') = (lexpr_b e1) and (e2',t2') = (expr_b e2) (* ALLOW VECTOR INDEXING *)
+                            in let te1' = (match t1' with
+                               Array(t,_) -> t
+                             | Vec -> Float
+                             | _-> raise(Failure("Indexing only supported for arrays and vectors"))
+                                )
+                            in 
+                            if t2'!= Int
+                                then raise(Failure ("Must index with an integer"))
+                                 else (Index((e1',t1'),(e2',t2')),te1')  
+
+              | (Member(e1,s),_) -> let (e1',t1') = (lexpr_b e1)
+                in let te1'= (match t1' with
+                        UserType(s1,_) -> s1
+                        |_ -> raise(Failure("Member operator (dot) can only be applied to struct or shape"))
+                        )
+                    in
+                    ( try (Member((e1',t1'),s),member_var_type te1' s) with Not_found -> raise(Failure(s^" is not a member of "^(string_of_typ t1'))))
+              | e -> raise (Failure ("rvalue given: "^(string_of_expr e)^ " where lvalue expected"))        
         in 
     
     let check_bool_expr e = if snd(expr_b e) != Int (*Could take in any number need to force check 1 or 0*)
