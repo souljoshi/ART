@@ -667,13 +667,13 @@ let translate prog =
             (* In final code [with semantic analysis] the ast type should be part of expr *)
             (*let rec expr_type (e,_) = baseexpr_type e*)
             let expr_type (_,t) = (string_of_typ2 t, t) in
-            
+
+            (* Adds an int_cast to the llvmop *)
+            let bit_to_int llvmop v1 v2 s builder =
+              let v = llvmop v1 v2 s builder in
+              L.build_zext_or_bitcast v i32_t s builder
+            in
             let binop_of_type (_,typ) op =
-                  (* Adds an int_cast to the llvmop *)
-                  let bit_to_int llvmop v1 v2 s builder =
-                    let v = llvmop v1 v2 s builder in
-                    L.build_zext_or_bitcast v i32_t s builder
-                  in
                   let vec_cmp vop iop v1 v2 s builder =
                     let bv = vop v1 v2 s builder in
                     let i1 = L.build_extractelement bv (L.const_int i32_t 0) "i1" builder
@@ -812,7 +812,7 @@ let translate prog =
                           (match snd(expr_type e) with A.Int -> L.build_neg
                             | A.Float | A.Vec -> L.build_fneg | t -> raise (Failure ("Negation not supported for "^A.string_of_typ(t)))
                           ) (expr builder e) "tmp" builder
-                  | A.Not     -> L.build_not (expr builder e) "tmp" builder
+                  | A.Not     -> expr builder (A.Binop((A.IntLit(0),A.Int), A.Equal,e),A.Int)
                   | A.Pos     -> expr builder e
                   | A.Preinc | A.Predec -> let e' = lexpr builder e in
                                  let ev = L.build_load e' "tmp" builder in
