@@ -127,10 +127,17 @@ let struct_name_list = List.fold_left(fun m usr -> StringMap.add usr.sname usr m
     StringMap.empty(structs)
 in 
 
+(* convert int to float ignore others *)
+let lit_promote (e,_) src trg = match (src,trg) with
+    (Int, Float) -> (FloatLit(float(get_int e)),Float)
+  | (t1, t2) when t1 = t2 -> (e,t1) (* No op promotion *)
+  | _ -> raise(Failure("Can not convert literal of type "^(string_of_typ src)^" to "^(string_of_typ trg)))
+
+in
 (* returns type and improved initializer *)
 let rec check_global_initer t n = function
     Exprinit e -> let (_,t') as e' = const_expr e in
-             let e'' = (try do_lit_promote e' t' t with Failure _ ->raise(Failure("Invalid initializer for global var "^n)))
+             let e'' = (try lit_promote e' t' t with Failure _ ->raise(Failure("Invalid initializer for global var "^n)))
              in (t, Exprinit(e''))
   | Listinit il -> (match t with
         Array(t2,e) -> 
@@ -143,7 +150,7 @@ let rec check_global_initer t n = function
                 (t, Listinit(List.map2 (fun t i -> snd(check_global_initer t n i)) dtl il))
             else raise(Failure("Invalid initializer for global var "^n))
 
-      | _ -> raise(Failure("Nested initializer cannot be used with "^(string_of_typ t)))
+      | _ -> raise(Failure("Brace initializer cannot be used with "^(string_of_typ t)))
     ) 
   | Noinit -> (t,Noinit)
 
@@ -239,6 +246,17 @@ let function_check func =
         (* Prepend any initializers to the statment list *)
         let (stmt_list, scopes) = 
             report_dup(fun n-> "Duplicate local variable " ^n ^ " in " ^ func.fname)(List.map (fun (_,a,_) ->  a)local_decls);
+            (* returns updated type (only for incomplete arrays) *)
+            let update_localt t = function
+                 Listinit il -> (match t with
+                    Array(t2,e) -> 
+                      if e <> (Noexpr,Void) then t else Array(t2, (IntLit (List.length il), Int))
+                  | UserType(s,_) -> t
+            
+                  | _ -> raise(Failure("Brace initializer cannot be used with "^(string_of_typ t)))
+                ) 
+              | _ -> t
+            in
             let add_local m (t,n,i) = 
                     ignore(match t with
                         UserType(s,ss) -> ignore(
@@ -250,7 +268,7 @@ let function_check func =
                         | Array(_,e) -> (try if snd(const_expr e)<>Int then raise Not_found with Not_found|Failure _ -> 
                                         raise(Failure("Array declaration requires constant integer: "^n)))
                         | _ -> ()
-                    ); StringMap.add n t m
+                    ); StringMap.add n (update_localt t i) m
              in
             let locals =  List.fold_left add_local StringMap.empty local_decls
             in  stmt_list,(locals, LocalScope)::scopes
@@ -477,8 +495,37 @@ let function_check func =
             |Return _ :: _ -> raise(Failure("Cannot have any code after a return statement"))
             |_ -> ()
         in
+        let var_promote e src trg= match (src,trg) with
+              (Int, Float) -> (Promote e,Float)
+            | (t1, t2) when t1 = t2 -> e (* No op promotion *)
+            | _ -> raise(Failure("Can not convert literal of type "^(string_of_typ src)^" to "^(string_of_typ trg)))
+        in
 
-        check_ret(); (local_decls, List.map stmt stmt_list) (* End of check_block *)
+        (* returns type and improved initializer *)
+        let thrd (_,_,x) = x 
+        in
+        let rec check_local_initer (t,n,i) = 
+          (match i with 
+              Exprinit e -> let (_,t') as e' = expr_b e in
+                       let e'' = (try var_promote e' t' t with Failure _ ->raise(Failure("Invalid initializer for local var "^n)))
+                       in (t,n,Exprinit(e''))
+            | Listinit il -> (match t with
+                  Array(t2,e) -> 
+                    let l =  List.map ( fun i -> thrd(check_local_initer (t2, n, i)) ) il in 
+                    if e <> (Noexpr,Void) then (t, n, Listinit l) else ( Array(t2, (IntLit (List.length l), Int)), n, Listinit l)
+                | UserType(s,_) ->
+                      (* type of members *)
+                      let dtl = List.map (fun (t,_)-> t) (StringMap.find s struct_name_list).decls  in
+                      if (List.length dtl = List.length il) then
+                          (t, n, Listinit(List.map2 (fun t i -> thrd(check_local_initer (t,n,i))) dtl il))
+                      else raise(Failure("Invalid initializer for local var "^n))
+          
+                | _ -> raise(Failure("Brace initializer cannot be used with "^(string_of_typ t)))
+              ) 
+            | Noinit -> (t,n,Noinit)
+          )
+        in
+        check_ret(); (List.map check_local_initer local_decls, List.map stmt stmt_list) (* End of check_block *)
     in 
     (* Construct the scopes list before calling check_block *)
     let scopes_list = match func.typ with
