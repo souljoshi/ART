@@ -658,8 +658,9 @@ let translate prog =
 
             (* Returns a tuple (type name, ast type) for an expression *)
             (* In final code [with semantic analysis] the ast type should be part of expr *)
-            let rec expr_type (e,_) = baseexpr_type e
-            and baseexpr_type  = function
+            (*let rec expr_type (e,_) = baseexpr_type e*)
+            let expr_type (_,t) = (string_of_typ2 t, t)
+            (*and baseexpr_type  = function
               A.IntLit i -> ("int", A.Int)
             | A.CharLit _ -> ("char",A.Char)
             | A.FloatLit f -> ("double", A.Float)
@@ -680,7 +681,7 @@ let translate prog =
                           in (string_of_typ2 t, t)
             | A.StringLit s -> ("string",A.String)
             |e -> raise (Failure ("Unsupported Expression for expr_type "^A.string_of_baseexpr e))
-
+*)
             in
 
 
@@ -818,7 +819,8 @@ let translate prog =
             and expr builder =  function
                   (A.Promote (e,st), tt) ->
                   (match (st,tt) with 
-                       (A.Int,A.Float) -> L.build_sitofp (baseexpr builder e) double_t "tmp" builder
+                       (a,b) when a=b  -> expr builder (e,st)
+                     | (A.Int,A.Float) -> L.build_sitofp (baseexpr builder e) double_t "tmp" builder
                      | (A.Int,A.Vec)   -> expr builder (A.Promote(A.Promote (e,st),A.Float), tt)
                      | (A.Float,A.Vec) -> let e' = (baseexpr builder e) in
                            let vec = L.const_vector [| L.const_float double_t 0.0 ; L.const_float double_t 0.0 |] in

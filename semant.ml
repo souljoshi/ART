@@ -389,9 +389,12 @@ let function_check func =
               | e -> raise (Failure ("rvalue given: "^(string_of_expr e)^ " where lvalue expected"))        
         in 
     
-    let check_bool_expr e = if snd(expr_b e) != Int (*Could take in any number need to force check 1 or 0*)
+    let check_bool_expr e = let (_,t') as f = expr_b e in
+            if t' != Int (*Could take in any number need to force check 1 or 0*)
             then raise(Failure((string_of_expr e)^" is not a boolean value"))
-            else() in
+            else f in
+
+    (* RETURN TO THIS: CHECK GLOBAL INITERS HERE *)
     List.iter(fun (t,n,e) -> ( match e with 
                                     Exprinit e -> let (e1',t1') = (expr_b e)
                                                         in if(t1'=t)
@@ -411,35 +414,34 @@ let function_check func =
 
 
         let rec stmt = function
-             Block (vl,sl,_)  -> check_block (vl, sl) scopes
-            |Expr e -> ignore(expr_b e)
-            |Return e -> let e1' = snd(expr_b e) in if e1'= func.rettyp then () else
+             Block (vl,sl,c)  -> let f =(check_block (vl, sl) scopes) in Block(fst f, snd f, c)
+            |Expr e -> Expr(expr_b e)
+            |Return e -> let (_,t1') as f= (expr_b e) in if t1'= func.rettyp then Return(f) else
                 raise(Failure("Incorrect return type in " ^ func.fname))
-            |If(p,e1,e2) -> check_bool_expr p; stmt e1; stmt e2;
-            |For(e1,e2,e3,state) -> ignore(expr_b e1); check_bool_expr e2; ignore(expr_b e3); stmt state
-            |While(p,s) -> check_bool_expr p; stmt s 
+            |If(p,e1,e2) -> If(check_bool_expr p, stmt e1, stmt e2)
+            |For(e1,e2,e3,state) -> For(expr_b e1, check_bool_expr e2,expr_b e3, stmt state)
+            |While(p,s) -> While(check_bool_expr p, stmt s)
             |ForDec (vdecls,e2,e3,body) -> stmt  ( Block(vdecls, [For((Noexpr,Void) , e2, e3, body)],PointContext) )
             |Timeloop(s1,e1,s2,e2,st1) -> 
                 (* Need to check statements also ? *)
                 if s1 = s2 then raise(Failure("Duplicate variable "^s1^" in timeloop definition"))
                 else
-                    let e1' = snd(expr_b e1) 
-                    and e2' = snd(expr_b e2)
+                    let (_,t1') as f1 = expr_b e1 
+                    and (_,t2') as f2 = expr_b e2
                     in 
-                    if e1' = Float && e2' = Float 
-                        then ()
+                    if (t1' = Float || t1'=Int) && (t2' = Float || t2'=Int) 
+                    then Timeloop(s1, (Promote f1,Float), s2, (Promote f2,Float),stmt st1) 
                     else raise(Failure("Timeloop definition only accepts expressions of type double"))
             |Frameloop (s1,e1,s2,e2,st1)-> 
                 (* Need to check statements also ? *)
-                if s1 = s2 then raise(Failure("Duplicate variable "^s1^" in frameloop definition"))
+                if s1 = s2 then raise(Failure("Duplicate variable "^s1^" in timeloop definition"))
                 else
-                    let e1' = snd(expr_b e1) 
-                    and e2' = snd(expr_b e2)
+                    let (_,t1') as f1 = expr_b e1 
+                    and (_,t2') as f2 = expr_b e2
                     in 
-                    if e1' = Float && e2' = Float 
-                        then ()
-                    else raise(Failure("Frameloop definition only accepts expressions of type double"))
-
+                    if (t1' = Float || t1'=Int) && (t2' = Float || t2'=Int) 
+                    then Frameloop(s1, (Promote f1,Float), s2, (Promote f2,Float),stmt st1) 
+                    else raise(Failure("Timeloop definition only accepts expressions of type double"))
         in 
         let check_ret () = match stmt_list with
             [Return _ ] -> ()
@@ -447,7 +449,7 @@ let function_check func =
             |_ -> ()
         in
 
-        check_ret(); List.iter stmt stmt_list (* End of check_block *)
+        check_ret(); (local_decls, List.map stmt stmt_list) (* End of check_block *)
     in 
     (* Construct the scopes list before calling check_block *)
     let scopes_list = match func.typ with
@@ -457,7 +459,16 @@ let function_check func =
                    So we are using an empty map *)
               | _      -> [(local_vars, LocalScope); (StringMap.empty, StructScope) ; (global_vars, GlobalScope)]
 in 
-    check_block (func.locals, func.body) scopes_list
+    let (locals',body') = check_block (func.locals, func.body) scopes_list in
+    { rettyp = func.rettyp; fname = func.fname; params = func.params; locals = locals'; body = body'; typ = func.typ; owner= func.owner}
 in
-List.iter function_check functions;
-List.iter (fun sdecl -> List.iter function_check (sdecl.ctor::sdecl.methods)) structs
+let f' = List.map function_check functions in
+let s' = List.map (fun st-> 
+    {
+        ss = st.ss ; sname = st.sname ; decls = st.decls;
+        ctor = function_check st.ctor;
+        methods = List.map function_check st.methods 
+    }
+) structs in
+let v' = globals in
+{ s = s' ; f=f'; v =v';}
