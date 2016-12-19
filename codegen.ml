@@ -659,48 +659,9 @@ let translate prog =
             (* Returns a tuple (type name, ast type) for an expression *)
             (* In final code [with semantic analysis] the ast type should be part of expr *)
             (*let rec expr_type (e,_) = baseexpr_type e*)
-            let expr_type (_,t) = (string_of_typ2 t, t)
-            (*and baseexpr_type  = function
-              A.IntLit i -> ("int", A.Int)
-            | A.CharLit _ -> ("char",A.Char)
-            | A.FloatLit f -> ("double", A.Float)
-            | A.Id s -> let t =  lookup_type s in (string_of_typ2 t, t)
-            | A.VecLit(f1, f2) -> ("vec", A.Vec)
-            | A.Vecexpr(e1, e2) -> ("vec", A.Vec)
-            | A.Index(a, e) -> (match snd(expr_type a) with (* First get type of the expr being indexed *)
-                                (* The type of the index expression is the subtype 't' of the array *)
-                                A.Array (t, e2) -> (string_of_typ2 t, t)
-                              | A.Vec -> (string_of_typ2 A.Float, A.Float)
-                              | _ -> raise (Failure ("Indexing non array")))
-
-            | A.Member(e, s) -> let (n,t) = expr_type e (* Get type name of the expression before dot *)
-                          (* Look for it in the structs map and get the var map *)
-                          in  let (varmap, _,_ ) = StringMap.find n struct_decls
-                          (* Look for string after the dot in the varmap *)
-                          in let t = fst(StringMap.find s varmap)
-                          in (string_of_typ2 t, t)
-            | A.StringLit s -> ("string",A.String)
-            |e -> raise (Failure ("Unsupported Expression for expr_type "^A.string_of_baseexpr e))
-*)
-            in
-
-
-            let convert_type e1 e2 builder =
-                let float_type = L.type_of (L.const_float double_t 1.1) and int_type = L.type_of(L.const_int i32_t 1) and type_of_e1=L.type_of(e1) and type_of_e2=L.type_of(e2)
-                  in let e1' =
-                          (if type_of_e1=int_type
-                              then L.build_sitofp e1 float_type "temp" builder
-                            else e1)
-                  and e2'=(if type_of_e2=int_type
-                            then L.build_sitofp e2 float_type "temp" builder 
-                           else e2 )
-                in (e1',e2')
-
-              in
-
-
+            let expr_type (_,t) = (string_of_typ2 t, t) in
             
-            let match_type typ op =
+            let binop_of_type (_,typ) op =
                   (* Adds an int_cast to the llvmop *)
                   let bit_to_int llvmop v1 v2 s builder =
                     let v = llvmop v1 v2 s builder in
@@ -713,10 +674,7 @@ let translate prog =
                     let ir = iop i1 i2 "ir" builder in
                     L.build_zext_or_bitcast ir i32_t s builder
                   in
-                  let float_type = (L.type_of (L.const_float double_t 1.1))
-                  and vec_type = L.type_of(L.const_vector [|L.const_float double_t 1.1 ; L.const_float double_t 1.1 |])
-                in 
-                if typ=vec_type
+                if typ=A.Vec
                   then match op with
                       A.Add -> L.build_fadd
                     | A.Sub     -> L.build_fsub
@@ -726,7 +684,7 @@ let translate prog =
                     | A.Neq     -> vec_cmp (L.build_fcmp L.Fcmp.One) L.build_or
                     | _         -> raise (Failure ("Unsupported binary operation for vec: "^A.string_of_op(op)))
 
-                else if typ=float_type
+                else if typ=A.Float
                   then match op with
                       A.Add -> L.build_fadd
                     | A.Sub     -> L.build_fsub
@@ -757,42 +715,6 @@ let translate prog =
                     | A.Greater -> bit_to_int (L.build_icmp L.Icmp.Sgt)
                     | A.Geq     -> bit_to_int (L.build_icmp L.Icmp.Sge)
               
-            in
-            let vec_scalar_mult e1'' e2'' builder =
-                let type_of_e1'' = L.type_of(e1'') 
-                and type_of_e2'' = L.type_of(e2'')
-                and float_type = L.type_of(L.const_float double_t 1.1)
-                and vec_type = L.type_of(L.const_vector [|L.const_float double_t 1.1 ; L.const_float double_t 1.1 |])
-                in
-                (
-                  if type_of_e2'' = float_type
-                  then 
-                  (
-                    let vec_of_e2'' = L.const_vector [| L.const_float double_t 0.0 ; L.const_float double_t 0.0 |]
-                  in
-                    let insert_element1 = L.build_insertelement vec_of_e2'' e2'' (L.const_int i32_t 0) "tmp1" builder
-                  in
-                    let insert_element2 = L.build_insertelement insert_element1 e2'' (L.const_int i32_t 1) "tmp2" builder
-                  in
-                    match_type vec_type A.Mult e1'' insert_element2 "tmp" builder
-                  )
-                  else 
-                  (
-                    if type_of_e1'' = float_type
-                    then
-                    ( 
-                      let vec_of_e1'' = L.const_vector [| L.const_float double_t 0.0 ; L.const_float double_t 0.0 |]
-                    in
-                      let insert_element1 = L.build_insertelement vec_of_e1'' e1'' (L.const_int i32_t 0) "tmp1" builder
-                    in
-                      let insert_element2 = L.build_insertelement insert_element1 e1'' (L.const_int i32_t 1) "tmp2" builder
-                    in
-                      match_type vec_type A.Mult insert_element2 e2'' "tmp" builder
-                    )
-                    else
-                      raise (Failure "Unsupported binary operation for vectors")
-                  )
-                )
             in
 
             (* Construct code for an lvalue; return a pointer to access object *)
@@ -828,9 +750,9 @@ let translate prog =
                   (A.Promote (e,st), tt) ->
                   (match (st,tt) with 
                        (a,b) when a=b  -> expr builder (e,st)
-                     | (A.Int,A.Float) -> L.build_sitofp (baseexpr builder e) double_t "tmp" builder
+                     | (A.Int,A.Float) -> L.build_sitofp (expr builder (e,st)) double_t "tmp" builder
                      | (A.Int,A.Vec)   -> expr builder (A.Promote(A.Promote (e,st),A.Float), tt)
-                     | (A.Float,A.Vec) -> let e' = (baseexpr builder e) in
+                     | (A.Float,A.Vec) -> let e' = (expr builder (e,st)) in
                            let vec = L.const_vector [| L.const_float double_t 0.0 ; L.const_float double_t 0.0 |] in
                            let i1 = L.build_insertelement vec e' (L.const_int i32_t 0) "tmp1" builder in
                            L.build_insertelement i1 e' (L.const_int i32_t 1) "tmp2" builder
@@ -858,21 +780,7 @@ let translate prog =
               | A.Binop (e1, op, e2) ->
                   let e1' = expr builder e1 
                   and e2' = expr builder e2 
-                  and float_type = L.type_of(L.const_float double_t 1.1)
-                  and vec_type = L.type_of(L.const_vector [|L.const_float double_t 1.1 ; L.const_float double_t 1.1 |])
-                in
-                  let type_of_e1' = L.type_of(e1') and type_of_e2' = L.type_of(e2')
-                in 
-                if type_of_e1' <> type_of_e2'
-                    then let ret= convert_type e1' e2' builder
-                        in let x = fst ret and y = snd ret
-                        in 
-                        (if ((L.type_of x) = vec_type || (L.type_of y) = vec_type) && op = A.Mult
-                          then vec_scalar_mult x y builder (*Handle vector scalar multiplication *)
-                          else match_type float_type op x y "temp" builder
-                        )
-                    else
-                      match_type type_of_e1' op e1' e2' "tmp" builder
+                  in binop_of_type (expr_type e1) op e1' e2' "tmp" builder
 
               | A.Index(e1,e2) as arr-> L.build_load (lbaseexpr builder arr) "tmp" builder
 
@@ -883,26 +791,11 @@ let translate prog =
                    (match op with
                        A.Asn -> let e' = expr builder er in
                                  ignore (L.build_store e' el' builder); e'
-                       (* The code here must change if supporting non-identifiers *)
                      | A.CmpAsn bop ->
                             let e' = 
                                let e1' = L.build_load el' "ltmp" builder
                                 and e2' = expr builder er
-                                and float_type = L.type_of(L.const_float double_t 1.1)
-                                and vec_type = L.type_of(L.const_vector [|L.const_float double_t 1.1 ; L.const_float double_t 1.1 |])
-                                in
-                                  let type_of_e1' = L.type_of(e1') and type_of_e2' = L.type_of(e2')
-                                in 
-                                if type_of_e1' <> type_of_e2'
-                                    then let ret= convert_type e1' e2' builder
-                                        in let x = fst ret and y = snd ret
-                                        in 
-                                        (if ((L.type_of x) = vec_type || (L.type_of y) = vec_type) && bop = A.Mult
-                                          then vec_scalar_mult x y builder (*Handle vector scalar multiplication *)
-                                          else match_type float_type bop x y "temp" builder
-                                        )
-                                    else
-                                      match_type type_of_e1' bop e1' e2' "tmp" builder
+                                in binop_of_type (expr_type el) bop e1' e2' "tmp" builder
                             in ignore(L.build_store e' el' builder); e'
                    )
 
@@ -932,7 +825,7 @@ let translate prog =
                     let add_one_shape ex = 
                       let fdef' = L.const_bitcast (fst(lookup_method (fst(expr_type ex)) "draw")) (L.pointer_type void_i8p_t) in
                       let i = L.build_load shape_list_ind "sindex" builder in
-                      let ex' = L.build_bitcast (lexpr builder ex) i8ptr_t "shp" builder in
+                      let ex' = L.build_bitcast (slexpr builder ex) i8ptr_t "shp" builder in
                       (* store the shape *)
                       ignore( L.build_store ex' (L.build_gep shape_list [| L.const_int i32_t 0; i; L.const_int i32_t 0|] "slp" builder) builder);
                       (* store the function *)

@@ -347,11 +347,11 @@ let function_check func =
                     | _ -> raise(Failure("Unsupported unary operation for "^ Ast.string_of_expr e1 ))
                 )
             |(Noexpr,_) -> (Noexpr,Void)
-            |(Asnop(e1,asnp,e2),_)  -> let (e1',t1') = (lexpr_b e1) and  (e2',t2')=(expr_b e2) in 
+            |(Asnop(e1,asnp,e2),_)  -> let (e1',t1') = (lexpr_b e1) and  (e2',t2') as f=(expr_b e2) in 
                 (match asnp with
                      Asn when t1'=t2' -> (Asnop((e1',t1'),asnp,(e2',t2')),t1')
                     |Asn when t1'=Float && t2'=Int ->  (Asnop((e1',t1'),asnp,(Promote(e2',t2'),Float)),Float)
-                    |CmpAsn b when t1'=snd(expr_b (Binop((e1',t1'), b, (e2',t2')), Void)) ->  (Asnop ((e1',t1'),asnp,(e2',t2')),t1')
+                    |CmpAsn b when t1'=snd(expr_b (Binop((e1',t1'), b, (e2',t2')), Void)) ->  (Asnop ((e1',t1'),asnp,(Promote f,t1')),t1')
                     (*|CmpAsn b when e1'=Float && e2'=Int ->  Float
                     |CmpAsn b when e1'=Int && e2'=Float ->  Float*)
                     | _ -> raise (Failure ("Invalid assigment of " ^ Ast.string_of_typ t2' ^ " to "^Ast.string_of_typ t1'))
