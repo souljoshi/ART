@@ -330,6 +330,7 @@ let function_check func =
             |(Unop(op,e1),_) -> let (e1',t1') as f = (expr_b e1) in
                 (match op with
                      Neg when t1'=Int -> (Unop(op,(e1',t1')),Int)
+                    |Not when t1'=Int -> (Unop(op,(e1',t1')),Int)
                     |Neg when t1'=Float -> (Unop(op,(e1',t1')),Float)
                     |Neg when t1'=Vec -> (Unop(op,(e1',t1')),Vec)
                     |Pos when t1'=Int -> (Unop(op,(e1',t1')),Int)
