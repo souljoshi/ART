@@ -1084,6 +1084,13 @@ let translate prog =
                     (* Check to see if the tloop_on flag is active *)
                     let t_off = (L.build_icmp L.Icmp.Eq)(L.build_load tloop_on "tflag" builder) 
                                (L.const_int i32_t 0) "t_on" builder in
+                    let e1' = expr builder e1 in let e2' = expr builder e2 in 
+                    let zero = L.const_float double_t 0.0 in
+                    (* fps/dt >= 0 *)
+                    let cond1 = L.build_and t_off (L.build_fcmp L.Fcmp.Oge e1' zero "le1" builder) "cond1" builder in
+                    (* frames/time > 0 *)
+                    let cond2 = L.build_and cond1 (L.build_fcmp L.Fcmp.Ogt e2' zero "le1" builder) "cond1" builder in
+
                     let merge_bb = L.append_block context "merge" the_function in (* Merge block *)
                     let then_bb = L.append_block context "then" the_function in
 
@@ -1092,7 +1099,7 @@ let translate prog =
                     (* add_terminal used to avoid insert two terminals to basic blocks *)
 
                     (* builder is in block that contains if stmt *)
-                    ignore (L.build_cond_br t_off then_bb else_bb builder);
+                    ignore (L.build_cond_br cond2 then_bb else_bb builder);
 
                     let builder =  L.builder_at_end context then_bb in
 
@@ -1117,7 +1124,6 @@ let translate prog =
                     ignore( _build_function_body loopdecl fdecls [(closure_map, ClosureScope)]);
                     (* Setup the timer and stepper values *)
                     ignore(L.build_store (do_seconds_call builder) g_last_time builder);
-                    let e1' = expr builder e1 in let e2' = expr builder e2 in
                     let delayflt = if loop = 0 then e1' else L.build_fdiv (L.const_float double_t 1.0) e1' "dfstps" builder in
                     ignore(L.build_store delayflt g_delay builder);
                     ignore(L.build_store (L.const_int i32_t 0) g_steps builder);
