@@ -126,16 +126,46 @@ in
 let struct_name_list = List.fold_left(fun m usr -> StringMap.add usr.sname usr m) (*creates a struct names list*)
     StringMap.empty(structs)
 in 
-let global_vars = List.fold_left(fun m(t,n,_)->
-                        (match t with
-                            UserType(s,ss) -> ignore(
-                                try if (StringMap.find s struct_name_list).ss != ss then  raise Not_found with Not_found ->
-                                    raise(Failure((string_of_stosh ss)^" "^s ^" is not defined "))
-                                ); StringMap.add n t m
-                            | _ -> StringMap.add n t m
-                        )
-                    ) StringMap.empty(globals)
+
+(* returns type and improved initializer *)
+let rec check_global_initer t n = function
+    Exprinit e -> let (_,t') as e' = const_expr e in
+             let e'' = (try do_lit_promote e' t' t with Failure _ ->raise(Failure("Invalid initializer for global var "^n)))
+             in (t, Exprinit(e''))
+  | Listinit il -> (match t with
+        Array(t2,e) -> let len = get_int(fst(const_expr e)) in
+          let l =  List.map ( fun i -> snd(check_global_initer t2 n i)) il in (t, Listinit l)
+      | UserType(n,_) ->
+            (* type of members *)
+            let dtl = List.map (fun (t,_)-> t) (StringMap.find n struct_name_list).decls  in
+            if (List.length dtl = List.length il) then
+                (t, Listinit(List.map2 (fun t i -> snd(check_global_initer t n i)) dtl il))
+            else raise(Failure("Invalid initializer for global var "^n))
+
+      | _ -> raise(Failure("Nested initializer cannot be used with "^(string_of_typ t)))
+    ) 
+  | Noinit -> (t,Noinit)
+
 in
+
+(* Simultaneously modify globals list and build global_vars map *)
+let (global_vars, globals') = 
+        List.fold_left(fun (m,gl) (t,n,i)->
+            (* check if type exists *)
+            (match t with
+                UserType(s,ss) -> ignore(
+                    try if (StringMap.find s struct_name_list).ss != ss then  raise Not_found with Not_found ->
+                        raise(Failure((string_of_stosh ss)^" "^s ^" is not defined "))
+                    );
+                | _ -> ()
+            ); 
+            let (t',i') = check_global_initer t n i in
+            (StringMap.add n t m, (t',n,i')::gl)
+        ) (StringMap.empty, []) globals
+in
+let globals = List.rev globals'
+in
+
 let function_check func =
 
 
