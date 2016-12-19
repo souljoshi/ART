@@ -133,11 +133,12 @@ let rec check_global_initer t n = function
              let e'' = (try do_lit_promote e' t' t with Failure _ ->raise(Failure("Invalid initializer for global var "^n)))
              in (t, Exprinit(e''))
   | Listinit il -> (match t with
-        Array(t2,e) -> let len = get_int(fst(const_expr e)) in
-          let l =  List.map ( fun i -> snd(check_global_initer t2 n i)) il in (t, Listinit l)
-      | UserType(n,_) ->
+        Array(t2,e) -> 
+          let l =  List.map ( fun i -> snd(check_global_initer t2 n i)) il in 
+          if e <> (Noexpr,Void) then (t, Listinit l) else ( Array(t2, (IntLit (List.length l), Int)), Listinit l)
+      | UserType(s,_) ->
             (* type of members *)
-            let dtl = List.map (fun (t,_)-> t) (StringMap.find n struct_name_list).decls  in
+            let dtl = List.map (fun (t,_)-> t) (StringMap.find s struct_name_list).decls  in
             if (List.length dtl = List.length il) then
                 (t, Listinit(List.map2 (fun t i -> snd(check_global_initer t n i)) dtl il))
             else raise(Failure("Invalid initializer for global var "^n))
@@ -157,10 +158,14 @@ let (global_vars, globals') =
                     try if (StringMap.find s struct_name_list).ss != ss then  raise Not_found with Not_found ->
                         raise(Failure((string_of_stosh ss)^" "^s ^" is not defined "))
                     );
+                | Array(_,(Noexpr,Void)) when i=Noinit -> raise(Failure("Incomplete array without initializer: "^n))
+                | Array(_,(Noexpr,Void)) when i<>Noinit -> ()
+                | Array(_,e) -> (try if snd(const_expr e)<>Int then raise Not_found with Not_found|Failure _ -> 
+                                        raise(Failure("Array declaration requires constant integer: "^n)))
                 | _ -> ()
             ); 
             let (t',i') = check_global_initer t n i in
-            (StringMap.add n t m, (t',n,i')::gl)
+            (StringMap.add n t' m, (t',n,i')::gl)
         ) (StringMap.empty, []) globals
 in
 let globals = List.rev globals'
@@ -234,14 +239,18 @@ let function_check func =
         (* Prepend any initializers to the statment list *)
         let (stmt_list, scopes) = 
             report_dup(fun n-> "Duplicate local variable " ^n ^ " in " ^ func.fname)(List.map (fun (_,a,_) ->  a)local_decls);
-            let add_local m (t,n,_) = 
-                    (match t with
+            let add_local m (t,n,i) = 
+                    ignore(match t with
                         UserType(s,ss) -> ignore(
                             try if (StringMap.find s struct_name_list).ss != ss then  raise Not_found with Not_found ->
                                 raise(Failure((string_of_stosh ss)^" "^s ^" is not defined "))
-                            ); StringMap.add n t m
-                        | _ -> StringMap.add n t m
-                    )
+                            ) 
+                        | Array(_,(Noexpr,Void)) when i=Noinit -> raise(Failure("Incomplete array without initializer: "^n))
+                        | Array(_,(Noexpr,Void)) when i<>Noinit -> ()
+                        | Array(_,e) -> (try if snd(const_expr e)<>Int then raise Not_found with Not_found|Failure _ -> 
+                                        raise(Failure("Array declaration requires constant integer: "^n)))
+                        | _ -> ()
+                    ); StringMap.add n t m
              in
             let locals =  List.fold_left add_local StringMap.empty local_decls
             in  stmt_list,(locals, LocalScope)::scopes
@@ -363,7 +372,7 @@ let function_check func =
 
                         List.iter2 (fun (ft, _,_) e -> let et = snd(e) in
                             ignore (check_ass ft et
-                            (Failure ("Illegal argument of type "^Ast.string_of_typ et^ " in call to function "^fd.fname^ " which expects argument of type " ^ Ast.string_of_typ ft)))
+                            (Failure ("Illegal argument "^(string_of_expr e)^" of type "^Ast.string_of_typ et^ " in call to function "^fd.fname^ " which expects argument of type " ^ Ast.string_of_typ ft)))
                         ) fd.params actuals;
                         actuals
                         
@@ -431,24 +440,6 @@ let function_check func =
             if t' != Int (*Could take in any number need to force check 1 or 0*)
             then raise(Failure((string_of_expr e)^" is not a boolean value"))
             else f in
-
-    (* RETURN TO THIS: CHECK GLOBAL INITERS HERE *)
-    List.iter(fun (t,n,e) -> ( match e with 
-                                    Exprinit e -> let (e1',t1') = (expr_b e)
-                                                        in if(t1'=t)
-                                                            then ()
-                                                        else raise(Failure("Global variable "^n^" needs to be assigned to type "^string_of_typ t^ ", not "^string_of_typ t1'))
-                                    |_ -> ()
-                                    )) globals;
-
-    List.iter(fun (t,n,e1) -> ( match t with 
-                                  Array(_,e)  -> let (e1',t1') = (expr_b e) 
-                                                        in
-                                                        (match e1' with
-                                                        | IntLit _ -> ()
-                                                        |_->  raise(Failure("Array declaration requires an integer constant index")))           
-                                    |_ -> ()
-                                    )) func.locals;
 
 
         let rec stmt = function
