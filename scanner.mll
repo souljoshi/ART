@@ -1,9 +1,8 @@
 (* Ocamllex scanner for ART *)
 
 { open Parser
+
   (* Converts escape sequences into characters *)
-  let string_func s =
-      Scanf.sscanf("\"" ^ s ^ "\"") "%S" (fun  y ->y )
 
   let char_esc = function
       "\\n"  -> Char.chr(0XA)
@@ -18,6 +17,7 @@
     |"\\'"   -> '\''
     | "\\\"" -> '"'
     | e      -> raise (Failure("illegal escape " ^ e))
+
 }
 
 let spc = [' ' '\t' '\r' '\n']
@@ -31,10 +31,9 @@ let escapes = "\\n" | "\\t"  | "\\v"          (* Escaped chars *)
             |"\\b"  | "\\r"  | "\\f"
             |"\\a"  | "\\\\" | "\\?"
             |"\\'"  | "\\\""
-let string = '"' ((printable|escapes)* as str) '"'
-
 let octescp = (oct | oct oct | oct oct oct) (* Octal escapes *)
 let hexescp = hex+                         (* Hex escapes *)
+
 
 let exp = 'e' ('+' | '-')? dec+               (* Floating point exponent *)
 let double = '.' dec+ exp? 
@@ -120,11 +119,14 @@ rule token = parse
                                                     (* oct escapes *)
 | '\''"\\x" (hexescp as lex)'\''{ CHARLIT (Char.chr(int_of_string ("0x"^lex)))}
                                                     (* hex escapes *)
-| '\''("\\" printable+ as lex)'\'' { CHARLIT (char_esc lex) } (* Catch invalid escapes *)
+| '\''("\\" printable as lex)'\'' { CHARLIT (char_esc lex) } (* Catch invalid escapes *)
 
 (* Double Literal *)
 |  double as lex { FLOATLIT (float_of_string lex)}
-| string {STRINGLIT(string_func str )}
+
+(* Hanlde strings as a sequence of character tokens *)
+| '"'      { read_string (Buffer.create 2048) lexbuf }
+
 (* Vector Literal *)
 |  '<' spc* (double as lex1) spc*
     ',' spc* (double as lex2) spc* '>'  { VECTORLIT(float_of_string lex1, float_of_string lex2)}
@@ -140,3 +142,16 @@ and block_comment = parse
 and line_comment = parse
   '\n' { Lexing.new_line lexbuf; token lexbuf }
 | _    { line_comment lexbuf }
+
+and read_string buf = parse
+
+| '"'                                 { STRINGLIT (Buffer.contents buf) }
+|  (printable as lex)                 { Buffer.add_char buf (lex) ; read_string buf lexbuf}                                  (* printable *)
+|  (escapes as lex)                   { Buffer.add_char buf (char_esc lex); read_string buf lexbuf }                         (* escapes *)
+|  "\\" (octescp as lex)              { Buffer.add_char buf (Char.chr(int_of_string ("0o"^lex))); read_string buf lexbuf}    (* oct escapes *)
+|  "\\x" (hexescp as lex)             { Buffer.add_char buf (Char.chr(int_of_string ("0x"^lex))); read_string buf lexbuf}    (* hex escapes *)
+| ("\\" printable as lex)             { Buffer.add_char buf (char_esc lex) ; read_string buf lexbuf}                         (* Catch invalid escapes *)  
+| '\n'                                { raise (Failure ("Multiline string not supported")) }
+
+| _ { raise (Failure ("Illegal string character: " ^ Lexing.lexeme lexbuf)) }
+| eof { raise (Failure ("String is not terminated")) }

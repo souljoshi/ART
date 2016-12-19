@@ -315,7 +315,7 @@ posexpr:
   | CHARLIT               { (CharLit($1), Char) }
   | FLOATLIT              { (FloatLit($1), Float) }
   | VECTORLIT             { (VecLit($1), Vec) }
-  | STRINGLIT             { (StringLit($1), String)}
+  | stringlit_list        { (StringLit($1), String)}
 
   /* Vector expression */
   | LT addexpr COMMA addexpr GT   %prec VECEXPR { (Vecexpr($2, $4), Vec) }
@@ -332,6 +332,10 @@ posexpr:
   | posexpr DOT ID                %prec MEMB    { (Member($1, $3), Void) }
   | posexpr PLUSPLUS              %prec POST    { (Posop(Postinc, $1), Void) }
   | posexpr MINUSMINUS            %prec POST    { (Posop(Postdec, $1), Void) }
+
+stringlit_list:
+  STRINGLIT                   {$1}
+| STRINGLIT stringlit_list    {$1^$2}
 
 arg_list:
   /* nothing */       {[]}
