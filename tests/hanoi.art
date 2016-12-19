@@ -39,7 +39,7 @@ void rectangle::draw()
 
 }
 
-int max =10;
+int max = 10;
 
 double dw()
 {
@@ -159,6 +159,99 @@ int hstack::animatedpush(double dt, shape hdisk &d)
     return 0;
 }
 
+/* a stack of ints for iterating over the hanoi problem */
+struct stack
+{
+    int top;
+    int[1024] data;
+}
+
+stack::stack() { top = -1;}
+
+int stack::is_empty() { return top == -1; }
+int stack::is_full() { return top == 256; }
+
+int stack::top() { 
+    if (is_empty()) {
+        prints("Error: accessing empty stack\n");
+        return -1;
+    } 
+    return data[top]; 
+}
+int stack::pop() { 
+    if (is_empty()) {
+        prints("Error: poping empty stack\n");
+        return -1;
+    }
+    return data[top--]; 
+}
+void stack::push(int x){
+    if(is_full()) {
+        prints ("Error: stack overflow\n");
+    }
+    data[++top] = x;
+}
+
+
+char name(int i){
+    if (i == 0)
+        return 'S';
+    else if (i == 2) 
+        return 'A';
+    else 
+        return 'D';
+}
+
+// hanoi state
+struct SH
+{ 
+    int n; int s; int d; int ax;
+    struct stack f;
+
+}
+
+SH::SH(int ni, int si, int di, int axi)
+{
+    n = ni; s = si; d = di; ax = axi;
+    f = stack(); 
+    f.push(ax);f.push(d);f.push(s);f.push(n);
+}
+void SH::print_state()
+{
+     prints("move disk");prints(" from ");printc(name(s));
+            prints(" to ");printc(name(d));prints("\n");
+}
+
+int SH::done(){return f.is_empty();}
+void SH::step_hanoi()
+{
+    while (1){
+       n = f.pop();  s = f.pop(); d = f.pop(); ax = f.pop();
+       if (n == 1) {
+            return;
+       } else
+       {
+            f.push(s);f.push(d);f.push(ax);f.push(n-1);
+            f.push(ax);f.push(d);f.push(s);f.push(1);
+            f.push(d);f.push(ax);f.push(s);f.push(n-1);
+       }
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 int movstate = 0;
 shape hdisk d; // temporary disk
 // Move from one stack to another 
@@ -206,7 +299,7 @@ int animatedmove(shape hstack &s1, shape hstack &s2, double dt)
     else  {
         s2.push(d);
         movstate = 0;
-        d.setloc(<100,100>); /* Move of screen */
+        d.setloc(<100,100>);//move it offscreen
         return 1;
     }
 }
@@ -218,94 +311,41 @@ int pow2(int n)
     else return 2*pow2(n-1);
 }
 
-int btwn = 0;
-int bcond(int cond, int st) 
-{
-    if (movstate == 0)
-        return cond;
-    else
-        return st == btwn;
-}
-// Function to implement legal movement between
-// two poles
-int movebetween(shape hstack &s, shape hstack &d, double dt)
-{
-    // When sourcee  is empty
-    if (bcond(s.is_empty(),1))
-    {
-        btwn = 1;
-        return animatedmove(d, s,dt);
-    }
- 
-    // When d is empty
-    else if (bcond(d.is_empty(),2))
-    {
-        btwn = 2;
-        return animatedmove(s,d,dt);
-    }
- 
-    // When top disk of s > top disk of d
-    else if (bcond(s.top().id > d.top().id,3))
-    {
-        btwn = 3;
-       return animatedmove(d, s,dt);
-    }
- 
-    // When top disk of pole1 < top disk of pole2
-    else
-    {
-        btwn = 3;
-       return animatedmove(s,d,dt);
-    }
-}
 
-void movebetweenandinc (shape hstack &s, shape hstack &d,double dt,int &i)
-{
-    if (movebetween(s,d,dt))
-        i++;
-}
 
 int main()
 {
-    shape hstack src = hstack(<-2.0/3.0,-1>,"src"); // source
-    shape hstack aux = hstack(<0.0,-1>,"aux");      // aux
-    shape hstack dest = hstack(<2.0/3.0,-1>,"dest");  // dest
+    shape hstack[3] sts;
+    sts[0] = hstack(<-2.0/3.0,-1>,"src"); // source
+    sts[1] = hstack(<0.0,-1>,"aux");      // dest
+    sts[2] = hstack(<2.0/3.0,-1>,"dest");  // aux
+
     for (int i = max ; i >= 1;i--)
-        src.push(hdisk(i));
+        sts[0].push(hdisk(i));
 
-    addshape(src,dest,aux);
+    for (int i = 0; i < 3;i++)
+        addshape(sts[i]);
 
-    int i = 1;
+    int moving = 0;
     int max_moves = pow2(max);
     double dt = 0.01;
-    printi(max %2 );prints("\n");
-    frameloop (fps = 240 ; frames = 100000) 
-   {
-        //prints("i: ");printi(i);prints("\n");
-        prints(src.dbg);prints(": ");printi(src.size());prints(" ");
-        prints(aux.dbg);prints(": ");printi(aux.size());prints(" ");
-        prints(dest.dbg);prints(": ");printi(dest.size());prints(" \n");
-        if (i < max_moves) {
-            if (i % 3 == 1){
-                if (max % 2 == 1)
-                    movebetweenandinc(src, dest, dt, i);
-                else
-                    movebetweenandinc(src, aux, dt, i);
+
+    struct SH sh = SH(max,0,1,2);
+
+    timeloop (dt = 1/24.0 ; playtime=10*max_moves) 
+    {
+        if(moving || !sh.done())
+        {
+            if (!moving){
+                sh.step_hanoi();
+                sh.print_state();
+                moving = 1;
             }
- 
-            else if (i % 3 == 2){
-                if (max % 2 == 1)
-                    movebetweenandinc(src, aux, dt, i);
-                else
-                    movebetweenandinc(src, dest, dt, i);
-            }
- 
-            else if (i % 3 == 0){
-                if (max % 2 == 1)
-                    movebetweenandinc(aux, dest, dt, i);
-                else
-                    movebetweenandinc(dest, aux, dt, i);
+            else {
+                if (animatedmove(sts[sh.s],sts[sh.d],0.01))
+                    moving = 0;
             }
         }
-   }
+
+    }
 }
