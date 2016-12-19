@@ -48,9 +48,12 @@ let struct_build prog =
         let filter_func m f =
           match f.typ with
             Func -> (m, true) (* true means keep function *)
-          | Constructor -> let s = try StringMap.find f.owner m
+          | Constructor -> 
+                let s = try StringMap.find f.owner m
                     with Not_found -> raise (Failure ("Constructor of undefined struct/shape: " ^ f.owner^"::"^f.fname))
-                in if (s.ctor.fname="") then (StringMap.add s.sname
+                in 
+                if f.fname <> f.owner then raise (Failure ("Constructor must have same name as struct/shape: " ^ f.owner^"::"^f.fname))
+                else if (s.ctor.fname="") then (StringMap.add s.sname
                             {ss = s.ss;sname = s.sname; decls = s.decls; ctor = f; methods = s.methods} m , false)
                         else
                             raise(Failure("Multiple constructor definitions for "^(string_of_stosh s.ss)^ " "^s.sname))
