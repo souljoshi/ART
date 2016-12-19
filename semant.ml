@@ -29,8 +29,10 @@ let struct_build prog =
             (match t with 
                 UserType(s,ss) -> if(st.sname = s) 
                     then raise(Failure("Cannot nest "^(string_of_stosh st.ss)^" "^st.sname^" within itself")) 
-                    else let x= StringMap.mem s m in if x=false 
-                    then raise(Failure((string_of_stosh ss)^" "^s ^" must be defined before using in "^(string_of_stosh st.ss)^" "^st.sname))            
+                    else (
+                        try if (StringMap.find s m).ss != ss then  raise Not_found with Not_found ->
+                        raise(Failure((string_of_stosh ss)^" "^s ^" must be defined before using in "^(string_of_stosh st.ss)^" "^st.sname)) 
+                    )           
                 | _-> ()   
             ))st.decls);
           StringMap.add st.sname st m
@@ -89,7 +91,7 @@ let check prog =
 
         report_dup(fun n-> "Duplicate global variable " ^n)(List.map (fun (_,a,_) ->  a)globals);
 
-        report_dup(fun n-> "Duplicate struct name " ^n)(List.map(fun st -> st.sname)structs); 
+        report_dup(fun n-> "Duplicate struct/shape name " ^n)(List.map(fun st -> st.sname)structs); 
 
 let built_in_fun = StringMap.add "printi"
 {rettyp=Void; fname="printi";params=[(Int, "x",Value)];locals=[];body=[];typ=Func;owner="None"}
@@ -120,14 +122,22 @@ let  main_check = let mn = (try function_decl "main" with Failure _ -> raise( Fa
            else ()(*Makes sure that main is defined*)        
 in
     main_check;
-let global_vars = List.fold_left(fun m(t,n,_)->StringMap.add n t m) StringMap.empty(globals)
+(* Map of struct name to struct *)
+let struct_name_list = List.fold_left(fun m usr -> StringMap.add usr.sname usr m) (*creates a struct names list*)
+    StringMap.empty(structs)
+in 
+let global_vars = List.fold_left(fun m(t,n,_)->
+                        (match t with
+                            UserType(s,ss) -> ignore(
+                                try if (StringMap.find s struct_name_list).ss != ss then  raise Not_found with Not_found ->
+                                    raise(Failure((string_of_stosh ss)^" "^s ^" is not defined "))
+                                ); StringMap.add n t m
+                            | _ -> StringMap.add n t m
+                        )
+                    ) StringMap.empty(globals)
 in
 let function_check func =
 
-    (* Map of struct name to struct *)
-    let struct_name_list = List.fold_left(fun m usr -> StringMap.add usr.sname usr m) (*creates a struct names list*)
-        StringMap.empty(structs)
-    in 
 
 (* Given struct give map of method names to method *)
     let get_member_funcs name = let st = try StringMap.find name struct_name_list (*creates a struct member funciontlist*)
@@ -164,10 +174,15 @@ let function_check func =
     let formal_vars = List.fold_left(fun m(t,n,_)->StringMap.add n t m) StringMap.empty (func.params)
     in
     (* Top level local_vars *)
-    let local_vars =  List.fold_left(fun m(t,n,i)-> (match t with
-                                                    UserType(s,_) -> get_struct_member_var s; StringMap.add n t m
-                                                    | _ -> StringMap.add n t m
-                                                    ))formal_vars (func.locals)
+    let local_vars =  List.fold_left(fun m(t,n,_)-> 
+          (match t with
+              UserType(s,ss) -> ignore(
+                            try if (StringMap.find s struct_name_list).ss != ss then  raise Not_found with Not_found ->
+                                raise(Failure((string_of_stosh ss)^" "^s ^" is not defined "))
+                            ); StringMap.add n t m
+              | _ -> StringMap.add n t m
+          )
+        )formal_vars (func.locals)
     in
         report_dup(fun n-> "Duplicate parameter " ^n ^" in " ^ func.fname)(List.map (fun (_,a,_) ->  a)func.params);    (*Checks is there exists duplicate parameter names and function local name*)
         report_dup(fun n-> "Duplicate local variable " ^n ^ " in " ^ func.fname)
@@ -189,22 +204,15 @@ let function_check func =
         (* Prepend any initializers to the statment list *)
         let (stmt_list, scopes) = 
             report_dup(fun n-> "Duplicate local variable " ^n ^ " in " ^ func.fname)(List.map (fun (_,a,_) ->  a)local_decls);
-            let add_local m (t,n) = (match t with
-                        UserType(s,t1) -> get_struct_member_var s; StringMap.add n t m
+            let add_local m (t,n,_) = 
+                    (match t with
+                        UserType(s,ss) -> ignore(
+                            try if (StringMap.find s struct_name_list).ss != ss then  raise Not_found with Not_found ->
+                                raise(Failure((string_of_stosh ss)^" "^s ^" is not defined "))
+                            ); StringMap.add n t m
                         | _ -> StringMap.add n t m
-                        )
+                    )
              in
-                 (* NOTE this translation should be moved to the semantic part of the code *)
-            let (stmt_list, local_decls) = List.fold_left
-                  (* Handle expression initers by adding them as assignment expression statments *)
-                  (fun (sl, ld) (t,n,i) -> 
-                        ( match i with Exprinit e ->  Expr( Asnop((Id(n), t),Asn, e),Void)::sl , (t,n)::ld  
-                          | _  ->  sl, (t,n)::ld (* Silently ingore NoInit and ListInit. HANDLE OTHER INTIIALIZERS*) 
-                        )
-                  ) (stmt_list, [])
-                (* Need to reverse since we are pushing to top of stmt_list. Luckily, the fold unreversed local_decls *)
-                (List.rev local_decls)
-            in
             let locals =  List.fold_left add_local StringMap.empty local_decls
             in  stmt_list,(locals, LocalScope)::scopes
         in
