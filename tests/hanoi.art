@@ -1,0 +1,234 @@
+struct color { double r,g,b; }
+color::color(double _r, double _g, double _b) { r =_r; g=_g;b=_b;}
+double PI = 3.14159265;
+
+struct color color;
+
+shape rectangle
+{
+    vec bl; // bottom left corner
+    double w,h; // widht height
+    int fill;
+    struct color c;
+}
+
+rectangle::rectangle(vec _bl, double _w, double _h , int f,struct color ci)
+{
+    bl = _bl;
+    w = _w;
+    h = _h;
+    fill = f;
+    c = ci;
+}
+
+void rectangle::draw()
+{
+    setcolor(c.r, c.g, c.b);
+    if (fill == 1)
+        <<
+            drawpoint(bl);drawpoint(bl+<w,0.0>);drawpoint(bl+<0.0,h>);
+            drawpoint(bl + <w,h>);drawpoint(bl+<w,0.0>);drawpoint(bl+<0.0,h>);
+        >>
+    else
+        [
+            drawpoint(bl);drawpoint(bl+<w,0.0>);
+            drawpoint(bl+<w,0.0>);drawpoint(bl+<w,h>);
+            drawpoint(bl+<w,h>);drawpoint(bl+<0.0,h>);
+            drawpoint(bl+<0.0,h>);drawpoint(bl);
+        ]
+
+}
+
+int max =2;
+
+double dw()
+{
+
+    double h = 1.0 / max;
+    if (h >= 0.2) h = 0.1;
+    return h;
+}
+
+double hw = 0.43;
+double sw = 0.43/6;
+double sh = 1.0;
+// A single hanoi disk
+shape hdisk { int id; shape rectangle r;}
+
+hdisk::hdisk(int i)
+{ 
+    id = i;
+
+    r = rectangle(<0.0,0.0>,(hw - sw)*i/max + sw*1.5, dw(), 1, color(1.0, 1.0/max *(max -i),1.0/max *(max -i)));
+}
+
+void hdisk::setloc(vec v) { r.bl = v;}
+void hdisk::incloc(vec v) { r.bl += v;}
+void hdisk::decloc(vec v) { r.bl -= v;}
+
+void hdisk::draw() { r.draw(); }
+
+struct color cblue = {196.0/255.0, 216.0/255.0, 226.0/255.0};
+
+// stack for placing disks
+shape hstack 
+{
+    shape rectangle s;
+    vec base;
+    int top;
+    shape hdisk[256] data;
+    // animation state
+    int being_poped;
+    int being_pushed;
+    int done_poped;
+    int done_pushed;
+}
+
+hstack::hstack(vec bz)
+{
+    base = bz;
+    s = rectangle(bz- <sw/2.0,0.0>, sw , 1.0, 1,cblue );
+    top = -1;
+
+    being_poped = being_pushed = done_poped = done_pushed = 0;
+}
+void hstack::draw()
+{
+    s.draw();
+    for (int i = 0; i <= top;i++)
+        data[i].draw();
+}
+
+// stack functions
+int hstack::is_empty() { return top == -1; }
+int hstack::is_full() { return top == 256; }
+int hstack::size() { return (top + 1);}
+
+shape hdisk hstack::top() { 
+    if (is_empty()) {
+        prints("Error: accessing empty stack\n");
+    } 
+    return data[top]; 
+}
+shape hdisk hstack::pop() { 
+    if (is_empty()) {
+        prints("Error: poping empty stack\n");
+    }
+    return data[top--]; 
+}
+void hstack::push(shape hdisk x){
+    if(is_full()) {
+        prints ("Error: stack overflow\n");
+    }
+    x.setloc(< base[0] - x.r.w/2, base[1] + (++top) *dw()>);
+    data[top] = x;
+}
+
+// returns 1 to signal pop animation is done
+int hstack::animatepop(double dt)
+{
+    if (done_poped){
+        done_poped = 0;
+        being_poped = 0;
+        return 1;
+    }
+    being_poped = 1;
+    data[top].incloc(<0.0,dt>);
+    if (( data[top].r.bl[1])  > ( dw() + s.h + s.bl[1]))
+        done_poped = 1; 
+    return 0;
+}
+
+int hstack::animatedpush(double dt, shape hdisk &d)
+{
+    if (done_pushed){
+        done_pushed = 0;
+        being_pushed = 0;
+        return 1;
+    }
+    if (being_pushed == 0){
+        d.setloc(base + <-d.r.w/2,s.h>);
+    }
+    being_pushed = 1;
+    d.decloc(<0.0,dt>);
+    if (d.r.bl[1] <= (top + 1)*dw() + base[1])
+        done_pushed = 1; 
+    return 0;
+}
+
+int movstate = 0;
+shape hdisk d; // temporary disk
+// Move from one stack to another 
+// 
+int sign (double d)
+{
+    if (d > 0) return 1;
+    else if (d <0)return -1;
+    else return 0;
+}
+int animatedmove(shape hstack &s1, shape hstack &s2, double dt)
+{
+    if (movstate == 0) {
+        if(s1.animatepop(dt)){
+                d = s1.pop();
+                movstate = 1;
+                // add it so we can draw it out selves
+                addshape(d);
+            }
+    }
+    // move to the right
+    else if (movstate == 1)
+    {
+        int s = sign(s2.base[0]-s1.base[0]);
+        if (s*d.r.bl[0] <= s*(s2.base[0] - d.r.w/2))
+            d.incloc(s*<dt,0.0>);
+        else
+            movstate = 2;
+    }
+    // lower a bit
+    else if (movstate == 2)
+    {
+        if (d.r.bl[1] > s2.base[1] + s2.s.h)
+            d.decloc(<0.0,dt>);
+        else
+            movstate = 3;
+    }
+    else if (movstate == 3)
+    {
+        if(s2.animatedpush(dt,d)){
+            movstate = 4;
+        }
+    }
+    else  {
+        s2.push(d);
+        movstate = 0;
+        d.setloc(<100,100>); /* Move of screen */
+        return 1;
+    }
+}
+
+int main()
+{
+    shape hstack st1 = hstack(<-2.0/3.0,-1>);
+    shape hstack st2 = hstack(<0.0,-1>);
+    shape hstack st3 = hstack(<2.0/3.0,-1>);
+    for (int i = max ; i >= 1;i--)
+        st1.push(hdisk(i));
+
+    addshape(st1,st2,st3);
+    vec loc = <0.0,0.0>;
+    double t = 0;
+    shape hdisk d;
+    int which = 0;
+    frameloop (dt = 100 ; end = 100.0*300) 
+   {
+        if (st1.size() == max)
+            which = 0;
+        else if (st2.size() == max)
+            which = 1;
+        if (which == 0)
+            animatedmove(st1,st2,0.01);
+        else
+            animatedmove(st2,st1,0.01);
+   }
+}
