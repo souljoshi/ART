@@ -808,13 +808,21 @@ let translate prog =
                            ignore (L.build_store e1' tmp builder);
                       L.build_gep tmp [|L.const_int i32_t 0; e2'|] "tmp" builder
                   )
-              | A.Member(e, s) -> let e' = lexpr builder e in
+              | A.Member(e, s) -> let e' = slexpr builder e in
                   (* Obtain index of s in the struct type of expression e *)
                   let (sname, _ ) = expr_type e in let i = memb_index sname s in
                   L.build_gep e' [|L.const_int i32_t 0; L.const_int i32_t i|] "tmp" builder
-              | e -> raise (Failure ("Trying to assign to an non l-value: "^(A.string_of_baseexpr e)))
+              | e -> raise (Failure ("r-value provided where l-value expected: "^(A.string_of_baseexpr e)))
 
-    
+            (* Special handling for member access to struct calls *)
+            and slexpr builder = function
+                (A.Call(_,_),t) as e -> 
+                              (* Create local temporary to hold newly created struct *)
+                              let loc = L.build_alloca  (ltype_of_typ t) "stmp" builder in
+                              ignore(L.build_store (expr builder e) loc builder);
+                              (* Return the adress of local temporary *)
+                              loc
+              | e -> lexpr builder e
             (* Construct code for an expression; return its value *)
             and expr builder =  function
                   (A.Promote (e,st), tt) ->
@@ -990,7 +998,7 @@ let translate prog =
                  (* This makes right to left evaluation order. What order should we use? *)
                  let actuals = List.rev (List.map2 (arg_passer builder) (List.rev fdecl.A.params) (List.rev act)) in
                  (* Append the left side of dot operator to arguments so it is used as a "this" argument *)
-                 let actuals = (lexpr builder e )::actuals in
+                 let actuals = (slexpr builder e )::actuals in
                  let result = (match fdecl.A.rettyp with A.Void -> "" (* don't name result for void llvm issue*)
                                                     | _ -> s^"_result") in
                  L.build_call fdef (Array.of_list actuals) result builder
