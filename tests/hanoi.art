@@ -39,7 +39,7 @@ void rectangle::draw()
 
 }
 
-int max =2;
+int max =10;
 
 double dw()
 {
@@ -82,11 +82,14 @@ shape hstack
     int being_pushed;
     int done_poped;
     int done_pushed;
+    // debug string
+    string dbg;
 }
 
-hstack::hstack(vec bz)
+hstack::hstack(vec bz,string d)
 {
     base = bz;
+    dbg = d;
     s = rectangle(bz- <sw/2.0,0.0>, sw , 1.0, 1,cblue );
     top = -1;
 
@@ -105,20 +108,20 @@ int hstack::is_full() { return top == 256; }
 int hstack::size() { return (top + 1);}
 
 shape hdisk hstack::top() { 
-    if (is_empty()) {
-        prints("Error: accessing empty stack\n");
-    } 
+   // if (is_empty()) {
+       // prints(dbg);prints(": accessing empty stack\n");
+   // } 
     return data[top]; 
 }
 shape hdisk hstack::pop() { 
     if (is_empty()) {
-        prints("Error: poping empty stack\n");
+        prints(dbg);prints(": poping empty stack\n");
     }
     return data[top--]; 
 }
 void hstack::push(shape hdisk x){
     if(is_full()) {
-        prints ("Error: stack overflow\n");
+       prints(dbg); prints (": stack overflow\n");
     }
     x.setloc(< base[0] - x.r.w/2, base[1] + (++top) *dw()>);
     data[top] = x;
@@ -182,8 +185,9 @@ int animatedmove(shape hstack &s1, shape hstack &s2, double dt)
         int s = sign(s2.base[0]-s1.base[0]);
         if (s*d.r.bl[0] <= s*(s2.base[0] - d.r.w/2))
             d.incloc(s*<dt,0.0>);
-        else
+        else{
             movstate = 2;
+        }
     }
     // lower a bit
     else if (movstate == 2)
@@ -207,28 +211,101 @@ int animatedmove(shape hstack &s1, shape hstack &s2, double dt)
     }
 }
 
+int pow2(int n)
+{
+    if (n <= 0)
+        return 1;
+    else return 2*pow2(n-1);
+}
+
+int btwn = 0;
+int bcond(int cond, int st) 
+{
+    if (movstate == 0)
+        return cond;
+    else
+        return st == btwn;
+}
+// Function to implement legal movement between
+// two poles
+int movebetween(shape hstack &s, shape hstack &d, double dt)
+{
+    // When sourcee  is empty
+    if (bcond(s.is_empty(),1))
+    {
+        btwn = 1;
+        return animatedmove(d, s,dt);
+    }
+ 
+    // When d is empty
+    else if (bcond(d.is_empty(),2))
+    {
+        btwn = 2;
+        return animatedmove(s,d,dt);
+    }
+ 
+    // When top disk of s > top disk of d
+    else if (bcond(s.top().id > d.top().id,3))
+    {
+        btwn = 3;
+       return animatedmove(d, s,dt);
+    }
+ 
+    // When top disk of pole1 < top disk of pole2
+    else
+    {
+        btwn = 3;
+       return animatedmove(s,d,dt);
+    }
+}
+
+void movebetweenandinc (shape hstack &s, shape hstack &d,double dt,int &i)
+{
+    if (movebetween(s,d,dt))
+        i++;
+}
+
 int main()
 {
-    shape hstack st1 = hstack(<-2.0/3.0,-1>);
-    shape hstack st2 = hstack(<0.0,-1>);
-    shape hstack st3 = hstack(<2.0/3.0,-1>);
+    shape hstack src = hstack(<-2.0/3.0,-1>,"src"); // source
+    shape hstack aux = hstack(<0.0,-1>,"aux");      // aux
+    shape hstack dest = hstack(<2.0/3.0,-1>,"dest");  // dest
     for (int i = max ; i >= 1;i--)
-        st1.push(hdisk(i));
+        src.push(hdisk(i));
 
-    addshape(st1,st2,st3);
-    vec loc = <0.0,0.0>;
-    double t = 0;
-    shape hdisk d;
-    int which = 0;
-    frameloop (dt = 100 ; end = 100.0*300) 
+    addshape(src,dest,aux);
+
+    int i = 1;
+    int max_moves = pow2(max);
+    double dt = 0.01;
+    printi(max %2 );prints("\n");
+    frameloop (fps = 240 ; frames = 100000) 
    {
-        if (st1.size() == max)
-            which = 0;
-        else if (st2.size() == max)
-            which = 1;
-        if (which == 0)
-            animatedmove(st1,st2,0.01);
-        else
-            animatedmove(st2,st1,0.01);
+        //prints("i: ");printi(i);prints("\n");
+        prints(src.dbg);prints(": ");printi(src.size());prints(" ");
+        prints(aux.dbg);prints(": ");printi(aux.size());prints(" ");
+        prints(dest.dbg);prints(": ");printi(dest.size());prints(" \n");
+        if (i < max_moves) {
+            if (i % 3 == 1){
+                if (max % 2 == 1)
+                    movebetweenandinc(src, dest, dt, i);
+                else
+                    movebetweenandinc(src, aux, dt, i);
+            }
+ 
+            else if (i % 3 == 2){
+                if (max % 2 == 1)
+                    movebetweenandinc(src, aux, dt, i);
+                else
+                    movebetweenandinc(src, dest, dt, i);
+            }
+ 
+            else if (i % 3 == 0){
+                if (max % 2 == 1)
+                    movebetweenandinc(aux, dest, dt, i);
+                else
+                    movebetweenandinc(dest, aux, dt, i);
+            }
+        }
    }
 }
