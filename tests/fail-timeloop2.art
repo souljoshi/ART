@@ -1,5 +1,4 @@
 int main()
-{
-	// checking for no duplicate names in timeloop definition
+{	// checking for no duplicate names in timeloop definition
 	timeloop (dt = 0.1 ; dt = 10.0){ }
 }

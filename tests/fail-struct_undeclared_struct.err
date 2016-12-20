@@ -1,1 +1,1 @@
-Fatal error: exception Failure("Undefined struct charpair")
+Fatal error: exception Failure("struct charpair is not defined ")
