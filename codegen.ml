@@ -188,7 +188,7 @@ let translate prog =
     let glut_decls = 
       let glut_decl m artname fdef  = StringMap.add artname fdef m in
       List.fold_left2 glut_decl StringMap.empty 
-      ["setcolor";"vertex";"sin";"cos";"drawpoint"]
+      ["setcolor.";"vertex";"sin";"cos";"drawpoint"]
       [glcolor_func;glvertex_func; sin_func;cos_func; L.const_int i32_t 0]
     in
     (* No type checking done *)
@@ -846,9 +846,12 @@ let translate prog =
                  (* The llvm type array of the calling functions parameters
                     Can be use to retreive the "this" argument *)
                  (try let fdef = StringMap.find f glut_decls in 
-                  let actuals = if (f = "drawpoint") (* Convert vector into two arguments *)
-                    then let v = (List.hd act) in List.map (expr builder) [ (A.Index(v,(A.IntLit(0),A.Int)),A.Float) ; (A.Index(v,(A.IntLit(1),A.Int)), A.Float)]
-                    else List.rev (List.map (expr builder) (List.rev act)) in
+                  let actuals = 
+                    if f = "drawpoint" (* Convert vector into two arguments *)
+                      then let v = (List.hd act) in List.map (expr builder) [ (A.Index(v,(A.IntLit(0),A.Int)),A.Float) ; (A.Index(v,(A.IntLit(1),A.Int)), A.Float)]
+                    (*else if f="setcolor" (* Convert color into three arguments *)
+                      then let c = (List.hd act) in List.map (expr builder) [ (A.Member(c,"r"),A.Float) ; (A.Member(c,"g"),A.Float);(A.Member(c,"b"),A.Float)]
+                     *) else List.rev (List.map (expr builder) (List.rev act)) in
                   do_glut_func fdef (Array.of_list actuals) builder
                 with Not_found -> (
                 

@@ -6,8 +6,16 @@
 #   Compile, run, and check the output of each expected-to-work test
 #   Compile and check the error of each expected-to-fail test
 
-# Path to LLVM interpreter
-LLI="lli"
+
+# llvm static compiler
+LLC="llc"
+
+# c compiler for linking in glut
+CC="gcc"
+
+# does the compilation
+COMPILE="compile"
+COMP="bash $COMPILE"
 
 # Path to ART compiler
 if [ -e "./art.native" ]
@@ -106,9 +114,9 @@ Check() {
 
     generatedfiles=""
 
-    generatedfiles="$generatedfiles ${resultname}.ll ${resultname}.out" &&
-    Run "$ART" "<" $1 ">" "${resultname}.ll" &&
-    Run "$LLI" "${resultname}.ll" ">" "${resultname}.out" &&
+    generatedfiles="$generatedfiles ${resultname}.ll ${resultname}.out ${resultname}.s" &&
+    Run "$COMP" "$1" "$resultname" "results/" &&
+    Run "$resultname"  ">" "${resultname}.out" &&
     Compare "${resultname}.out" ${reffile}.out "${resultname}.diff"
 
     # Report the status and clean up the generated files
@@ -176,16 +184,32 @@ done
 
 shift `expr $OPTIND - 1`
 
-# Error finding LLI
-LLIFail()
+# Error finding CC
+CCFail()
 {
-    echo "Could not find the LLVM interpreter \"$LLI\"."
-    echo "Check your LLVM installation and/or modify the LLI variable in testall.sh"
+    echo "Could not find c compiler \"$CC\"."
+    echo "Check your installation and/or modify the CC variable in testall.sh"
     exit 1
 }
 
-which "$LLI" >> $globallog || LLIFail
+# Error finding LLC
+LLCFail()
+{
+    echo "Could not find the LLVM static compiler \"$LLC\"."
+    echo "Check your LLVM installation and/or modify the LLC variable in testall.sh"
+    exit 1
+}
 
+# Error finding COMPILE
+COMPILEFail()
+{
+    echo "Could not find compile \"$COMPILE\"."
+    exit 1
+}
+
+which "$CC" >> $globallog || CCFail
+which "$LLC" >> $globallog || LLCFail
+ls "$COMPILE" >> $globallog || COMPILEFail
 
 if [ $# -ge 1 ]
 then

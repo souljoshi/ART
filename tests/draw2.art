@@ -1,4 +1,3 @@
-struct color { double r,g,b; }
 double PI;
 
 struct color color;

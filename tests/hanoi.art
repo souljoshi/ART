@@ -1,5 +1,3 @@
-struct color { double r,g,b; }
-color::color(double _r, double _g, double _b) { r =_r; g=_g;b=_b;}
 double PI = 3.14159265;
 
 struct color color;
@@ -23,7 +21,7 @@ rectangle::rectangle(vec _bl, double _w, double _h , int f,struct color ci)
 
 void rectangle::draw()
 {
-    setcolor(c.r, c.g, c.b);
+    setcolor(c);
     if (fill == 1)
         <<
             drawpoint(bl);drawpoint(bl+<w,0.0>);drawpoint(bl+<0.0,h>);

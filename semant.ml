@@ -17,7 +17,21 @@ let check_ass lval rval promote err =
 
 let struct_build prog =
     let globals = prog.v
-    and functions = prog.f
+    and functions = {
+        rettyp = Void; fname="setcolor"; params=[(UserType("color",StructType),"c",Value)]; locals=[];
+        body= [Expr (Call ( (Id "setcolor.",Void), [ (Member((Id "c", Void),"r"),Float) ; (Member((Id "c", Void),"g"),Float);(Member((Id "c", Void),"b"),Float)]),Void)];
+        typ=Func;owner="None"}::prog.f
+    and structlist  = {
+            ss      = StructType; 
+            sname   = "color";
+            decls   = [(Float,"r");(Float,"g");(Float,"b")];
+            ctor    = { rettyp=Void; fname="color";params=[(Float,"ri",Value);(Float,"gi",Value);(Float,"bi",Value)];
+                        locals=[]; body = [Expr (Asnop ((Id "r",Float), Asn,(Id "ri",Float) ), Float ); 
+                                           Expr (Asnop ((Id "g",Float), Asn,(Id "gi",Float) ), Float );
+                                           Expr (Asnop ((Id "b",Float), Asn,(Id "bi",Float) ), Float )] ; 
+                           typ = Constructor; owner="color" } ;
+            methods = [];
+        } :: prog.s (* adding color type here *)
 
     in  
     (* A map of all struct/shape types *)
@@ -39,7 +53,7 @@ let struct_build prog =
 
     )
 
-                StringMap.empty prog.s in
+                StringMap.empty structlist in
 
 
     let (structs,funcs) = (* Refers to structs and non-member functions *)
@@ -80,7 +94,7 @@ let struct_build prog =
                             then raise(Failure("draw method must have return type void, and no parameters"))
                             else s.methods       
                 else s.methods}
-        ) prog.s;
+        ) structlist;
       f = List.rev funcs ; v = globals }
 
 let check prog =
@@ -96,16 +110,23 @@ let check prog =
 
         report_dup(fun n-> "Duplicate struct/shape name " ^n)(List.map(fun st -> st.sname)structs); 
 
-let built_in_fun = StringMap.add "printi"
-{rettyp=Void; fname="printi";params=[(Int, "x",Value)];locals=[];body=[];typ=Func;owner="None"}
-(StringMap.add"printf" {rettyp=Void; fname="printf";params=[(Float, "x",Value)];locals=[];body=[];typ=Func;owner="None";}       (*Builds a list of the predefined functions special note about add shape it demands a name to contstruct the type *)
-(StringMap.add "prints" {rettyp=Void; fname="prints";params=[(String, "x",Value)];locals=[];body=[];typ=Func;owner="None";}
-(StringMap.add "addshape"{rettyp=Void;fname="addshape";params=[(UserType(".shape",ShapeType),"x",Value)];locals=[];body=[];typ=Func;owner="None";}
-(StringMap.add "cos"{rettyp=Float;fname="cos";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None";}
-(StringMap.add "sin"{rettyp=Float;fname="sin";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None";}
-(StringMap.add "setcolor"{rettyp=Void;fname="setcolor";params=[(Float,"x",Value);(Float,"x",Value);(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None";}
-(StringMap.add "drawpoint"{rettyp=Void;fname="drawpoint";params=[(Vec,"x",Value)];locals=[];body=[];typ=Func;owner="None";}
-(StringMap.singleton "printc" {rettyp=Void; fname="printc";params=[(Char, "x",Value)];locals=[];body=[];typ=Func;owner="None";}))))))))
+(* a list of the predefined functions special note about add shape it demands a name to contstruct the type *)
+let builtinlist = [
+    {rettyp=Void; fname="printi";params=[(Int, "x",Value)];locals=[];body=[];typ=Func;owner="None"};
+    {rettyp=Void; fname="printf";params=[(Float, "x",Value)];locals=[];body=[];typ=Func;owner="None"};     
+    {rettyp=Void; fname="prints";params=[(String, "x",Value)];locals=[];body=[];typ=Func;owner="None";};
+    {rettyp=Void;fname="addshape";params=[(UserType(".shape",ShapeType),"x",Value)];locals=[];body=[];typ=Func;owner="None"};
+    {rettyp=Void;fname="setcolor.";params=[(Float,"x",Value);(Float,"x",Value);(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None"};
+    {rettyp=Void;fname="drawpoint";params=[(Vec,"x",Value)];locals=[];body=[];typ=Func;owner="None"};
+    {rettyp=Void; fname="printc";params=[(Char, "x",Value)];locals=[];body=[];typ=Func;owner="None"};
+    {rettyp=Float;fname="cos";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None"};
+    {rettyp=Float;fname="sin";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None"};
+
+
+]
+in
+
+let built_in_fun = List.fold_left (fun m f -> StringMap.add f.fname f m) StringMap.empty builtinlist
 (*let function_decls =
     List.map(fun fd -> fd.fname) functions*)
 in 
