@@ -2,5 +2,5 @@ int main()
 {
     vec v1;
 
-    v1[0] = 10; // Error, only works with doubles
+    v1[0] = <9.0,7.8>; // Error, only works with doubles
 }

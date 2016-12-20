@@ -33,7 +33,7 @@ struct rectangle
 	int length;
 }
 
-rectangle::rectange()
+rectangle::rectangle()
 {
 	length = 10;
 }

@@ -1,1 +1,1 @@
-Fatal error: exception Failure("Struct rectangle must be defined before using it in struct square")
+Fatal error: exception Failure("struct rectangle must be defined before using in struct square")

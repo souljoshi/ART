@@ -1,1 +1,1 @@
-Fatal error: exception Failure("Frameloop definition only accepts expressions of type double")
+Fatal error: exception Failure("Invalid initializer for local var fps")

@@ -1,5 +1,5 @@
 int main()
 {
 	// only float expressions are accepted in timeloop definition
-	timeloop (dt = 0.1 ; end = 10){ }
+	timeloop (dt = 0.1 ; end = <0.0,5.0>){ }
 }

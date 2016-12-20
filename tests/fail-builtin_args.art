@@ -4,6 +4,6 @@ int main()
 {
 	//printi(5.5); // error printi only accepts int
 	//printc(1);
-	//prints(5);
-	printf(1);
+	prints(5);
+	//printf(1);
 }

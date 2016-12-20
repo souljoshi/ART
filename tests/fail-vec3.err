@@ -1,3 +1,1 @@
-Stored value type does not match pointer operand type!
-  store i32 10, double* %tmp
- doubleLLVM ERROR: Broken module found, compilation aborted!
+Fatal error: exception Failure("Invalid assigment of vec to double")
