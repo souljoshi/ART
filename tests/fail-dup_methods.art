@@ -1,0 +1,18 @@
+// check duplicate method name in same struct
+
+struct circle 
+{
+	int radius;
+}
+
+void circle::size()
+{
+}
+
+void circle::size()
+{
+}
+
+int main()
+{
+}

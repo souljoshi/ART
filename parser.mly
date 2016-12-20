@@ -11,6 +11,18 @@
      [] -> t
    | [i] -> Array(t, i)
    | i::l -> List.fold_left (fun at e -> Array(at,e)) (Array(t, i)) l
+   (*let handle_mixed_scoping *)
+   type mixed_decl = {l : vdecl list ; t : vdecl list * stmt list }
+  let handle_dup ml (dl,sl) = 
+    let rec helper = function 
+            (t,n1,i) :: (_,n2,_)::_ when n1=n2 -> [(t,n1,i)]
+            |_ :: tl -> helper tl
+            |[]->[] in
+    
+    let ml = (List.sort (fun (_,n1,_) (_,n2,_) -> compare n1 n2)ml) in
+    match (helper ml) with
+        [s] -> (s::dl,sl)
+      | _   -> (dl,sl)
 %}
 
 %token VOID INT CHAR DOUBLE VEC STRING
@@ -20,7 +32,7 @@
 %token ASSIGN PLUSASSIGN MINUSASSIGN TIMESASSIGN 
 %token DIVASSIGN MODASSIGN PLUSPLUS MINUSMINUS
 %token EQ NEQ LT LEQ GT GEQ AND OR NOT LTLT GTGT
-%token RETURN IF ELSE FOR WHILE BREAK CONTINUE
+%token RETURN IF ELSE FOR WHILE
 %token STRUCT SHAPE
 %token TLOOP FLOOP
 %token <int> INTLIT
@@ -34,7 +46,6 @@
 %nonassoc NOELSE
 %nonassoc ELSE
 %right ASSIGN PLUSASSIGN MINUSASSIGN TIMESASSIGN DIVASSIGN MODASSIGN
-%right CONDITIONAL  /* ? : */
 %left OR
 %left AND
 %left EQ NEQ
@@ -93,8 +104,7 @@ method_declarator:
 
 func_block:
   /* Function Block */
-    LBRACE stmt_list RBRACE                  { ([], List.rev $2) }
-  | LBRACE declaration_list stmt_list RBRACE { ($2, List.rev $3) } /* Already Reversed */
+    LBRACE decl_list_stmt_list RBRACE        {$2}
 
 parameter_list:
   /* No parameter case */  {[]}
@@ -186,15 +196,13 @@ init_list:
   | init_list COMMA init  { $3 :: $1}
 
 stmt_list: /* inverted list of the statements */
-    /* nothing */  { [] }
+    stmt  { [$1] }
   | stmt_list stmt { $2 :: $1 }
 
 stmt:
     expr_opt SEMI                           { Expr $1 }
   | RETURN SEMI                             { Return (Noexpr,Void) }
   | RETURN expr SEMI                        { Return $2 }
-  | BREAK SEMI                              { Break }
-  | CONTINUE SEMI                           { Continue }
 
   /* Block */
   | stmt_block                               { $1 }   /* defined in stmt_block: */
@@ -202,10 +210,10 @@ stmt:
   | IF LPAREN expr RPAREN stmt %prec NOELSE { If($3, $5, Block([],[],PointContext)) }
   | IF LPAREN expr RPAREN stmt ELSE stmt    { If($3, $5, $7) }
 
-  | FOR LPAREN expr_opt SEMI expr_opt SEMI expr_opt RPAREN stmt
+  | FOR LPAREN expr_opt SEMI for_cond SEMI expr_opt RPAREN stmt
      { For($3, $5, $7, $9) }
   /* Deal with for with declaration */
-  | FOR LPAREN declaration expr_opt SEMI expr_opt RPAREN stmt
+  | FOR LPAREN declaration for_cond SEMI expr_opt RPAREN stmt
      { ForDec($3, $4, $6, $8) }
   | WHILE LPAREN expr RPAREN stmt { While($3, $5) }
 
@@ -222,8 +230,23 @@ stmt_block:
   | LTLT decl_list_stmt_list GTGT             { Block(fst $2, snd $2, TriangleContext) }
 
 decl_list_stmt_list:
-    stmt_list                   {([], List.rev $1)} /* stmt_list needs to be reversed */
-  | declaration_list stmt_list  {($1, List.rev $2)} /* declaration doesn't need reversing */
+    /* Empty Block */                {([],[])}
+  | stmt_list                        {([], List.rev $1)} /* stmt_list needs to be reversed */
+  | cdlist_slist_pair_list           {$1}
+  | stmt_list cdlist_slist_pair_list {( [],List.rev( (Block (fst $2, snd $2, PointContext))::($1) ))}
+
+cdlist_slist_pair_list:
+    dlist_slist_pair_list  {handle_dup $1.l $1.t}
+  
+dlist_slist_pair_list:
+    dlist_slist_pair                        {$1}
+  | declaration_list                        {{l=$1; t=($1,[])}} 
+  | dlist_slist_pair dlist_slist_pair_list  
+      {{l=($1.l)@($2.l) ; t=(fst $1.t, List.rev( Block(fst $2.t, snd $2.t, PointContext)::(List.rev(snd $1.t)) ) )}}
+
+  /* A pair of declaration List , statement List */
+dlist_slist_pair:
+    declaration_list stmt_list  {{l=$1; t=($1, List.rev $2)}} /* declaration doesn't need reversing */
 
 
 /* Optional Expression */
@@ -231,12 +254,11 @@ expr_opt:
   /* nothing */ { (Noexpr,Void) }
   | expr          { $1 }
 
+for_cond:
+  /* nothing */ { (IntLit 1,Int) }
+  | expr        { $1 }
 expr:
   bexpr                     { $1 }
-
-  /* Conditional */
-  /* $1 = bexpr, $3 = expr, $5 = expr */
-  |bexpr QMARK expr COLON expr %prec CONDITIONAL { (Trop(Cond, $1, $3, $5),Void) }
 
   /* postfix expressions */
   /* Assignment */
@@ -289,14 +311,14 @@ addexpr:
 
 posexpr: 
   /* Literals */
-    INTLIT                { (IntLit($1), Void) }
-  | CHARLIT               { (CharLit($1), Void) }
-  | FLOATLIT              { (FloatLit($1), Void) }
-  | VECTORLIT             { (VecLit($1), Void) }
-  | STRINGLIT             { (StringLit($1), Void)}
+    INTLIT                { (IntLit($1), Int) }
+  | CHARLIT               { (CharLit($1), Char) }
+  | FLOATLIT              { (FloatLit($1), Float) }
+  | VECTORLIT             { (VecLit($1), Vec) }
+  | stringlit_list        { (StringLit($1), String)}
 
   /* Vector expression */
-  | LT addexpr COMMA addexpr GT   %prec VECEXPR { (Vecexpr($2, $4), Void) }
+  | LT addexpr COMMA addexpr GT   %prec VECEXPR { (Vecexpr($2, $4), Vec) }
 
   /* primary expression */
   | ID                    { (Id($1),Void) }
@@ -310,6 +332,10 @@ posexpr:
   | posexpr DOT ID                %prec MEMB    { (Member($1, $3), Void) }
   | posexpr PLUSPLUS              %prec POST    { (Posop(Postinc, $1), Void) }
   | posexpr MINUSMINUS            %prec POST    { (Posop(Postdec, $1), Void) }
+
+stringlit_list:
+  STRINGLIT                   {$1}
+| STRINGLIT stringlit_list    {$1^$2}
 
 arg_list:
   /* nothing */       {[]}

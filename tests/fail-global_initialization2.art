@@ -1,0 +1,12 @@
+int x = "soul"; // error
+
+int main()
+{
+	printi(x);
+	printc('\n');
+
+	x = 2;
+
+	printi(x);
+	printc('\n');
+}

@@ -1,0 +1,43 @@
+void int_ref(int x, int &y)
+{
+	x = 10;
+	y = 20;
+	printi(x);
+	printc('\n');
+	printi(y);
+	printc('\n');
+}
+
+void double_ref(double &z)
+{
+	z = 3.0;
+	printf(z);
+	printc('\n');
+}
+
+int main()
+{
+	int a = 0;
+	int b = 5;
+	int[10] c;
+	vec v1 = <10.0, 5.5>;
+
+	c[0] = 1;
+	c[1] = 2;
+
+	int_ref(a, b);
+
+	int_ref(c[0], c[1]);
+
+	double_ref(v1[0]);
+
+	printi(a);
+	printc('\n');
+	printi(b);
+	printc('\n');
+
+	printi(c[0]);
+	printc('\n');
+	printi(c[1]);
+	printc('\n');
+}

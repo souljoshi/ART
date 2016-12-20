@@ -1,0 +1,23 @@
+/* Float Condition Testing */
+void printiln(int f){printi(f);printc('\n');}
+int main()
+{
+    double x = 1.2;
+    double y = -1.3;
+    double z = 1.2;
+    double w = 30e7;
+
+    /* First constant vectors */
+    printiln(<1.0,2.0> == <1.0,2.0>);
+    printiln(<1.0,2.0> != <1.0,2.0>);
+    printiln(<-1.0,2.0> == <1.0,2.0>);
+    printiln(<1.0,2.0> != <-1.0,2.0>);
+
+    vec a = <x,x>, b = <x,y>, c = <z,w>;
+    printiln( a == a);
+    printiln( a != b);
+    printiln( a != <x,x>);
+    printiln( b == <x,y>);
+    printiln( c == <1.0,2.0>);
+    printiln( c == <1.2, 30e7>);
+}

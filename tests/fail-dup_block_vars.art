@@ -1,0 +1,13 @@
+// check duplicate vars in block
+
+int main()
+{
+	{
+		int x;
+		{
+			int x;
+			int y;
+			int y; // y is duplicate
+		}
+	}
+}

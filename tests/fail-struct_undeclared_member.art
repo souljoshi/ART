@@ -12,6 +12,6 @@ int main ()
 
     a.x = 77;
     a.y = 18;
-    a.z = 11;
+    a.z = 11; // undeclared member
 
 }

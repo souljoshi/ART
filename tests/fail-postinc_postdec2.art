@@ -1,0 +1,15 @@
+// check postinc and postdec on array index
+
+int main()
+{
+	int[10] a;
+	double[8] a2;
+
+	a[0] = 5;
+	a[0]++; // ok
+	a[0]--; // ok
+
+	a2[0] = 5.5;
+	a2[0]--; // error, double
+	//a2[0]++; // error
+}

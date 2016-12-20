@@ -1,0 +1,62 @@
+// check that only shapes can be used as arguments for addshape()
+
+shape disc
+{
+	int radius;
+}
+
+disc::disc()
+{
+	radius = 10;
+}
+
+void disc::draw()
+{
+}
+
+shape disc2
+{
+	int radius;
+}
+
+disc2::disc2()
+{
+	radius = 10;
+}
+
+void disc2::draw()
+{
+}
+
+struct rectangle
+{
+	int length;
+}
+
+rectangle::rectangle()
+{
+	length = 10;
+}
+
+struct square
+{
+	int length;
+}
+
+square::square()
+{
+	length = 50;
+}
+
+int main()
+{
+	shape disc d1;
+	struct rectangle r1;
+	struct square s1;
+	shape disc2 d2;
+
+	addshape(d1,d2); // ok
+	addshape(d1,d2,r1); // error
+	//addshape(r1,s1); // error
+	//addshape(10,11,d1); // error
+}

@@ -1,0 +1,28 @@
+// check that scalar multiplication works with both
+// double and int
+// int is promoted to double
+
+int main()
+{
+	int a = 10;
+	double b = 5.5;
+	vec v = <5.0, 5.0>;
+	vec v2;
+	vec v3;
+
+	v2 = v * a; // int promoted to double
+	v2 = a * v;
+
+	v3 = b * v;
+	v3 = v * b;
+
+	printf(v2[0]);
+	printc('\n');
+	printf(v2[1]);
+	printc('\n');
+	printf(v3[0]);
+	printc('\n');
+	printf(v3[1]);
+	printc('\n');
+}
+

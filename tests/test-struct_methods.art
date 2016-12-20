@@ -1,0 +1,24 @@
+// different structs can have same method names
+
+struct circle
+{
+	int radius;
+}
+
+void circle::size()
+{
+}
+
+struct rectangle
+{
+	int length;
+}
+
+void rectangle::size()
+{
+}
+
+int main()
+{
+	prints("ok\n");	
+}
