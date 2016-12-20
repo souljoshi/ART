@@ -471,7 +471,7 @@ let translate prog =
             | A.Asnop(e1,_,e2) -> StringSet.union (non_local_expr e1)  (non_local_expr e2)
             | A.Unop(_,e)      -> non_local_expr e
             | A.Posop(_,e)     -> non_local_expr e
-            | A.Call(e1,el)  -> StringSet.union (match e1 with (A.Id s,_) -> StringSet.empty | _ -> non_local_expr e1) 
+            | A.Call(e1,el)  -> StringSet.union (match e1 with (A.Id _,_) -> StringSet.empty | _ -> non_local_expr e1) 
                                  ( List.fold_left (fun set e-> StringSet.union set (non_local_expr e)) StringSet.empty el)
             | A.Index(e1, e2)-> StringSet.union (non_local_expr e1)  (non_local_expr e2)
             | A.Member(e, _) | A.Promote(e) -> non_local_expr e
@@ -622,7 +622,7 @@ let translate prog =
                   | (locls, LocalScope)  -> ( try fst(StringMap.find n locls)
                                               with Not_found -> _lookup n builder (List.tl scopes) )
                   | (_, StructScope) -> ( try (
-                    let ind = try memb_index fdecl.A.owner n with Failure s -> raise Not_found in
+                    let ind = try memb_index fdecl.A.owner n with Failure _ -> raise Not_found in
                       (* If member, get its pointer by dereferencing the first argument
                         corresponding to the "this" pointer *)
                       let e' = L.param (fst (lookup_function fdecl.A.fname) ) 0  in
@@ -647,7 +647,7 @@ let translate prog =
                   | (locls, ClosureScope) -> ( try snd(StringMap.find n locls)
                                               with Not_found -> _lookup_type n (List.tl scopes) )
                   | (_, StructScope) -> try memb_type fdecl.A.owner n
-                                        with Failure s -> _lookup_type n (List.tl scopes)
+                                        with Failure _ -> _lookup_type n (List.tl scopes)
                 )
             in
             let lookup n builder = _lookup n builder scopes 
@@ -789,9 +789,9 @@ let translate prog =
                   and e2' = expr builder e2 
                   in binop_of_type (expr_type e1) op e1' e2' "tmp" builder
 
-              | A.Index(e1,e2) as arr-> L.build_load (lbaseexpr builder arr) "tmp" builder
+              | A.Index(_,_) as arr-> L.build_load (lbaseexpr builder arr) "tmp" builder
 
-              | A.Member(e, s) as mem -> L.build_load (lbaseexpr builder mem) "tmp" builder
+              | A.Member(_, _) as mem -> L.build_load (lbaseexpr builder mem) "tmp" builder
 
               | A.Asnop (el, op, er) ->
                    let el' = lexpr builder el in
@@ -968,7 +968,7 @@ let translate prog =
                 | A.For (e1, e2, e3, body) -> stmt builder
                     ( A.Block ( [], [  A.Expr e1; A.While (e2, A.Block ([], [body; A.Expr e3],A.PointContext) ) ] , A.PointContext) )
                 | A.ForDec (vdecls, e2, e3, body) -> stmt builder ( A.Block(vdecls, [A.For((A.Noexpr,A.Void) , e2, e3, body)], A.PointContext) )
-                | A.Timeloop(s1, e1, s2, e2, stmt) | A.Frameloop(s1, e1, s2, e2, stmt) as s->
+                | A.Timeloop(_, e1, _, e2, stmt) | A.Frameloop(_, e1, _, e2, stmt) as s->
                     let loop = (match s with A.Timeloop(_,_,_,_,_) -> 0 | _ -> 1) in (* 0 for time and 1 for frame *)
                     let ftype = L.function_type void_t [| |] in
                     let fdef = L.define_function "timeloop." ftype the_module in

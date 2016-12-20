@@ -294,7 +294,7 @@ let fail_op t op = raise(Failure("No operator "^(string_of_op op)^" defined for 
 let fail_uop t op = raise(Failure("No operator "^(string_of_uop op)^" defined for type "^(string_of_typ t)))
 let bti b = if b then 1 else 0
 (* binop on two const expressions of the same type *)
-let do_binop (e1,t1) op (e2,t2) = 
+let do_binop (e1,t1) op (e2,_) = 
   match(op) with
     Add -> if t1 = Int then (IntLit((get_int e1) + (get_int e2)),Int)
       else if t1 = Float then (FloatLit((get_float e1) +. (get_float e2)),Float)

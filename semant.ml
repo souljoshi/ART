@@ -23,9 +23,9 @@ let struct_build prog =
     (* A map of all struct/shape types *)
     let structs = List.fold_left ( 
         fun m st -> report_dup(fun n-> "Duplicate member variable named " ^n ^" in "^(
-          string_of_stosh st.ss)^" "^st.sname)(List.map (fun (t,n) ->  n)st.decls);
+          string_of_stosh st.ss)^" "^st.sname)(List.map (fun (_,n) ->  n)st.decls);
 
-          (List.iter(fun (t,n)-> 
+          (List.iter(fun (t,_)-> 
             (match t with 
                 UserType(s,ss) -> if(st.sname = s) 
                     then raise(Failure("Cannot nest "^(string_of_stosh st.ss)^" "^st.sname^" within itself")) 
@@ -254,7 +254,7 @@ let function_check func =
                  Listinit il -> (match t with
                     Array(t2,e) -> 
                       if e <> (Noexpr,Void) then t else Array(t2, (IntLit (List.length il), Int))
-                  | UserType(s,_) -> t
+                  | UserType(_,_) -> t
             
                   | _ -> raise(Failure("Brace initializer cannot be used with "^(string_of_typ t)))
                 ) 
@@ -302,8 +302,8 @@ let function_check func =
             |(StringLit s,_)-> (StringLit s, String)
             |(FloatLit s,_)-> (FloatLit s, Float)
             |(VecLit (f1,f2),_)-> (VecLit(f1,f2), Vec)
-            |(Id s, _) as s1 ->  (Id s, ret_type s)
-            |(Promote e, t) as p-> (Promote(expr_b e),t)
+            |(Id s, _)  ->  (Id s, ret_type s)
+            |(Promote e, t) -> (Promote(expr_b e),t)
             |(Binop(e1,op,e2),_) -> let (e1',t1') = (expr_b e1) and (e2',t2')=(expr_b e2) in
 
             (match op with
@@ -337,14 +337,14 @@ let function_check func =
                     |Pos when t1'=Float -> (Unop(op,(e1',t1')),Float) 
                     |Pos when t1'=Vec -> (Unop(op,(e1',t1')),Vec)
                     |Preinc when t1'= Int ->(match f with
-                                            (Id(s1),Int) -> (Unop(op,(f)),Int)
-                                            |(Index(e1,e2),Int) -> (Unop(op,(f)),Int)
+                                            (Id(_),Int) -> (Unop(op,(f)),Int)
+                                            |(Index(_,_),Int) -> (Unop(op,(f)),Int)
                                             |(Member(_,_),Int) -> (Unop(op,(f)),Int)
                                             |_ -> raise(Failure("PreInc or PreDec cannot be applied to " ^ Ast.string_of_expr f))
                                             )
                     |Predec when t1'= Int -> (match f with
-                                            (Id(s1),Int) -> (Unop(op,(f)),Int)
-                                            |(Index(e1,e2),Int) -> (Unop(op,(f)),Int)
+                                            (Id(_),Int) -> (Unop(op,(f)),Int)
+                                            |(Index(_,_),Int) -> (Unop(op,(f)),Int)
                                             |(Member(_,_),Int) -> (Unop(op,(f)),Int)
                                             |_ -> raise(Failure("PrecInc or PreDec cannot be applied to " ^ Ast.string_of_expr f))
                                             )
@@ -365,7 +365,7 @@ let function_check func =
                                 with Not_found -> function_decl s))
                 |(Member (e,s),_)-> let (_,t') as f = expr_b e in
                                 let sname= (match t' with
-                                            UserType(s,e1) -> s
+                                            UserType(s,_) -> s
                                             | _-> raise(Failure("Member operator (dot) can only be applied to struct or shape"))
                                             )
                                      in ((Member(f,s), Void), get_mem_func_name sname s)
@@ -380,7 +380,7 @@ let function_check func =
                     then
                         if fd.fname="addshape"&&(List.length actuals>0) 
                         then 
-                            List.map(fun e -> let (e1',t1') as f=(expr_b e) in 
+                            List.map(fun e -> let (_,t1') as f=(expr_b e) in 
                                 (match t1' with
                                 UserType(_,ShapeType) -> f
                                 | _-> raise(Failure("Arguments of addshape function must be of type shape")) 
@@ -392,9 +392,10 @@ let function_check func =
                         (*let actuals = List.map2 (fun (t, s, p) e -> if p = Ref then  (lexpr_b e) else (expr_b e)
                         ) fd.params actuals in*)
 
-                        List.map2 (fun (t,s,p) e -> let (_,et) as f = (if p = Ref then  lexpr_b e else expr_b e) in
-                            check_ass t et (p=Value)
-                            (Failure ("Illegal argument "^(string_of_expr e)^" of type "^Ast.string_of_typ et^ " in call to function \""^fd.fname^ "\" which expects argument of type " ^ Ast.string_of_typ t));
+                        List.map2 (fun (t,_,p) e -> let (_,et) as f = (if p = Ref then  lexpr_b e else expr_b e) in
+                            ignore (check_ass t et (p=Value)
+                            (Failure ("Illegal argument "^(string_of_expr e)^" of type "^Ast.string_of_typ et^ " in call to function \""^fd.fname^ "\" which expects argument of type " ^ Ast.string_of_typ t))
+                            );
                             (if p=Ref then f else expr_b (Promote (f),t) )
                         )
                          fd.params actuals
@@ -404,15 +405,15 @@ let function_check func =
                 (Call(e',actuals'), if fd.typ <> Constructor then fd.rettyp
                                 else UserType(fd.owner,(StringMap.find fd.owner struct_name_list).ss) )
             |(Vecexpr (e1,e2),_) -> 
-                let (e1',t1') as f1 = (expr_b e1) and (e2',t2') as f2= (expr_b e2)
+                let (_,t1') as f1 = (expr_b e1) and (_,t2') as f2= (expr_b e2)
                 in
                 let f1 = if (t1' = Float) then f1 else if t1'=Int then (Promote f1,Float) else raise(Failure("Elements of vector must be of type double"))
                 and f2 = if (t2' = Float) then f2 else if t2'=Int then (Promote f2,Float) else raise(Failure("Elements of vector must be of type double"))
                 in (Vecexpr(f1,f2),Vec)
             |(Posop (s,e2),_)-> let e2'=(expr_b e2)
             in (match e2' with
-                 (Id(s1),Int) -> (Posop(s,(e2')),Int)
-                |(Index(e1,e2),Int) -> (Posop(s,(e2')),Int)
+                 (Id(_),Int) -> (Posop(s,(e2')),Int)
+                |(Index(_,_),Int) -> (Posop(s,(e2')),Int)
                 |(Member(_,_),Int) -> (Posop(s,e2'),Int)
                 |_ -> raise(Failure("PostInc or PostDec cannot be applied to " ^ Ast.string_of_expr e2))
                 )
@@ -435,7 +436,6 @@ let function_check func =
                     in
                     ( try (Member((e1',t1'),s),member_var_type te1' s) with Not_found -> raise(Failure(s^" is not a member of "^(string_of_typ t1'))))  
                 
-        | _ -> (Noexpr,Void)
         (* Special handling for lvalue expressions *)
         and lexpr_b  = function
                 (Id s,_) -> (Id s, ret_type s)
