@@ -114,7 +114,7 @@ Check() {
 
     generatedfiles=""
 
-    generatedfiles="$generatedfiles ${resultname}.ll ${resultname}.out ${resultname}.s" &&
+    generatedfiles="$generatedfiles ${resultname}.ll ${resultname}.out ${resultname}.s ${resultname}" &&
     Run "$COMP" "$1" "$resultname" "results/" &&
     Run "$resultname"  ">" "${resultname}.out" &&
     Compare "${resultname}.out" ${reffile}.out "${resultname}.diff"
