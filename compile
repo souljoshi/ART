@@ -22,17 +22,24 @@ fi
 
 
 
-base=`echo $1 | sed 's/.*\\///
+base=`echo "$1" | sed 's/.*\\///
                              s/.art//'`
 
-if [ -z $2 ]
+if [ -z "$2" ]
 then 
     out=./$base
 else
-    out=$2
+    out="$2"
 fi
 
-${ART} < $1 > /tmp/${base}.bc &&
-llc /tmp/${base}.bc &&
-gcc /tmp/${base}.s -g -lm -lglut -lGLU -lGL -o $out 
+if [ -z "$3" ]
+then 
+    tmp="/tmp"
+else
+    tmp="$3"
+fi
+
+${ART} < $1 > ${tmp}/${base}.ll &&
+llc ${tmp}/${base}.ll &&
+gcc ${tmp}/${base}.s -g -lm -lglut -lGLU -lGL -o $out 
 
