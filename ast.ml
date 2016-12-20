@@ -164,7 +164,7 @@ paren_of_expr *) = function
     IntLit(l) -> string_of_int l
   | CharLit(l) -> "'" ^ (string_of_chr l) ^ "'"
   | FloatLit(l) -> string_of_float l
-  | StringLit(s) -> "" ^ s
+  | StringLit(s) -> "\"" ^ s^"\""
   | VecLit(a,b)  -> "< " ^ (string_of_float a) ^ " , " ^ (string_of_float b) ^ " >"
   | Id(s) -> s
   | Vecexpr(e1,e2) -> " < "^ string_of_expr e1 ^ " , " ^ string_of_expr e2 ^ " >"

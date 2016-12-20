@@ -392,10 +392,10 @@ let function_check func =
                         (*let actuals = List.map2 (fun (t, s, p) e -> if p = Ref then  (lexpr_b e) else (expr_b e)
                         ) fd.params actuals in*)
 
-                        List.map2 (fun (t,s,p) e -> let (_,et) as f = (if p = Ref then  lexpr_b e else expr_b (Promote (expr_b e),t)) in
+                        List.map2 (fun (t,s,p) e -> let (_,et) as f = (if p = Ref then  lexpr_b e else expr_b e) in
                             check_ass t et (p=Value)
-                            (Failure ("Illegal argument "^(string_of_expr e)^" of type "^Ast.string_of_typ et^ " in call to function "^fd.fname^ " which expects argument of type " ^ Ast.string_of_typ t));
-                            f
+                            (Failure ("Illegal argument "^(string_of_expr e)^" of type "^Ast.string_of_typ et^ " in call to function \""^fd.fname^ "\" which expects argument of type " ^ Ast.string_of_typ t));
+                            (if p=Ref then f else expr_b (Promote (f),t) )
                         )
                          fd.params actuals
                         (*actuals*)
