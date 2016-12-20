@@ -1,1 +1,1 @@
-Fatal error: exception Failure("Illegal argument of type int in call to function printf which expects argument of type double")
+Fatal error: exception Failure("Illegal argument 5 of type int in call to function "prints" which expects argument of type string")
