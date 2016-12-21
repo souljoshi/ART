@@ -60,3 +60,23 @@ clean :
 clean-tests:
 	rm -rf results
 	rm -f *.diff *.ll *.out *.err
+
+# Building the tarball
+
+TESTS = *
+
+FAILS = *
+
+DEMOS = *
+
+TESTFILES = $(TESTS:%=test-%.out) $(TESTS:%=test-%.art)\
+	    $(FAILS:%=fail-%.art) $(FAILS:%=fail-%.err)
+
+DEMOFILES = $(DEMOS)
+
+TARFILES = ast.ml codegen.ml compile Makefile art.ml parser.mly README.md \
+	scanner.mll semant.ml testall.sh $(TESTFILES:%=tests/%) $(DEMOFILES:%=demos/%)
+
+ART.tar.gz : $(TARFILES)
+	cd .. && tar czf ART/ART.tar.gz \
+		$(TARFILES:%=ART/%) 
