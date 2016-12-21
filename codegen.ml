@@ -349,6 +349,8 @@ let translate prog =
         in
         let tloop_on = unique_global "tloop_on." (L.const_int i32_t 0)
         in
+        let draw_enabled = unique_global "draw_enabled." (L.const_int i32_t 0)
+        in
         let do_seconds_call builder =
           let secptr = ignore(L.build_call  get_tday_func [|time_value ; L.const_null i8ptr_t |] "" builder);
           L.build_gep time_value [|L.const_int i32_t 0; L.const_int i32_t 0 |] "sec" builder in
@@ -363,6 +365,7 @@ let translate prog =
             let get_draw_func = 
                 let draw_func = L.define_function "draw." void_void_t the_module in
                 let builder = L.builder_at_end context (L.entry_block draw_func) in
+                ignore(L.build_store (L.const_int i32_t 1) draw_enabled builder);
                 let i = ignore (L.build_call glclear_func     [|L.const_int i32_t 0x4000|] "" builder); 
                         L.build_alloca i32_t "drawi" builder in
                 ignore (L.build_store (L.const_int i32_t 0) i  builder);
@@ -393,6 +396,7 @@ let translate prog =
                 ignore (L.build_cond_br bool_val body_bb merge_bb pred_builder);
                 let merge_builder = L.builder_at_end context merge_bb in
                 ignore(L.build_call glswap_func       [||] "" merge_builder);
+                ignore(L.build_store (L.const_int i32_t 0) draw_enabled merge_builder);
                 ignore (L.build_ret_void merge_builder); draw_func
             in
            (match (L.lookup_function "draw." the_module) with
@@ -1050,14 +1054,39 @@ let translate prog =
                        So we are using an empty map *)
                   | _      -> closure_scopes@[(formal_vars, LocalScope); (StringMap.empty, StructScope) ; (global_vars, GlobalScope)]
         in 
+       (* returns out of a draw shape if no timeloop is active *)
+        let handle_draw_shape builder = 
+            let bool_val = (* Check to see if the tloop_on flag is active *)
+                     (L.build_icmp L.Icmp.Eq)(L.build_load draw_enabled "dflag" builder) 
+                      (L.const_int i32_t 0) "d_on" builder in
+            let merge_bb = L.append_block context "merge" the_function in (* Merge block *)
+            let then_bb = L.append_block context "then" the_function in
 
+            add_terminal (L.builder_at_end context then_bb)
+                (L.build_ret_void);
+            (*add_terminal (stmt (L.builder_at_end context then_bb) (Return Noexpr))
+                (L.build_br merge_bb);*)
+
+            let else_bb = L.append_block context "else" the_function in
+            add_terminal (L.builder_at_end context else_bb)
+                (L.build_br merge_bb);
+            (* add_terminal used to avoid insert two terminals to basic blocks *)
+
+            (* builder is in block that contains if stmt *)
+            ignore (L.build_cond_br bool_val then_bb else_bb builder);
+            L.builder_at_end context merge_bb 
+        in
         let builder = 
-          (* Add glbegin to beginning of shape draw methods *)
-          ( if (is_draw_shape fdecl) 
-              then ignore(L.build_call glbegin_func     [|L.const_int i32_t 0 |] "" builder)
-              else ()
-          );
-          build_block_body (fdecl.A.locals, fdecl.A.body) builder scopes_list in
+          let builder' = if is_draw_shape fdecl then handle_draw_shape builder else builder
+           in
+             (* Add glbegin to beginning of shape draw methods *)
+             ( if (is_draw_shape fdecl) 
+                 then ignore(L.build_call glbegin_func     [|L.const_int i32_t 0 |] "" builder')
+                 else ()
+             );
+          
+           build_block_body (fdecl.A.locals, fdecl.A.body) builder' scopes_list 
+          in
         (* Add a return if the last block falls off the end *)
         add_terminal builder (match fdecl.A.rettyp with
             A.Void -> build_custom_ret_void
