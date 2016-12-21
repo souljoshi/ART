@@ -1,8 +1,3 @@
-struct color { double r,g,b; }
-color::color(double _r, double _g, double _b) { r =_r; g=_g;b=_b;}
-
-double PI;
-
 struct color color;
 
 shape rectangle
@@ -22,7 +17,7 @@ rectangle::rectangle(vec _bl, double _w, double _h , int f)
 
 void rectangle::draw()
 {
-    setcolor(color.r, color.g, color.b);
+    setcolor(color);
     if (fill == 1)
         <<
             drawpoint(bl);drawpoint(bl+<w,0.0>);drawpoint(bl+<0.0,h>);
@@ -56,7 +51,7 @@ circle::circle(vec origin, double radius)
 /* Notice that it only uses draw points. */
 void circle::draw()
 {
-    setcolor(color.r, color.g, color.b);
+    setcolor(color);
     // Single circle is 1000 points YIKES
 [
     for (double theta = 0.0; theta <= 2  * PI; theta += .05 * PI) {
@@ -84,7 +79,7 @@ disk::disk(vec origin, double radius)
 /* Notice that it only uses draw points. */
 void disk::draw()
 {
-    setcolor(color.r, color.g, color.b);
+    setcolor(color);
 <<
     for (double theta = 0.0; theta <= 2  * PI; theta += .05 * PI) {
          drawpoint(o);
@@ -110,7 +105,7 @@ int MOD(int x)
 
 void path::draw()
 {
-    setcolor(color.r, color.g, color.b);
+    setcolor(color);
 [
     if ( f != b)
     for (int i = MOD(f) + 1;  MOD(i) != MOD(b); i+=1) {    
@@ -193,7 +188,7 @@ int main()
     color.r = 1.0; color.b = color.g = 0.0;
     printf(theta);
     printc('\n');
-   timeloop (dt = 0.01 ; end = 30.0)
+    timeloop (dt = 0.01 ; end = 30.0)
     {
         theta += .010 * PI;
        // r.bl = o + 1.3 * r.w * <cos(theta),sin(theta)>;

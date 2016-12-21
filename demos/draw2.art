@@ -1,5 +1,3 @@
-double PI;
-
 struct color color;
 
 /* A cicle with origin at x,y with radius r */
@@ -20,7 +18,7 @@ circle::circle(vec origin, double radius)
 /* Notice that it only uses draw points. */
 void circle::draw()
 {
-    setcolor(color.r, color.g, color.b);
+    setcolor(color);
     // Single circle is 1000 points YIKES
 [
     for (double theta = 0.0; theta <= 2  * PI; theta += .05 * PI) {
@@ -48,7 +46,7 @@ disk::disk(vec origin, double radius)
 /* Notice that it only uses draw points. */
 void disk::draw()
 {
-    setcolor(color.r, color.g, color.b);
+    setcolor(color);
 <<
     for (double theta = 0.0; theta <= 2  * PI; theta += .05 * PI) {
          drawpoint(o);
@@ -74,7 +72,7 @@ int MOD(int x)
 
 void path::draw()
 {
-    setcolor(color.r, color.g, color.b);
+    setcolor(color);
 [
     if ( f != b)
     for (int i = MOD(f) + 1;  MOD(i) != MOD(b); i+=1) {    

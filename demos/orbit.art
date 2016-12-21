@@ -1,8 +1,3 @@
-struct color { double r,g,b; }
-color::color(double _r, double _g, double _b) { r =_r; g=_g;b=_b;}
-
-double PI = 3.14159265;
-
 struct color color;
 
 shape circle 
@@ -21,7 +16,7 @@ circle::circle(vec origin, double radius, struct color c)
 
 void circle::draw()
 {
-    setcolor(col.r, col.g, col.b);
+    setcolor(col);
     [
         for (double theta = 0.0; theta <= 2  * PI; theta += .05 * PI) {
             drawpoint(o + r*<cos(theta - 0.05*PI), sin(theta-0.05*PI)>);
@@ -47,7 +42,7 @@ disk::disk(vec origin, double radius, struct color c)
 
 void disk::draw()
 {
-    setcolor(col.r, col.g, col.b);
+    setcolor(col);
     <<
         for (double theta = 0.0; theta <= 2  * PI; theta += .05 * PI) 
         {
