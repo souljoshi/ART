@@ -1,5 +1,3 @@
-double PI = 3.14159265;
-
 struct color color;
 
 shape rectangle

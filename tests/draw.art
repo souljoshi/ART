@@ -1,8 +1,3 @@
-struct color { double r,g,b; }
-double PI;
-
-struct color color;
-
 /* A cicle with origin at x,y with radius r */
 shape circle 
 {

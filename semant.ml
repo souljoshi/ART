@@ -16,7 +16,8 @@ let check_ass lval rval promote err =
     if lval = rval || (promote && lval=Float && rval=Int ) then lval else raise err         
 
 let struct_build prog =
-    let globals = prog.v
+    let globals = (Float,"PI",Exprinit (FloatLit 3.141592653589793,Float))::
+                (Float,"E",Exprinit (FloatLit 2.718281828459045,Float))::prog.v
     and functions = {
         rettyp = Void; fname="setcolor"; params=[(UserType("color",StructType),"c",Value)]; locals=[];
         body= [Expr (Call ( (Id "setcolor.",Void), [ (Member((Id "c", Void),"r"),Float) ; (Member((Id "c", Void),"g"),Float);(Member((Id "c", Void),"b"),Float)]),Void)];
@@ -119,8 +120,27 @@ let builtinlist = [
     {rettyp=Void;fname="setcolor.";params=[(Float,"x",Value);(Float,"x",Value);(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None"};
     {rettyp=Void;fname="drawpoint";params=[(Vec,"x",Value)];locals=[];body=[];typ=Func;owner="None"};
     {rettyp=Void; fname="printc";params=[(Char, "x",Value)];locals=[];body=[];typ=Func;owner="None"};
-    {rettyp=Float;fname="cos";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None"};
+
+    (* math funcs *)
     {rettyp=Float;fname="sin";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None"};
+    {rettyp=Float;fname="cos";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None"};
+    {rettyp=Float;fname="tan";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None"};
+    {rettyp=Float;fname="log";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None"};
+    {rettyp=Float;fname="log2";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None"}; 
+    {rettyp=Float;fname="log10";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None"};
+    {rettyp=Float;fname="abs";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None"};
+    {rettyp=Float;fname="exp";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None"};
+    {rettyp=Float;fname="sqrt";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None"};
+    {rettyp=Float;fname="asin";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None"};
+    {rettyp=Float;fname="acos";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None"};
+    {rettyp=Float;fname="atan";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None"};
+    {rettyp=Float;fname="sinh";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None"};
+    {rettyp=Float;fname="cosh";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None"}; 
+    {rettyp=Float;fname="tanh";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None"};
+    {rettyp=Float;fname="asinh";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None"};
+    {rettyp=Float;fname="acosh";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None"}; 
+    {rettyp=Float;fname="atanh";params=[(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None"};
+    {rettyp=Float;fname="pow";params=[(Float,"x",Value);(Float,"x",Value)];locals=[];body=[];typ=Func;owner="None"};      
 
 
 ]

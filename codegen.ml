@@ -129,6 +129,7 @@ let translate prog =
     and  void_2d_t  = L.function_type  void_t [| double_t ; double_t|]
     and  void_3d_t  = L.function_type  void_t [| double_t ; double_t; double_t|]
     and  double_double_t = L.function_type double_t [|double_t|]
+    and  double_2d_t = L.function_type double_t [|double_t;double_t|]
     in
     let  void_callback_t  = L.function_type void_t[| L.pointer_type void_void_t |]
   in
@@ -162,8 +163,28 @@ let translate prog =
     (* technically not glut *)
     and sin_func = L.declare_function "sin" double_double_t the_module
     and cos_func = L.declare_function "cos" double_double_t the_module
-    
+    and tan_func = L.declare_function "tan" double_double_t the_module
+    and log_func = L.declare_function "log" double_double_t the_module
+    and log2_func = L.declare_function "log2" double_double_t the_module
+    and log10_func = L.declare_function "log10" double_double_t the_module
+    and abs_func = L.declare_function "fabs" double_double_t the_module
+    and exp_func = L.declare_function "exp" double_double_t the_module
+    and sqrt_func = L.declare_function "sqrt" double_double_t the_module
+    and asin_func = L.declare_function "asin" double_double_t the_module
+    and acos_func = L.declare_function "acos" double_double_t the_module
+    and atan_func = L.declare_function "atan" double_double_t the_module
+    and sinh_func = L.declare_function "sinh" double_double_t the_module
+    and cosh_func = L.declare_function "cosh" double_double_t the_module
+    and tanh_func = L.declare_function "tanh" double_double_t the_module
+    and asinh_func = L.declare_function "asinh" double_double_t the_module
+    and acosh_func = L.declare_function "acosh" double_double_t the_module
+    and atanh_func = L.declare_function "atanh" double_double_t the_module
+    and pow_func = L.declare_function   "pow"   double_2d_t the_module
+
     in
+
+
+
     (* END OF GLUT FUNCTION DECLARATIONS *)
 
     (* Defining each of the declared functions *)
@@ -188,17 +209,20 @@ let translate prog =
     let glut_decls = 
       let glut_decl m artname fdef  = StringMap.add artname fdef m in
       List.fold_left2 glut_decl StringMap.empty 
-      ["setcolor.";"vertex";"sin";"cos";"drawpoint"]
-      [glcolor_func;glvertex_func; sin_func;cos_func; L.const_int i32_t 0]
+      ["setcolor.";"vertex";"sin";"cos";"tan";"log";"log2";"log10";"abs";"exp";"sqrt";
+      "asin";"acos";"atan";"sinh";"cosh";"tanh";"asinh";"acosh";"atanh";"pow";"drawpoint"]
+      [glcolor_func;glvertex_func; sin_func;cos_func; tan_func;log_func;
+      log2_func;log10_func;abs_func;exp_func;sqrt_func;asin_func;acos_func;atan_func;
+      sinh_func;cosh_func;tanh_func;asinh_func;acosh_func;atanh_func;pow_func;L.const_int i32_t 0]
     in
     (* No type checking done *)
     let do_glut_func fdef act builder = 
-           if glcolor_func    == fdef then   L.build_call glcolor_func     [|act.(0) ; act.(1); act.(2)|] "" builder   
-      else if glvertex_func   == fdef then   L.build_call glvertex_func    [|act.(0) ; act.(1) |] "" builder  
-      else if sin_func         == fdef then   L.build_call sin_func        [|act.(0)|] "" builder 
-      else if cos_func         == fdef then   L.build_call cos_func        [|act.(0)|] "" builder
+           if glcolor_func    == fdef then   L.build_call glcolor_func      [|act.(0) ; act.(1); act.(2)|] "" builder   
+      else if glvertex_func   == fdef then   L.build_call glvertex_func     [|act.(0) ; act.(1) |] "" builder
+      else if  pow_func == fdef       then    L.build_call fdef               [|act.(0); act.(1) |] "tmp" builder  
+      else if  L.const_int i32_t 0 <> fdef then  L.build_call fdef          [|act.(0)|] "tmp" builder
       (* Draw Point - draws vertices *)
-      else L.build_call glvertex_func    [|act.(0) ; act.(1) |] "" builder
+      else  L.build_call glvertex_func    [|act.(0) ; act.(1) |] "" builder
 
     in
     let do_glut_init argc argv title draw_func idle_func builder = 
